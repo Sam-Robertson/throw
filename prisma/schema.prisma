@@ -1,0 +1,289 @@
+// Prisma schema for Throw — pottery studio booking & membership platform
+// All DateTime fields are stored in UTC.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  CUSTOMER
+  STAFF
+  ADMIN
+}
+
+enum MembershipStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+  EXPIRED
+}
+
+enum MembershipEventType {
+  CREATED
+  UPGRADED
+  DOWNGRADED
+  PAUSED
+  RESUMED
+  CANCELLED
+  RENEWED
+  CREDIT_ISSUED
+  CREDIT_USED
+}
+
+enum BookingStatus {
+  CONFIRMED
+  WAITLIST
+  CANCELLED
+  NO_SHOW
+}
+
+enum BookingSource {
+  MEMBERSHIP_CREDIT
+  MEMBER_FREE
+  DROP_IN
+  COMP
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum TaskTriggerType {
+  MANUAL
+  AUTOMATION
+}
+
+// ---------------------------------------------------------------------------
+// NextAuth v5 models (exact Auth.js / Prisma adapter spec)
+// ---------------------------------------------------------------------------
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime // UTC
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime // UTC
+
+  @@unique([identifier, token])
+}
+
+// ---------------------------------------------------------------------------
+// Core domain models
+// ---------------------------------------------------------------------------
+
+model User {
+  id                    String   @id @default(cuid())
+  email                 String   @unique
+  emailVerified         DateTime? // UTC
+  name                  String?
+  phone                 String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  hashedPassword        String?
+  role                  Role     @default(CUSTOMER)
+  createdAt             DateTime @default(now()) // UTC
+  updatedAt             DateTime @updatedAt      // UTC
+
+  accounts       Account[]
+  sessions       Session[]
+  memberships    Membership[]
+  bookings       Booking[]
+  waivers        Waiver[]
+  assignedTasks  StaffTask[]  @relation("AssignedTasks")
+  createdTasks   StaffTask[]  @relation("CreatedTasks")
+  linkedTasks    StaffTask[]  @relation("LinkedCustomerTasks")
+  instructedSessions StudioSession[]
+}
+
+model MembershipPlan {
+  id                  String   @id @default(cuid())
+  name                String
+  slug                String   @unique
+  description         String?
+  price               Int      // cents
+  billingIntervalDays Int      // e.g. 28, 84, 365
+  creditsPerPeriod    Int      // busy-window credits issued each billing period
+  hasShelfSpace       Boolean  @default(false)
+  hasPriorityBooking  Boolean  @default(false)
+  guestPassesPerPeriod Int     @default(0)
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now()) // UTC
+  updatedAt           DateTime @updatedAt      // UTC
+
+  memberships Membership[]
+}
+
+model Membership {
+  id                   String           @id @default(cuid())
+  userId               String
+  planId               String
+  status               MembershipStatus @default(ACTIVE)
+  stripeSubscriptionId String?          @unique
+  stripeCustomerId     String?
+  currentPeriodStart   DateTime         // UTC
+  currentPeriodEnd     DateTime         // UTC
+  creditsRemaining     Int
+  pausedAt             DateTime?        // UTC
+  resumesAt            DateTime?        // UTC
+  cancelledAt          DateTime?        // UTC
+  createdAt            DateTime         @default(now()) // UTC
+  updatedAt            DateTime         @updatedAt      // UTC
+
+  user             User              @relation(fields: [userId], references: [id])
+  plan             MembershipPlan    @relation(fields: [planId], references: [id])
+  membershipEvents MembershipEvent[]
+  bookings         Booking[]
+}
+
+model MembershipEvent {
+  id           String              @id @default(cuid())
+  membershipId String
+  eventType    MembershipEventType
+  note         String?
+  createdAt    DateTime            @default(now()) // UTC
+
+  membership Membership @relation(fields: [membershipId], references: [id])
+}
+
+model SessionType {
+  id               String   @id @default(cuid())
+  name             String
+  slug             String   @unique
+  description      String?
+  durationMinutes  Int
+  capacity         Int
+  dropInPriceCents Int
+  isBusyWindow     Boolean  @default(false)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now()) // UTC
+  updatedAt        DateTime @updatedAt      // UTC
+
+  studioSessions StudioSession[]
+}
+
+model StudioSession {
+  id            String   @id @default(cuid())
+  sessionTypeId String
+  instructorId  String?
+  startsAt      DateTime // UTC
+  endsAt        DateTime // UTC
+  capacity      Int
+  isCancelled   Boolean  @default(false)
+  createdAt     DateTime @default(now()) // UTC
+  updatedAt     DateTime @updatedAt      // UTC
+
+  sessionType SessionType @relation(fields: [sessionTypeId], references: [id])
+  instructor  User?       @relation(fields: [instructorId], references: [id])
+  bookings    Booking[]
+}
+
+model Booking {
+  id                   String        @id @default(cuid())
+  userId               String
+  studioSessionId      String
+  membershipId         String?
+  status               BookingStatus @default(CONFIRMED)
+  source               BookingSource
+  creditUsed           Boolean       @default(false)
+  stripePaymentIntentId String?
+  amountPaidCents      Int           @default(0)
+  cancelledAt          DateTime?     // UTC
+  createdAt            DateTime      @default(now()) // UTC
+  updatedAt            DateTime      @updatedAt      // UTC
+
+  user          User          @relation(fields: [userId], references: [id])
+  studioSession StudioSession @relation(fields: [studioSessionId], references: [id])
+  membership    Membership?   @relation(fields: [membershipId], references: [id])
+}
+
+model Waiver {
+  id              String   @id @default(cuid())
+  userId          String
+  signedAt        DateTime // UTC
+  ipAddress       String
+  contentSnapshot String   @db.Text
+  createdAt       DateTime @default(now()) // UTC
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model StaffTask {
+  id               String          @id @default(cuid())
+  title            String
+  description      String?
+  status           TaskStatus      @default(OPEN)
+  triggerType      TaskTriggerType @default(MANUAL)
+  dueAt            DateTime?       // UTC
+  assignedToId     String?
+  createdById      String
+  linkedCustomerId String?
+  createdAt        DateTime        @default(now()) // UTC
+  updatedAt        DateTime        @updatedAt      // UTC
+
+  assignedTo      User?  @relation("AssignedTasks", fields: [assignedToId], references: [id])
+  createdBy       User   @relation("CreatedTasks", fields: [createdById], references: [id])
+  linkedCustomer  User?  @relation("LinkedCustomerTasks", fields: [linkedCustomerId], references: [id])
+}
+
+model SmsAutomation {
+  id              String   @id @default(cuid())
+  name            String
+  triggerEvent    String
+  delayMinutes    Int      @default(0)
+  messageTemplate String   @db.Text
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now()) // UTC
+  updatedAt       DateTime @updatedAt      // UTC
+}
+
+model AdTracking {
+  id               String    @id @default(cuid())
+  userId           String?
+  sessionId        String?
+  utmSource        String?
+  utmMedium        String?
+  utmCampaign      String?
+  utmContent       String?
+  utmTerm          String?
+  firstBookingAt   DateTime? // UTC
+  firstPurchaseAt  DateTime? // UTC
+  createdAt        DateTime  @default(now()) // UTC
+}
