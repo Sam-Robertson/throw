@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(npx prisma *)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(node -e \"const Stripe = require\\('stripe'\\); const s = new Stripe\\('sk_test_x'\\); console.log\\(s.getApiField\\('version'\\)\\);\")",
+      "Bash(node -e \"const s = require\\('./node_modules/stripe'\\); console.log\\(Object.keys\\(s\\)\\);\")",
+      "Bash(node *)"
     ]
   }
 }

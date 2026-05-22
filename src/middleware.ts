@@ -25,8 +25,13 @@ export default auth((req) => {
     }
   }
 
-  // /dashboard/* and /account/* — require any authenticated user
-  if (pathname.startsWith("/dashboard") || pathname.startsWith("/account")) {
+  // /dashboard/*, /account/*, /book/*, /booking/* — require any authenticated user
+  if (
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/account") ||
+    pathname.startsWith("/book") ||
+    pathname.startsWith("/booking")
+  ) {
     if (!session) {
       const url = new URL("/login", req.nextUrl.origin);
       url.searchParams.set("callbackUrl", pathname);

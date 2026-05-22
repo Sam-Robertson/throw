@@ -6,8 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ---------------------------------------------------------------------------
@@ -65,6 +66,21 @@ enum TaskTriggerType {
   AUTOMATION
 }
 
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentType {
+  DROP_IN
+  MEMBERSHIP
+  GIFT_CARD
+  TIP
+  OTHER
+}
+
 // ---------------------------------------------------------------------------
 // NextAuth v5 models (exact Auth.js / Prisma adapter spec)
 // ---------------------------------------------------------------------------
@@ -110,51 +126,133 @@ model VerificationToken {
 // ---------------------------------------------------------------------------
 
 model User {
-  id                    String   @id @default(cuid())
-  email                 String   @unique
+  id                    String    @id @default(cuid())
+  email                 String    @unique
   emailVerified         DateTime? // UTC
   name                  String?
   phone                 String?
   emergencyContactName  String?
   emergencyContactPhone String?
   hashedPassword        String?
-  role                  Role     @default(CUSTOMER)
-  createdAt             DateTime @default(now()) // UTC
-  updatedAt             DateTime @updatedAt      // UTC
+  role                  Role      @default(CUSTOMER)
+  stripeCustomerId      String?
+  createdAt             DateTime  @default(now()) // UTC
+  updatedAt             DateTime  @updatedAt      // UTC
 
-  accounts       Account[]
-  sessions       Session[]
-  memberships    Membership[]
-  bookings       Booking[]
-  waivers        Waiver[]
-  assignedTasks  StaffTask[]  @relation("AssignedTasks")
-  createdTasks   StaffTask[]  @relation("CreatedTasks")
-  linkedTasks    StaffTask[]  @relation("LinkedCustomerTasks")
-  instructedSessions StudioSession[]
+  accounts             Account[]
+  sessions             Session[]
+  memberships          Membership[]
+  bookings             Booking[]
+  assignedTasks        StaffTask[]           @relation("AssignedTasks")
+  createdTasks         StaffTask[]           @relation("CreatedTasks")
+  linkedTasks          StaffTask[]           @relation("LinkedCustomerTasks")
+  instructedSessions   StudioSession[]
+  staffRoleAssignments StaffRoleAssignment[]
+  waiverSignatures     WaiverSignature[]
+  payments             Payment[]
+}
+
+model Location {
+  id        String   @id @default(cuid())
+  name      String
+  address   String?
+  timezone  String   @default("America/Denver")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessionTypes    SessionType[]
+  studioSessions  StudioSession[]
+  memberships     Membership[]
+  membershipPlans MembershipPlan[]
+  staffRoles      StaffRole[]
+  waiverVersions  WaiverVersion[]
+  payments        Payment[]
+  tips            Tip[]
+  adTracking      AdTracking[]
+  smsAutomations  SmsAutomation[]
+  staffTasks      StaffTask[]
+}
+
+model StaffRole {
+  id          String   @id @default(cuid())
+  locationId  String
+  name        String
+  permissions Json     // { canViewTips, canViewMembershipReporting, canViewBilling, canManageSchedule, canCheckInMembers, canManageTasks }
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  location    Location              @relation(fields: [locationId], references: [id])
+  assignments StaffRoleAssignment[]
+}
+
+model StaffRoleAssignment {
+  id          String   @id @default(cuid())
+  userId      String
+  staffRoleId String
+  locationId  String
+  createdAt   DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id])
+  staffRole StaffRole @relation(fields: [staffRoleId], references: [id])
+
+  @@unique([userId, locationId])
+}
+
+model WaiverVersion {
+  id          String   @id @default(cuid())
+  locationId  String
+  content     String   @db.Text
+  version     Int
+  publishedAt DateTime
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  location   Location          @relation(fields: [locationId], references: [id])
+  signatures WaiverSignature[]
+
+  @@unique([locationId, version])
+}
+
+model WaiverSignature {
+  id              String   @id @default(cuid())
+  userId          String
+  waiverVersionId String
+  signedAt        DateTime
+  ipAddress       String
+  createdAt       DateTime @default(now())
+
+  user          User          @relation(fields: [userId], references: [id])
+  waiverVersion WaiverVersion @relation(fields: [waiverVersionId], references: [id])
+
+  @@unique([userId, waiverVersionId])
 }
 
 model MembershipPlan {
-  id                  String   @id @default(cuid())
-  name                String
-  slug                String   @unique
-  description         String?
-  price               Int      // cents
-  billingIntervalDays Int      // e.g. 28, 84, 365
-  creditsPerPeriod    Int      // busy-window credits issued each billing period
-  hasShelfSpace       Boolean  @default(false)
-  hasPriorityBooking  Boolean  @default(false)
-  guestPassesPerPeriod Int     @default(0)
-  isActive            Boolean  @default(true)
-  createdAt           DateTime @default(now()) // UTC
-  updatedAt           DateTime @updatedAt      // UTC
+  id                   String   @id @default(cuid())
+  name                 String
+  slug                 String   @unique
+  description          String?
+  price                Int      // cents
+  billingIntervalDays  Int      // e.g. 28, 84, 365
+  hasShelfSpace        Boolean  @default(false)
+  hasPriorityBooking   Boolean  @default(false)
+  guestPassesPerPeriod Int      @default(0)
+  isActive             Boolean  @default(true)
+  stripePriceId        String?
+  locationId           String?
+  createdAt            DateTime @default(now()) // UTC
+  updatedAt            DateTime @updatedAt      // UTC
 
   memberships Membership[]
+  location    Location?    @relation(fields: [locationId], references: [id])
 }
 
 model Membership {
   id                   String           @id @default(cuid())
   userId               String
   planId               String
+  locationId           String?
   status               MembershipStatus @default(ACTIVE)
   stripeSubscriptionId String?          @unique
   stripeCustomerId     String?
@@ -169,6 +267,7 @@ model Membership {
 
   user             User              @relation(fields: [userId], references: [id])
   plan             MembershipPlan    @relation(fields: [planId], references: [id])
+  location         Location?         @relation(fields: [locationId], references: [id])
   membershipEvents MembershipEvent[]
   bookings         Booking[]
 }
@@ -193,16 +292,19 @@ model SessionType {
   dropInPriceCents Int
   isBusyWindow     Boolean  @default(false)
   isActive         Boolean  @default(true)
+  locationId       String?
   createdAt        DateTime @default(now()) // UTC
   updatedAt        DateTime @updatedAt      // UTC
 
   studioSessions StudioSession[]
+  location       Location?       @relation(fields: [locationId], references: [id])
 }
 
 model StudioSession {
   id            String   @id @default(cuid())
   sessionTypeId String
   instructorId  String?
+  locationId    String?
   startsAt      DateTime // UTC
   endsAt        DateTime // UTC
   capacity      Int
@@ -213,36 +315,59 @@ model StudioSession {
   sessionType SessionType @relation(fields: [sessionTypeId], references: [id])
   instructor  User?       @relation(fields: [instructorId], references: [id])
   bookings    Booking[]
+  location    Location?   @relation(fields: [locationId], references: [id])
 }
 
 model Booking {
-  id                   String        @id @default(cuid())
-  userId               String
-  studioSessionId      String
-  membershipId         String?
-  status               BookingStatus @default(CONFIRMED)
-  source               BookingSource
-  creditUsed           Boolean       @default(false)
+  id                    String        @id @default(cuid())
+  userId                String
+  studioSessionId       String
+  membershipId          String?
+  status                BookingStatus @default(CONFIRMED)
+  source                BookingSource
+  creditUsed            Boolean       @default(false)
   stripePaymentIntentId String?
-  amountPaidCents      Int           @default(0)
-  cancelledAt          DateTime?     // UTC
-  createdAt            DateTime      @default(now()) // UTC
-  updatedAt            DateTime      @updatedAt      // UTC
+  amountPaidCents       Int           @default(0)
+  cancelledAt           DateTime?     // UTC
+  createdAt             DateTime      @default(now()) // UTC
+  updatedAt             DateTime      @updatedAt      // UTC
 
   user          User          @relation(fields: [userId], references: [id])
   studioSession StudioSession @relation(fields: [studioSessionId], references: [id])
   membership    Membership?   @relation(fields: [membershipId], references: [id])
 }
 
-model Waiver {
-  id              String   @id @default(cuid())
-  userId          String
-  signedAt        DateTime // UTC
-  ipAddress       String
-  contentSnapshot String   @db.Text
-  createdAt       DateTime @default(now()) // UTC
+model Payment {
+  id                    String        @id @default(cuid())
+  userId                String
+  locationId            String
+  stripePaymentIntentId String        @unique
+  amountInCents         Int
+  currency              String        @default("usd")
+  status                PaymentStatus @default(PENDING)
+  type                  PaymentType
+  bookingId             String?
+  membershipId          String?
+  metadata              Json?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
 
-  user User @relation(fields: [userId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+  location Location @relation(fields: [locationId], references: [id])
+}
+
+model Tip {
+  id                    String    @id @default(cuid())
+  bookingId             String
+  customerId            String
+  instructorId          String
+  locationId            String
+  amountInCents         Int
+  stripePaymentIntentId String
+  paidOutAt             DateTime?
+  createdAt             DateTime  @default(now())
+
+  location Location @relation(fields: [locationId], references: [id])
 }
 
 model StaffTask {
@@ -255,12 +380,14 @@ model StaffTask {
   assignedToId     String?
   createdById      String
   linkedCustomerId String?
+  locationId       String?
   createdAt        DateTime        @default(now()) // UTC
   updatedAt        DateTime        @updatedAt      // UTC
 
-  assignedTo      User?  @relation("AssignedTasks", fields: [assignedToId], references: [id])
-  createdBy       User   @relation("CreatedTasks", fields: [createdById], references: [id])
-  linkedCustomer  User?  @relation("LinkedCustomerTasks", fields: [linkedCustomerId], references: [id])
+  assignedTo     User?     @relation("AssignedTasks", fields: [assignedToId], references: [id])
+  createdBy      User      @relation("CreatedTasks", fields: [createdById], references: [id])
+  linkedCustomer User?     @relation("LinkedCustomerTasks", fields: [linkedCustomerId], references: [id])
+  location       Location? @relation(fields: [locationId], references: [id])
 }
 
 model SmsAutomation {
@@ -270,20 +397,26 @@ model SmsAutomation {
   delayMinutes    Int      @default(0)
   messageTemplate String   @db.Text
   isActive        Boolean  @default(true)
+  locationId      String?
   createdAt       DateTime @default(now()) // UTC
   updatedAt       DateTime @updatedAt      // UTC
+
+  location Location? @relation(fields: [locationId], references: [id])
 }
 
 model AdTracking {
-  id               String    @id @default(cuid())
-  userId           String?
-  sessionId        String?
-  utmSource        String?
-  utmMedium        String?
-  utmCampaign      String?
-  utmContent       String?
-  utmTerm          String?
-  firstBookingAt   DateTime? // UTC
-  firstPurchaseAt  DateTime? // UTC
-  createdAt        DateTime  @default(now()) // UTC
+  id              String    @id @default(cuid())
+  userId          String?
+  sessionId       String?
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
+  utmContent      String?
+  utmTerm         String?
+  firstBookingAt  DateTime? // UTC
+  firstPurchaseAt DateTime? // UTC
+  locationId      String?
+  createdAt       DateTime  @default(now()) // UTC
+
+  location Location? @relation(fields: [locationId], references: [id])
 }
