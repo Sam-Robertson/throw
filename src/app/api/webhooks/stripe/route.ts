@@ -4,6 +4,7 @@ import { stripe } from "@/lib/stripe";
 export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { inngest } from "@/lib/inngest";
+import { sendSms } from "@/lib/sms";
 import type Stripe from "stripe";
 
 // App Router reads raw body via req.text() — no bodyParser config needed
@@ -187,86 +188,150 @@ export async function POST(req: NextRequest) {
     }
   } else if (event.type === "checkout.session.completed") {
     const checkoutSession = event.data.object as Stripe.Checkout.Session;
-    const { userId, studioSessionId } = checkoutSession.metadata ?? {};
-
-    if (!userId || !studioSessionId) {
-      return NextResponse.json({ error: "Missing metadata" }, { status: 400 });
-    }
-
-    const studioSession = await prisma.studioSession.findUnique({
-      where: { id: studioSessionId },
-      include: {
-        _count: { select: { bookings: { where: { status: "CONFIRMED" } } } },
-      },
-    });
-
-    if (!studioSession) {
-      return NextResponse.json(
-        { error: "Session not found" },
-        { status: 404 },
-      );
-    }
-
-    const confirmedCount = studioSession._count.bookings;
-    const bookingStatus =
-      confirmedCount >= studioSession.capacity ? "WAITLIST" : "CONFIRMED";
+    const metadata = checkoutSession.metadata ?? {};
 
     const paymentIntentId =
       typeof checkoutSession.payment_intent === "string"
         ? checkoutSession.payment_intent
         : (checkoutSession.payment_intent?.id ?? null);
 
-    const amountPaid = checkoutSession.amount_total ?? 0;
+    if (metadata.type === "tip") {
+      // ── Tip payment ──────────────────────────────────────────────
+      const { bookingId, userId, instructorId, locationId } = metadata;
 
-    const booking = await prisma.booking.create({
-      data: {
-        userId,
-        studioSessionId,
-        status: bookingStatus,
-        source: "DROP_IN",
-        stripePaymentIntentId: paymentIntentId,
-        amountPaidCents: amountPaid,
-      },
-    });
+      if (!bookingId || !userId || !instructorId || !locationId || !paymentIntentId) {
+        return NextResponse.json({ error: "Missing tip metadata" }, { status: 400 });
+      }
 
-    if (studioSession.locationId && paymentIntentId) {
-      await prisma.payment
-        .create({
+      const amountInCents = checkoutSession.amount_total ?? 0;
+
+      // Idempotency: skip if tip already created (e.g., duplicate webhook)
+      const existingTip = await prisma.tip.findFirst({ where: { bookingId } });
+      if (!existingTip) {
+        await prisma.tip.create({
           data: {
-            userId,
-            locationId: studioSession.locationId,
+            bookingId,
+            customerId: userId,
+            instructorId,
+            locationId,
+            amountInCents,
             stripePaymentIntentId: paymentIntentId,
-            amountInCents: amountPaid,
-            status: "SUCCEEDED",
-            type: "DROP_IN",
-            bookingId: booking.id,
           },
-        })
-        .catch(() => {
-          // Idempotency: ignore if payment record already exists
         });
-    }
 
-    if (bookingStatus === "CONFIRMED") {
-      await inngest.send({
-        name: "booking/confirmed",
-        data: { bookingId: booking.id, userId, studioSessionId },
-      });
-    }
+        await prisma.payment
+          .create({
+            data: {
+              userId,
+              locationId,
+              stripePaymentIntentId: paymentIntentId,
+              amountInCents,
+              status: "SUCCEEDED",
+              type: "TIP",
+              bookingId,
+            },
+          })
+          .catch(() => {
+            // Idempotency: ignore if payment record already exists
+          });
 
-    // Fire booking + purchase conversions for DROP_IN
-    prisma.adTracking
-      .findFirst({ where: { userId } })
-      .then((t) => {
-        if (!t) return;
-        const data: { firstBookingAt?: Date; firstPurchaseAt?: Date } = {};
-        if (!t.firstBookingAt) data.firstBookingAt = new Date();
-        if (!t.firstPurchaseAt) data.firstPurchaseAt = new Date();
-        if (Object.keys(data).length) {
-          prisma.adTracking.update({ where: { id: t.id }, data }).catch(() => {});
+        // Notify instructor via SMS if they have a phone number
+        const instructor = await prisma.user.findUnique({
+          where: { id: instructorId },
+          select: { phone: true, name: true },
+        });
+        if (instructor?.phone) {
+          const dollars = (amountInCents / 100).toLocaleString("en-US", {
+            style: "currency",
+            currency: "USD",
+          });
+          await sendSms({
+            to: instructor.phone,
+            message: `You received a ${dollars} tip! Thank you for teaching a great class.`,
+            userId: instructorId,
+          }).catch(() => {
+            // Non-fatal: SMS failure should not block the tip record
+          });
         }
-      })
-      .catch(() => {});
+      }
+    } else {
+      // ── Drop-in booking payment ───────────────────────────────────
+      const { userId, studioSessionId } = metadata;
+
+      if (!userId || !studioSessionId) {
+        return NextResponse.json({ error: "Missing metadata" }, { status: 400 });
+      }
+
+      const studioSession = await prisma.studioSession.findUnique({
+        where: { id: studioSessionId },
+        include: {
+          _count: { select: { bookings: { where: { status: "CONFIRMED" } } } },
+        },
+      });
+
+      if (!studioSession) {
+        return NextResponse.json(
+          { error: "Session not found" },
+          { status: 404 },
+        );
+      }
+
+      const confirmedCount = studioSession._count.bookings;
+      const bookingStatus =
+        confirmedCount >= studioSession.capacity ? "WAITLIST" : "CONFIRMED";
+
+      const amountPaid = checkoutSession.amount_total ?? 0;
+
+      const booking = await prisma.booking.create({
+        data: {
+          userId,
+          studioSessionId,
+          status: bookingStatus,
+          source: "DROP_IN",
+          stripePaymentIntentId: paymentIntentId,
+          amountPaidCents: amountPaid,
+        },
+      });
+
+      if (studioSession.locationId && paymentIntentId) {
+        await prisma.payment
+          .create({
+            data: {
+              userId,
+              locationId: studioSession.locationId,
+              stripePaymentIntentId: paymentIntentId,
+              amountInCents: amountPaid,
+              status: "SUCCEEDED",
+              type: "DROP_IN",
+              bookingId: booking.id,
+            },
+          })
+          .catch(() => {
+            // Idempotency: ignore if payment record already exists
+          });
+      }
+
+      if (bookingStatus === "CONFIRMED") {
+        await inngest.send({
+          name: "booking/confirmed",
+          data: { bookingId: booking.id, userId, studioSessionId },
+        });
+      }
+
+      // Fire booking + purchase conversions for DROP_IN
+      prisma.adTracking
+        .findFirst({ where: { userId } })
+        .then((t) => {
+          if (!t) return;
+          const data: { firstBookingAt?: Date; firstPurchaseAt?: Date } = {};
+          if (!t.firstBookingAt) data.firstBookingAt = new Date();
+          if (!t.firstPurchaseAt) data.firstPurchaseAt = new Date();
+          if (Object.keys(data).length) {
+            prisma.adTracking.update({ where: { id: t.id }, data }).catch(() => {});
+          }
+        })
+        .catch(() => {});
+    }
   }
 
   return NextResponse.json({ received: true });

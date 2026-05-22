@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
           include: {
             sessionType: { select: { name: true } },
             location: { select: { name: true } },
+            instructor: { select: { id: true, name: true } },
           },
         },
       },
@@ -64,7 +65,23 @@ export async function GET(request: NextRequest) {
     prisma.booking.count({ where }),
   ]);
 
-  return NextResponse.json({ bookings, total, page, limit });
+  // For past bookings, check which have tips so the UI can show the right state
+  let tipBookingIds = new Set<string>();
+  if (statusParam === "past" && bookings.length > 0) {
+    const ids = bookings.map((b) => b.id);
+    const tips = await prisma.tip.findMany({
+      where: { bookingId: { in: ids } },
+      select: { bookingId: true },
+    });
+    tipBookingIds = new Set(tips.map((t) => t.bookingId));
+  }
+
+  const enriched = bookings.map((b) => ({
+    ...b,
+    hasTip: tipBookingIds.has(b.id),
+  }));
+
+  return NextResponse.json({ bookings: enriched, total, page, limit });
 }
 
 export async function POST(req: NextRequest) {

@@ -1,15 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { formatMountainTime } from "@/lib/timezone";
 
 type Tab = "upcoming" | "past" | "cancelled";
@@ -22,11 +17,13 @@ interface Booking {
   status: BookingStatus;
   source: BookingSource;
   amountPaidCents: number;
+  hasTip: boolean;
   studioSession: {
     startsAt: string;
     endsAt: string;
     sessionType: { name: string };
     location: { name: string } | null;
+    instructor: { id: string; name: string | null } | null;
   };
 }
 
@@ -48,7 +45,10 @@ function formatCents(cents: number) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-export default function BookingsPage() {
+function BookingsInner() {
+  const searchParams = useSearchParams();
+  const justTipped = searchParams.get("tipped") === "1";
+
   const [tab, setTab] = useState<Tab>("upcoming");
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [total, setTotal] = useState(0);
@@ -105,8 +105,12 @@ export default function BookingsPage() {
   const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
 
   return (
-    <TooltipProvider>
       <main className="mx-auto max-w-3xl p-8">
+        {justTipped && (
+          <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+            💚 Your tip was sent — thank you for supporting your instructor!
+          </div>
+        )}
         <div className="mb-6 flex items-center gap-4">
           <Link
             href="/dashboard"
@@ -176,21 +180,26 @@ export default function BookingsPage() {
                       >
                         {b.status}
                       </Badge>
-                      {tab === "past" && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              disabled
-                              className="text-xs"
-                            >
+                      {tab === "past" && (() => {
+                        const endsAt = new Date(b.studioSession.endsAt);
+                        const hasInstructor = !!b.studioSession.instructor;
+                        const sessionEnded = endsAt < now;
+                        if (!hasInstructor || !sessionEnded) return null;
+                        if (b.hasTip) {
+                          return (
+                            <Badge variant="outline" className="text-xs text-green-700 border-green-300">
+                              Tip sent ✓
+                            </Badge>
+                          );
+                        }
+                        return (
+                          <Link href={`/bookings/${b.id}/tip`}>
+                            <Button size="sm" variant="ghost" className="text-xs">
                               Leave a tip
                             </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Coming soon</TooltipContent>
-                        </Tooltip>
-                      )}
+                          </Link>
+                        );
+                      })()}
                       {canCancel && (
                         <Button
                           size="sm"
@@ -240,6 +249,13 @@ export default function BookingsPage() {
           </>
         )}
       </main>
-    </TooltipProvider>
+  );
+}
+
+export default function BookingsPage() {
+  return (
+    <Suspense fallback={<main className="mx-auto max-w-3xl p-8"><p className="text-sm text-muted-foreground">Loading…</p></main>}>
+      <BookingsInner />
+    </Suspense>
   );
 }
