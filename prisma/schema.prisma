@@ -377,6 +377,7 @@ model StaffTask {
   status           TaskStatus      @default(OPEN)
   triggerType      TaskTriggerType @default(MANUAL)
   dueAt            DateTime?       // UTC
+  completedAt      DateTime?       // UTC
   assignedToId     String?
   createdById      String
   linkedCustomerId String?
@@ -419,4 +420,31 @@ model AdTracking {
   createdAt       DateTime  @default(now()) // UTC
 
   location Location? @relation(fields: [locationId], references: [id])
+}
+
+model SmsLog {
+  id           String   @id @default(cuid())
+  userId       String
+  toPhone      String
+  message      String   @db.Text
+  twilioSid    String?
+  status       String   @default("sent")
+  automationId String?
+  createdAt    DateTime @default(now())
+}
+
+model LandingPage {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  title        String
+  headline     String
+  subheadline  String?
+  bodyHtml     String?  @db.Text
+  ctaLabel     String
+  ctaUrl       String
+  heroImageUrl String?
+  isActive     Boolean  @default(true)
+  locationId   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }

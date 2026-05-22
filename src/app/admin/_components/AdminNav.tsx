@@ -8,9 +8,13 @@ const NAV = [
   { href: "/admin", label: "Dashboard", exact: true },
   { href: "/admin/class-types", label: "Class Types" },
   { href: "/admin/schedule", label: "Schedule" },
+  { href: "/admin/membership-plans", label: "Membership Plans" },
   { href: "/admin/memberships", label: "Memberships" },
+  { href: "/admin/waivers", label: "Waivers" },
+  { href: "/admin/automations", label: "Automations" },
   { href: "/admin/customers", label: "Customers" },
   { href: "/admin/tasks", label: "Tasks" },
+  { href: "/admin/landing-pages", label: "Landing Pages" },
   { href: "/admin/reports", label: "Reports" },
 ];
 

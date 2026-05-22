@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
+async function linkTracking(sessionToken: string, userId: string) {
+  const tracking = await prisma.adTracking.findFirst({
+    where: { sessionId: sessionToken },
+  });
+  if (tracking && !tracking.userId) {
+    await prisma.adTracking.update({
+      where: { id: tracking.id },
+      data: { userId },
+    });
+  }
+}
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(req: NextRequest) {
@@ -43,6 +55,11 @@ export async function POST(req: NextRequest) {
     },
     select: { id: true, email: true, name: true },
   });
+
+  const sessionToken = req.cookies.get("throw_session")?.value;
+  if (sessionToken) {
+    linkTracking(sessionToken, user.id).catch(() => {});
+  }
 
   return NextResponse.json(user, { status: 201 });
 }

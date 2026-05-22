@@ -36,6 +36,7 @@
     "next-auth": "^5.0.0-beta.25",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "recharts": "^3.8.1",
     "resend": "^6.12.3",
     "stripe": "^22.1.1",
     "tailwind-merge": "^3.6.0",
