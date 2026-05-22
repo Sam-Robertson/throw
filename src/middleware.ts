@@ -1,6 +1,8 @@
-import { auth } from "@/auth";
+import NextAuth from "next-auth";
+import { authConfig } from "@/auth.config";
 import { NextResponse } from "next/server";
 
+const { auth } = NextAuth(authConfig);
 const STAFF_AND_ADMIN = ["ADMIN", "STAFF"];
 
 export default auth((req) => {
