@@ -57,11 +57,6 @@ export default async function LandingPageRoute({ params }: Props) {
           {page.ctaLabel}
         </a>
       </div>
-
-      {/* Footer */}
-      <footer className="border-t py-8 text-center text-sm text-muted-foreground">
-        <p className="font-medium">Throw Pottery Studio</p>
-      </footer>
     </div>
   );
 }

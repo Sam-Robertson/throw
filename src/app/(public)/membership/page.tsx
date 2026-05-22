@@ -2,7 +2,14 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +38,7 @@ export default async function MembershipPage() {
   }
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-16">
+    <div className="mx-auto max-w-5xl px-4 py-16">
       <div className="mb-10 text-center">
         <h1 className="mb-2 text-4xl font-bold">Membership Plans</h1>
         <p className="text-muted-foreground">
@@ -90,6 +97,6 @@ export default async function MembershipPage() {
           </p>
         )}
       </div>
-    </main>
+    </div>
   );
 }

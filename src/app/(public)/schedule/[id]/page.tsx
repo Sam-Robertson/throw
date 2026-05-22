@@ -38,16 +38,13 @@ export default async function SessionDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [rawSession, authSession] = await Promise.all([
-    getSession(id),
-    auth(),
-  ]);
+  const [rawSession, authSession] = await Promise.all([getSession(id), auth()]);
 
   if (!rawSession) notFound();
   const session = rawSession;
 
   const now = new Date();
-  const isPast = session.startsAt < now;
+  const isPast = session.endsAt < now;
   const spotsRemaining = session.capacity - session._count.bookings;
   const isFull = spotsRemaining <= 0;
 
@@ -68,11 +65,13 @@ export default async function SessionDetailPage({
       return <Badge variant="destructive">Cancelled</Badge>;
     }
     if (isPast) {
-      return <Badge variant="secondary">Completed</Badge>;
+      return <Badge variant="secondary">This session has ended</Badge>;
     }
     if (userBooking?.status === "CONFIRMED") {
       return (
-        <Badge className="bg-green-600 text-white">You&apos;re booked</Badge>
+        <Badge className="bg-green-600 text-white">
+          You&apos;re booked for this session
+        </Badge>
       );
     }
     if (userBooking?.status === "WAITLIST") {
@@ -80,23 +79,31 @@ export default async function SessionDetailPage({
         <Badge variant="secondary">You&apos;re on the waitlist</Badge>
       );
     }
+    // Not logged in
+    if (!authSession?.user) {
+      return (
+        <Button asChild size="lg">
+          <Link href={`/login?callbackUrl=/schedule/${session.id}`}>
+            Sign in to book
+          </Link>
+        </Button>
+      );
+    }
+    // Logged in, available
     return (
       <Button asChild size="lg">
         <Link href={`/book/${session.id}`}>
-          {isFull ? "Join Waitlist" : "Book Now"}
+          {isFull ? "Join Waitlist" : "Book This Session"}
         </Link>
       </Button>
     );
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
+    <div className="mx-auto max-w-2xl px-4 py-10">
       <div className="mb-6">
-        <Link
-          href="/schedule"
-          className="text-sm text-muted-foreground hover:underline"
-        >
-          ← Back to schedule
+        <Link href="/schedule" className="text-sm text-muted-foreground hover:underline">
+          ← Schedule
         </Link>
       </div>
 
@@ -136,20 +143,12 @@ export default async function SessionDetailPage({
           {session.instructor?.name && (
             <div>
               <dt className="font-medium">Instructor</dt>
-              <dd className="text-muted-foreground">
-                {session.instructor.name}
-              </dd>
+              <dd className="text-muted-foreground">{session.instructor.name}</dd>
             </div>
           )}
           <div>
             <dt className="font-medium">Spots remaining</dt>
-            <dd
-              className={
-                isFull
-                  ? "text-destructive"
-                  : "text-muted-foreground"
-              }
-            >
+            <dd className={isFull ? "text-destructive" : "text-muted-foreground"}>
               {isFull ? "Full" : spotsRemaining}
             </dd>
           </div>
@@ -163,6 +162,6 @@ export default async function SessionDetailPage({
 
         <div className="flex items-center gap-3">{cta()}</div>
       </div>
-    </main>
+    </div>
   );
 }

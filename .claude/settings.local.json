@@ -11,7 +11,8 @@
       "Bash(mkdir -p /Users/samrobertson/Desktop/throw/src/app/api/memberships/pause /Users/samrobertson/Desktop/throw/src/app/api/memberships/resume /Users/samrobertson/Desktop/throw/src/app/api/memberships/cancel /Users/samrobertson/Desktop/throw/src/app/api/memberships/change-plan /Users/samrobertson/Desktop/throw/src/app/api/admin/memberships/\\\\[id\\\\]/cancel /Users/samrobertson/Desktop/throw/src/app/api/admin/memberships/\\\\[id\\\\]/pause)",
       "Bash(mkdir -p /Users/samrobertson/Desktop/throw/src/app/membership/manage/_components)",
       "Bash(npm list *)",
-      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\({**d.get\\('dependencies',{}\\), **d.get\\('devDependencies',{}\\)}, indent=2\\)\\)\")"
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\({**d.get\\('dependencies',{}\\), **d.get\\('devDependencies',{}\\)}, indent=2\\)\\)\")",
+      "Bash(xargs cat)"
     ]
   }
 }
