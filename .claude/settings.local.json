@@ -20,7 +20,8 @@
       "Bash(mv src/app/book/\\\\[id\\\\]/page.tsx                         src/app/\\\\\\(customer\\\\\\)/book/\\\\[id\\\\]/page.tsx)",
       "Bash(mkdir -p \"/Users/samrobertson/Desktop/throw/src/app/\\(public\\)/community/[id]\")",
       "Bash(mkdir -p \"/Users/samrobertson/Desktop/throw/src/app/admin/community/[id]/edit\")",
-      "Bash(npx tsx *)"
+      "Bash(npx tsx *)",
+      "Bash(git -C /Users/samrobertson/Desktop/throw status --short)"
     ]
   }
 }

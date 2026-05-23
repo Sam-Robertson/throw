@@ -1,25 +1,27 @@
-import Link from "next/link";
-import { prisma } from "@/lib/prisma";
-import { formatMountainTime } from "@/lib/timezone";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import NextLink from 'next/link';
+import { prisma } from '@/lib/prisma';
+import { formatMountainTime } from '@/lib/timezone';
+import Box from '@mui/material/Box';
+import Container from '@mui/material/Container';
+import Grid from '@mui/material/Grid';
+import Typography from '@mui/material/Typography';
+import Button from '@mui/material/Button';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import CardActions from '@mui/material/CardActions';
+import Chip from '@mui/material/Chip';
+import Link from '@mui/material/Link';
+import Stack from '@mui/material/Stack';
+import { md3 } from '@/lib/theme';
 
 async function getUpcomingSessions() {
   return prisma.studioSession.findMany({
     where: { startsAt: { gte: new Date() }, isCancelled: false },
     include: {
       sessionType: { select: { name: true } },
-      _count: { select: { bookings: { where: { status: "CONFIRMED" } } } },
+      _count: { select: { bookings: { where: { status: 'CONFIRMED' } } } },
     },
-    orderBy: { startsAt: "asc" },
+    orderBy: { startsAt: 'asc' },
     take: 6,
   });
 }
@@ -27,7 +29,7 @@ async function getUpcomingSessions() {
 async function getActivePlans() {
   return prisma.membershipPlan.findMany({
     where: { isActive: true },
-    orderBy: { price: "asc" },
+    orderBy: { price: 'asc' },
   });
 }
 
@@ -39,189 +41,239 @@ function formatPrice(cents: number, days: number) {
 }
 
 export default async function HomePage() {
-  const [sessions, plans] = await Promise.all([
-    getUpcomingSessions(),
-    getActivePlans(),
-  ]);
+  const [sessions, plans] = await Promise.all([getUpcomingSessions(), getActivePlans()]);
 
   return (
     <>
-      {/* ── Hero ───────────────────────────────────────────────── */}
-      <section className="bg-foreground px-4 py-24 text-background">
-        <div className="mx-auto max-w-3xl text-center">
-          <h1 className="text-4xl font-bold leading-tight tracking-tight sm:text-5xl md:text-6xl">
+      {/* ── Hero ─────────────────────────────────────────────────────────────── */}
+      <Box
+        component="section"
+        sx={{
+          bgcolor: md3.inverseSurface,
+          color: md3.inverseOnSurface,
+          py: { xs: 10, md: 14 },
+          px: 3,
+        }}
+      >
+        <Container maxWidth="md" sx={{ textAlign: 'center' }}>
+          <Typography
+            variant="h1"
+            sx={{ color: md3.inverseOnSurface, fontWeight: 700 }}
+          >
             Make something with your hands.
-          </h1>
-          <p className="mt-6 text-lg text-background/70 sm:text-xl">
-            Pottery studio in Provo, Utah. Open studio sessions, classes, and
-            memberships.
-          </p>
-          <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-            <Button size="lg" variant="secondary" asChild>
-              <Link href="/schedule">Browse Schedule</Link>
+          </Typography>
+          <Typography
+            variant="body1"
+            sx={{ mt: 3, color: `${md3.inverseOnSurface}B3`, fontSize: { xs: '1rem', md: '1.125rem' } }}
+          >
+            Pottery studio in Provo, Utah. Open studio sessions, classes, and memberships.
+          </Typography>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            sx={{ justifyContent: 'center', gap: 1.5, mt: 4 }}
+          >
+            <Button
+              component={NextLink}
+              href="/schedule"
+              variant="contained"
+              size="large"
+              sx={{
+                bgcolor: md3.inversePrimary,
+                color: md3.primary,
+                '&:hover': { bgcolor: md3.primaryContainer },
+              }}
+            >
+              Browse Schedule
             </Button>
             <Button
-              size="lg"
-              variant="outline"
-              className="border-background/30 bg-transparent text-background hover:bg-background/10"
-              asChild
+              component={NextLink}
+              href="/membership"
+              variant="outlined"
+              size="large"
+              sx={{
+                borderColor: `${md3.inverseOnSurface}50`,
+                color: md3.inverseOnSurface,
+                '&:hover': { bgcolor: `${md3.inverseOnSurface}15`, borderColor: md3.inverseOnSurface },
+              }}
             >
-              <Link href="/membership">View Memberships</Link>
+              View Memberships
             </Button>
-          </div>
-        </div>
-      </section>
+          </Stack>
+        </Container>
+      </Box>
 
-      {/* ── This Week ──────────────────────────────────────────── */}
-      <section className="px-4 py-16">
-        <div className="mx-auto max-w-6xl">
-          <h2 className="mb-8 text-2xl font-bold">This Week</h2>
+      {/* ── This Week ────────────────────────────────────────────────────────── */}
+      <Box component="section" sx={{ py: { xs: 8, md: 10 }, px: 3 }}>
+        <Container maxWidth="lg">
+          <Typography variant="h2" sx={{ mb: 4, fontWeight: 700 }}>
+            This Week
+          </Typography>
 
           {sessions.length === 0 ? (
-            <p className="text-muted-foreground">
+            <Typography color="text.secondary">
               No upcoming sessions this week. Check back soon!
-            </p>
+            </Typography>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Grid container spacing={2}>
               {sessions.map((s) => {
                 const spots = s.capacity - s._count.bookings;
                 const isFull = spots <= 0;
                 return (
-                  <Card key={s.id} className="flex flex-col">
-                    <CardHeader className="pb-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <CardTitle className="text-base leading-tight">
-                          {s.sessionType.name}
-                        </CardTitle>
-                        {isFull && (
-                          <Badge variant="secondary" className="shrink-0 text-xs">
-                            Full
-                          </Badge>
-                        )}
-                      </div>
-                      <CardDescription>
-                        {formatMountainTime(s.startsAt, "datetime")}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex-1 pb-2">
-                      <p className="text-sm text-muted-foreground">
-                        {isFull ? (
-                          <span className="text-destructive">No spots left</span>
-                        ) : (
-                          `${spots} spot${spots !== 1 ? "s" : ""} remaining`
-                        )}
-                      </p>
-                    </CardContent>
-                    <CardFooter>
-                      <Button
-                        asChild
-                        size="sm"
-                        variant={isFull ? "secondary" : "default"}
-                        className="w-full"
-                      >
-                        <Link href={`/schedule/${s.id}`}>
-                          {isFull ? "Join Waitlist" : "Book"}
-                        </Link>
-                      </Button>
-                    </CardFooter>
-                  </Card>
+                  <Grid key={s.id} size={{ xs: 12, sm: 6, lg: 4 }}>
+                    <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                      <CardContent sx={{ flex: 1 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1, mb: 1 }}>
+                          <Typography variant="h6" sx={{ lineHeight: 1.3 }}>
+                            {s.sessionType.name}
+                          </Typography>
+                          {isFull && (
+                            <Chip label="Full" size="small" color="default" />
+                          )}
+                        </Box>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                          {formatMountainTime(s.startsAt, 'datetime')}
+                        </Typography>
+                        <Typography variant="body2" color={isFull ? 'error.main' : 'text.secondary'}>
+                          {isFull ? 'No spots left' : `${spots} spot${spots !== 1 ? 's' : ''} remaining`}
+                        </Typography>
+                      </CardContent>
+                      <CardActions>
+                        <Button
+                          component={NextLink}
+                          href={`/schedule/${s.id}`}
+                          variant={isFull ? 'outlined' : 'contained'}
+                          size="small"
+                          fullWidth
+                        >
+                          {isFull ? 'Join Waitlist' : 'Book'}
+                        </Button>
+                      </CardActions>
+                    </Card>
+                  </Grid>
                 );
               })}
-            </div>
+            </Grid>
           )}
 
-          <div className="mt-6 text-center">
+          <Box sx={{ mt: 4, textAlign: 'center' }}>
             <Link
+              component={NextLink}
               href="/schedule"
-              className="text-sm underline underline-offset-4 hover:text-muted-foreground"
+              underline="always"
+              sx={{ fontSize: '0.875rem', color: 'text.secondary' }}
             >
               See full schedule →
             </Link>
-          </div>
-        </div>
-      </section>
+          </Box>
+        </Container>
+      </Box>
 
-      {/* ── Become a Member ────────────────────────────────────── */}
-      <section className="bg-muted/40 px-4 py-16">
-        <div className="mx-auto max-w-6xl">
-          <h2 className="mb-2 text-2xl font-bold">Become a Member</h2>
-          <p className="mb-8 text-muted-foreground">
+      {/* ── Become a Member ──────────────────────────────────────────────────── */}
+      <Box
+        component="section"
+        sx={{
+          bgcolor: md3.surfaceVariant,
+          py: { xs: 8, md: 10 },
+          px: 3,
+        }}
+      >
+        <Container maxWidth="lg">
+          <Typography variant="h2" sx={{ mb: 1, fontWeight: 700 }}>
+            Become a Member
+          </Typography>
+          <Typography color="text.secondary" sx={{ mb: 4 }}>
             Unlimited access, priority booking, and more.
-          </p>
+          </Typography>
 
           {plans.length === 0 ? (
-            <p className="text-muted-foreground">
-              Membership plans coming soon.
-            </p>
+            <Typography color="text.secondary">Membership plans coming soon.</Typography>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Grid container spacing={2}>
               {plans.map((p) => (
-                <Card key={p.id}>
-                  <CardHeader>
-                    <CardTitle>{p.name}</CardTitle>
-                    {p.description && (
-                      <CardDescription>{p.description}</CardDescription>
-                    )}
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-bold">
-                      {formatPrice(p.price, p.billingIntervalDays)}
-                    </p>
-                  </CardContent>
-                  <CardFooter>
-                    <Button asChild variant="outline" className="w-full">
-                      <Link href="/membership">Learn More</Link>
-                    </Button>
-                  </CardFooter>
-                </Card>
+                <Grid key={p.id} size={{ xs: 12, sm: 6, lg: 4 }}>
+                  <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                    <CardContent sx={{ flex: 1 }}>
+                      <Typography variant="h6" sx={{ mb: 0.5 }}>{p.name}</Typography>
+                      {p.description && (
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                          {p.description}
+                        </Typography>
+                      )}
+                      <Typography variant="h4" color="primary" sx={{ fontWeight: 700 }}>
+                        {formatPrice(p.price, p.billingIntervalDays)}
+                      </Typography>
+                    </CardContent>
+                    <CardActions>
+                      <Button
+                        component={NextLink}
+                        href="/membership"
+                        variant="outlined"
+                        size="small"
+                        fullWidth
+                      >
+                        Learn More
+                      </Button>
+                    </CardActions>
+                  </Card>
+                </Grid>
               ))}
-            </div>
+            </Grid>
           )}
-        </div>
-      </section>
+        </Container>
+      </Box>
 
-      {/* ── Visit Us ───────────────────────────────────────────── */}
-      <section className="px-4 py-16">
-        <div className="mx-auto max-w-6xl">
-          <h2 className="mb-8 text-2xl font-bold">Visit Us</h2>
-          <div className="grid gap-8 md:grid-cols-2">
+      {/* ── Visit Us ─────────────────────────────────────────────────────────── */}
+      <Box component="section" sx={{ py: { xs: 8, md: 10 }, px: 3 }}>
+        <Container maxWidth="lg">
+          <Typography variant="h2" sx={{ mb: 4, fontWeight: 700 }}>
+            Visit Us
+          </Typography>
+          <Grid container spacing={6}>
             {/* Text */}
-            <div>
-              <div className="mb-6">
-                <h3 className="mb-1 font-semibold">Address</h3>
-                <p className="text-muted-foreground">Provo, Utah</p>
-              </div>
-              <div>
-                <h3 className="mb-2 font-semibold">Hours</h3>
-                <ul className="space-y-1 text-sm text-muted-foreground">
-                  {[
-                    "Monday",
-                    "Tuesday",
-                    "Wednesday",
-                    "Thursday",
-                    "Friday",
-                    "Saturday",
-                  ].map((day) => (
-                    <li key={day} className="flex justify-between gap-4">
-                      <span>{day}</span>
-                      <span>See schedule for session times</span>
-                    </li>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="h6" sx={{ mb: 0.5 }}>Address</Typography>
+                <Typography color="text.secondary">Provo, Utah</Typography>
+              </Box>
+              <Box>
+                <Typography variant="h6" sx={{ mb: 1 }}>Hours</Typography>
+                <Stack spacing={0.5}>
+                  {['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((day) => (
+                    <Box key={day} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                      <Typography variant="body2">{day}</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        See schedule for session times
+                      </Typography>
+                    </Box>
                   ))}
-                  <li className="flex justify-between gap-4">
-                    <span>Sunday</span>
-                    <span>Closed</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                    <Typography variant="body2">Sunday</Typography>
+                    <Typography variant="body2" color="text.secondary">Closed</Typography>
+                  </Box>
+                </Stack>
+              </Box>
+            </Grid>
 
             {/* Photo placeholder */}
-            <div className="flex min-h-48 items-center justify-center rounded-lg bg-muted text-sm text-muted-foreground">
-              Photo coming soon
-            </div>
-          </div>
-        </div>
-      </section>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Box
+                sx={{
+                  minHeight: 192,
+                  borderRadius: 3,
+                  bgcolor: md3.surfaceVariant,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'text.secondary',
+                  fontSize: '0.875rem',
+                }}
+              >
+                Photo coming soon
+              </Box>
+            </Grid>
+          </Grid>
+        </Container>
+      </Box>
     </>
   );
 }

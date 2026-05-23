@@ -1,18 +1,18 @@
-import Link from "next/link";
-import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import NextLink from 'next/link';
+import { auth } from '@/auth';
+import { prisma } from '@/lib/prisma';
+import Box from '@mui/material/Box';
+import Container from '@mui/material/Container';
+import Grid from '@mui/material/Grid';
+import Typography from '@mui/material/Typography';
+import Button from '@mui/material/Button';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import CardActions from '@mui/material/CardActions';
+import Chip from '@mui/material/Chip';
+import Alert from '@mui/material/Alert';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 function formatPrice(priceInCents: number, billingIntervalDays: number): string {
   const dollars = (priceInCents / 100).toFixed(2);
@@ -26,77 +26,105 @@ export default async function MembershipPage() {
 
   const plans = await prisma.membershipPlan.findMany({
     where: { isActive: true },
-    orderBy: { price: "asc" },
+    orderBy: { price: 'asc' },
   });
 
   let activeMembership: { id: string } | null = null;
   if (session?.user?.id) {
     activeMembership = await prisma.membership.findFirst({
-      where: { userId: session.user.id, status: "ACTIVE" },
+      where: { userId: session.user.id, status: 'ACTIVE' },
       select: { id: true },
     });
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-16">
-      <div className="mb-10 text-center">
-        <h1 className="mb-2 text-4xl font-bold">Membership Plans</h1>
-        <p className="text-muted-foreground">
+    <Container maxWidth="lg" sx={{ py: { xs: 8, md: 10 }, px: { xs: 3, md: 4 } }}>
+      <Box sx={{ mb: 6, textAlign: 'center' }}>
+        <Typography variant="h1" sx={{ mb: 1.5, fontWeight: 700 }}>
+          Membership Plans
+        </Typography>
+        <Typography color="text.secondary" variant="body1">
           Join our studio community with a recurring membership.
-        </p>
-      </div>
+        </Typography>
+      </Box>
 
       {activeMembership && (
-        <div className="mb-8 flex items-center justify-between rounded-lg border bg-muted/40 px-6 py-4">
-          <div className="flex items-center gap-3">
-            <Badge>Active Member</Badge>
-            <span className="text-sm text-muted-foreground">
-              You already have an active membership.
-            </span>
-          </div>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/membership/manage">Manage</Link>
-          </Button>
-        </div>
+        <Alert
+          severity="success"
+          sx={{ mb: 4, alignItems: 'center' }}
+          action={
+            <Button
+              component={NextLink}
+              href="/membership/manage"
+              variant="outlined"
+              size="small"
+              color="success"
+            >
+              Manage
+            </Button>
+          }
+          icon={<Chip label="Active Member" size="small" color="success" sx={{ fontWeight: 600 }} />}
+        >
+          You already have an active membership.
+        </Alert>
       )}
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <Grid container spacing={3}>
         {plans.map((plan) => (
-          <Card key={plan.id} className="flex flex-col">
-            <CardHeader>
-              <CardTitle>{plan.name}</CardTitle>
-              {plan.description && (
-                <CardDescription>{plan.description}</CardDescription>
-              )}
-            </CardHeader>
-            <CardContent className="flex-1">
-              <p className="text-3xl font-bold">
-                {formatPrice(plan.price, plan.billingIntervalDays)}
-              </p>
-            </CardContent>
-            <CardFooter>
-              {activeMembership ? (
-                <Button className="w-full" disabled>
-                  You&apos;re a member
-                </Button>
-              ) : session?.user ? (
-                <Button asChild className="w-full">
-                  <Link href={`/membership/subscribe/${plan.id}`}>Join</Link>
-                </Button>
-              ) : (
-                <Button asChild className="w-full">
-                  <Link href={`/login?callbackUrl=/membership`}>Join</Link>
-                </Button>
-              )}
-            </CardFooter>
-          </Card>
+          <Grid key={plan.id} size={{ xs: 12, sm: 6, lg: 4 }}>
+            <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <CardContent sx={{ flex: 1 }}>
+                <Typography variant="h5" sx={{ mb: 0.5, fontWeight: 600 }}>
+                  {plan.name}
+                </Typography>
+                {plan.description && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    {plan.description}
+                  </Typography>
+                )}
+                <Typography variant="h3" color="primary" sx={{ fontWeight: 700 }}>
+                  {formatPrice(plan.price, plan.billingIntervalDays)}
+                </Typography>
+              </CardContent>
+              <CardActions>
+                {activeMembership ? (
+                  <Button variant="contained" fullWidth disabled>
+                    You&apos;re a member
+                  </Button>
+                ) : session?.user ? (
+                  <Button
+                    component={NextLink}
+                    href={`/membership/subscribe/${plan.id}`}
+                    variant="contained"
+                    fullWidth
+                  >
+                    Join
+                  </Button>
+                ) : (
+                  <Button
+                    component={NextLink}
+                    href={`/login?callbackUrl=/membership`}
+                    variant="contained"
+                    fullWidth
+                  >
+                    Join
+                  </Button>
+                )}
+              </CardActions>
+            </Card>
+          </Grid>
         ))}
         {plans.length === 0 && (
-          <p className="col-span-full py-12 text-center text-muted-foreground">
-            No membership plans are currently available.
-          </p>
+          <Grid size={12}>
+            <Typography
+              color="text.secondary"
+              sx={{ textAlign: 'center', py: 8 }}
+            >
+              No membership plans are currently available.
+            </Typography>
+          </Grid>
         )}
-      </div>
-    </div>
+      </Grid>
+    </Container>
   );
 }

@@ -1,16 +1,20 @@
-import { auth } from "@/auth";
-import { redirect } from "next/navigation";
+import { auth } from '@/auth';
+import { redirect } from 'next/navigation';
+import Container from '@mui/material/Container';
+import Typography from '@mui/material/Typography';
 
 export default async function AdminPage() {
   const session = await auth();
-  if (!session) redirect("/login");
+  if (!session) redirect('/login');
 
   return (
-    <main className="p-8">
-      <h1 className="text-2xl font-semibold">Admin dashboard</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
+    <Container maxWidth="lg" sx={{ py: 5, px: { xs: 3, md: 4 } }}>
+      <Typography variant="h2" sx={{ fontWeight: 700 }}>
+        Admin dashboard
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
         {session.user.name ?? session.user.email} &middot; {session.user.role}
-      </p>
-    </main>
+      </Typography>
+    </Container>
   );
 }

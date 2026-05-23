@@ -1,8 +1,9 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { Heart } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useState } from 'react';
+import Button from '@mui/material/Button';
+import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
+import FavoriteIcon from '@mui/icons-material/Favorite';
 
 interface Props {
   postId: string;
@@ -20,20 +21,16 @@ export function LikeButton({ postId, initialLiked, initialCount, disabled }: Pro
     if (disabled || loading) return;
     const prevLiked = liked;
     const prevCount = count;
-    // Optimistic update
     setLiked(!liked);
     setCount(liked ? count - 1 : count + 1);
     setLoading(true);
     try {
-      const res = await fetch(`/api/community/posts/${postId}/like`, {
-        method: "POST",
-      });
-      if (!res.ok) throw new Error("Failed");
+      const res = await fetch(`/api/community/posts/${postId}/like`, { method: 'POST' });
+      if (!res.ok) throw new Error('Failed');
       const data = (await res.json()) as { liked: boolean; count: number };
       setLiked(data.liked);
       setCount(data.count);
     } catch {
-      // Revert on error
       setLiked(prevLiked);
       setCount(prevCount);
     } finally {
@@ -42,20 +39,22 @@ export function LikeButton({ postId, initialLiked, initialCount, disabled }: Pro
   }
 
   return (
-    <button
+    <Button
+      size="small"
       onClick={handleClick}
       disabled={disabled}
-      className={cn(
-        "flex items-center gap-1.5 text-sm transition-colors",
-        liked ? "text-rose-500" : "text-muted-foreground hover:text-rose-500",
-        disabled && "cursor-default opacity-60",
-      )}
-      aria-label={liked ? "Unlike post" : "Like post"}
+      startIcon={liked ? <FavoriteIcon sx={{ fontSize: '16px !important' }} /> : <FavoriteBorderIcon sx={{ fontSize: '16px !important' }} />}
+      sx={{
+        color: liked ? '#e11d48' : 'text.secondary',
+        minWidth: 0,
+        p: '2px 8px',
+        fontSize: '0.875rem',
+        '&:hover': { color: '#e11d48', bgcolor: '#fce7ef' },
+        '&.Mui-disabled': { opacity: 0.6, color: 'text.secondary' },
+      }}
+      aria-label={liked ? 'Unlike post' : 'Like post'}
     >
-      <Heart
-        className={cn("h-4 w-4", liked && "fill-current")}
-      />
-      <span>{count}</span>
-    </button>
+      {count}
+    </Button>
   );
 }

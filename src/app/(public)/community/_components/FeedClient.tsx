@@ -1,9 +1,11 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { PostCard } from "./PostCard";
-import { Button } from "@/components/ui/button";
-import type { Role } from "@prisma/client";
+import { useState } from 'react';
+import Box from '@mui/material/Box';
+import Stack from '@mui/material/Stack';
+import Button from '@mui/material/Button';
+import { PostCard } from './PostCard';
+import type { Role } from '@prisma/client';
 
 interface Post {
   id: string;
@@ -34,10 +36,8 @@ export function FeedClient({ initialPosts, isAuthenticated }: Props) {
     setLoading(true);
     try {
       const nextPage = page + 1;
-      const res = await fetch(
-        `/api/community/posts?page=${nextPage}&limit=${LIMIT}`,
-      );
-      if (!res.ok) throw new Error("Failed");
+      const res = await fetch(`/api/community/posts?page=${nextPage}&limit=${LIMIT}`);
+      if (!res.ok) throw new Error('Failed');
       const data = (await res.json()) as { posts: Post[] };
       setPosts((prev) => [...prev, ...data.posts]);
       setPage(nextPage);
@@ -50,23 +50,18 @@ export function FeedClient({ initialPosts, isAuthenticated }: Props) {
   }
 
   return (
-    <div className="space-y-4">
+    <Stack spacing={2}>
       {posts.map((post) => (
-        <PostCard
-          key={post.id}
-          post={post}
-          isAuthenticated={isAuthenticated}
-          truncate
-        />
+        <PostCard key={post.id} post={post} isAuthenticated={isAuthenticated} truncate />
       ))}
 
       {hasMore && (
-        <div className="flex justify-center pt-2">
-          <Button variant="outline" onClick={loadMore} disabled={loading}>
-            {loading ? "Loading..." : "Load more"}
+        <Box sx={{ display: 'flex', justifyContent: 'center', pt: 1 }}>
+          <Button variant="outlined" onClick={loadMore} disabled={loading}>
+            {loading ? 'Loading…' : 'Load more'}
           </Button>
-        </div>
+        </Box>
       )}
-    </div>
+    </Stack>
   );
 }

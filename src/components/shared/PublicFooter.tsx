@@ -1,64 +1,97 @@
-import Link from "next/link";
-import { Circle } from "lucide-react";
+import NextLink from 'next/link';
+import Box from '@mui/material/Box';
+import Container from '@mui/material/Container';
+import Grid from '@mui/material/Grid';
+import Typography from '@mui/material/Typography';
+import Link from '@mui/material/Link';
+import Divider from '@mui/material/Divider';
+import IconButton from '@mui/material/IconButton';
+import CircleIcon from '@mui/icons-material/Circle';
+import { md3 } from '@/lib/theme';
+
+const FOOTER_LINKS = [
+  { href: '/schedule', label: 'Schedule' },
+  { href: '/membership', label: 'Memberships' },
+  { href: '/about', label: 'About' },
+  { href: '/login', label: 'Login' },
+];
 
 export function PublicFooter() {
   return (
-    <footer className="border-t bg-foreground text-background">
-      <div className="mx-auto max-w-6xl px-4 py-12">
-        <div className="grid gap-8 sm:grid-cols-3">
-          {/* Left — wordmark + tagline */}
-          <div>
-            <p className="text-lg font-bold">Throw</p>
-            <p className="mt-1 text-sm text-background/70">
+    <Box
+      component="footer"
+      sx={{
+        bgcolor: md3.inverseSurface,
+        color: md3.inverseOnSurface,
+        mt: 'auto',
+      }}
+    >
+      <Container maxWidth="lg" sx={{ py: { xs: 6, md: 8 }, px: { xs: 3, md: 4 } }}>
+        <Grid container spacing={4}>
+          {/* Wordmark + tagline */}
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <Typography
+              variant="h6"
+              sx={{ fontWeight: 700, color: md3.inverseOnSurface }}
+            >
+              Throw
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{ mt: 0.5, color: `${md3.inverseOnSurface}99` }}
+            >
               Pottery studio in Provo, Utah
-            </p>
-          </div>
+            </Typography>
+          </Grid>
 
-          {/* Center — links */}
-          <div className="flex flex-col gap-2">
-            <Link
-              href="/schedule"
-              className="text-sm text-background/70 transition-colors hover:text-background"
-            >
-              Schedule
-            </Link>
-            <Link
-              href="/membership"
-              className="text-sm text-background/70 transition-colors hover:text-background"
-            >
-              Memberships
-            </Link>
-            <Link
-              href="/about"
-              className="text-sm text-background/70 transition-colors hover:text-background"
-            >
-              About
-            </Link>
-            <Link
-              href="/login"
-              className="text-sm text-background/70 transition-colors hover:text-background"
-            >
-              Login
-            </Link>
-          </div>
+          {/* Links */}
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {FOOTER_LINKS.map((l) => (
+                <Link
+                  key={l.href}
+                  component={NextLink}
+                  href={l.href}
+                  underline="hover"
+                  sx={{
+                    color: `${md3.inverseOnSurface}99`,
+                    fontSize: '0.875rem',
+                    '&:hover': { color: md3.inverseOnSurface },
+                    transition: 'color 0.2s',
+                  }}
+                >
+                  {l.label}
+                </Link>
+              ))}
+            </Box>
+          </Grid>
 
-          {/* Right — social */}
-          <div className="flex items-start gap-3">
-            <a
+          {/* Social */}
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <IconButton
               href="#"
-              title="Instagram — coming soon"
               aria-label="Instagram (coming soon)"
-              className="text-background/50 transition-colors hover:text-background"
+              title="Instagram — coming soon"
+              sx={{ color: `${md3.inverseOnSurface}60`, p: 0.5 }}
             >
-              <Circle className="h-5 w-5" />
-            </a>
-          </div>
-        </div>
+              <CircleIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+          </Grid>
+        </Grid>
 
-        <div className="mt-10 border-t border-background/20 pt-6 text-center text-xs text-background/50">
+        <Divider sx={{ my: 4, borderColor: `${md3.inverseOnSurface}20` }} />
+
+        <Typography
+          variant="caption"
+          sx={{
+            display: 'block',
+            textAlign: 'center',
+            color: `${md3.inverseOnSurface}60`,
+          }}
+        >
           © 2025 Throw Art Studio. All rights reserved.
-        </div>
-      </div>
-    </footer>
+        </Typography>
+      </Container>
+    </Box>
   );
 }

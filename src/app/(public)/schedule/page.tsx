@@ -1,15 +1,23 @@
-import Link from "next/link";
-import { prisma } from "@/lib/prisma";
-import { formatMountainTime } from "@/lib/timezone";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import NextLink from 'next/link';
+import { prisma } from '@/lib/prisma';
+import { formatMountainTime } from '@/lib/timezone';
+import Box from '@mui/material/Box';
+import Container from '@mui/material/Container';
+import Grid from '@mui/material/Grid';
+import Typography from '@mui/material/Typography';
+import Button from '@mui/material/Button';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import CardActions from '@mui/material/CardActions';
+import Chip from '@mui/material/Chip';
+import Stack from '@mui/material/Stack';
+import { md3 } from '@/lib/theme';
 
 async function getSessionTypes() {
   return prisma.sessionType.findMany({
     where: { isActive: true },
     select: { id: true, name: true, slug: true },
-    orderBy: { name: "asc" },
+    orderBy: { name: 'asc' },
   });
 }
 
@@ -18,32 +26,25 @@ async function getSessions(typeSlug?: string) {
     where: {
       startsAt: { gte: new Date() },
       isCancelled: false,
-      ...(typeSlug
-        ? { sessionType: { slug: typeSlug } }
-        : {}),
+      ...(typeSlug ? { sessionType: { slug: typeSlug } } : {}),
     },
     include: {
       sessionType: {
-        select: {
-          name: true,
-          slug: true,
-          durationMinutes: true,
-          dropInPriceCents: true,
-        },
+        select: { name: true, slug: true, durationMinutes: true, dropInPriceCents: true },
       },
       instructor: { select: { name: true } },
-      _count: { select: { bookings: { where: { status: "CONFIRMED" } } } },
+      _count: { select: { bookings: { where: { status: 'CONFIRMED' } } } },
     },
-    orderBy: { startsAt: "asc" },
+    orderBy: { startsAt: 'asc' },
   });
 }
 
 type Session = Awaited<ReturnType<typeof getSessions>>[number];
 
 function formatPrice(cents: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
     maximumFractionDigits: 0,
   }).format(cents / 100);
 }
@@ -51,7 +52,7 @@ function formatPrice(cents: number) {
 function groupByDate(sessions: Session[]): Map<string, Session[]> {
   const groups = new Map<string, Session[]>();
   for (const s of sessions) {
-    const key = formatMountainTime(s.startsAt, "date");
+    const key = formatMountainTime(s.startsAt, 'date');
     const list = groups.get(key) ?? [];
     list.push(s);
     groups.set(key, list);
@@ -64,54 +65,57 @@ function SessionCard({ session }: { session: Session }) {
   const isFull = spotsRemaining <= 0;
 
   return (
-    <div className="rounded-lg border bg-card p-5 shadow-sm">
-      <div className="mb-3 flex items-start justify-between gap-2">
-        <h3 className="font-semibold leading-tight">{session.sessionType.name}</h3>
-        {isFull && (
-          <Badge variant="secondary" className="shrink-0 text-xs">
-            Full
-          </Badge>
-        )}
-      </div>
+    <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <CardContent sx={{ flex: 1 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1, mb: 2 }}>
+          <Typography variant="h6" sx={{ lineHeight: 1.3 }}>
+            {session.sessionType.name}
+          </Typography>
+          {isFull && <Chip label="Full" size="small" />}
+        </Box>
 
-      <dl className="mb-4 space-y-1 text-sm text-muted-foreground">
-        <div className="flex gap-2">
-          <dt className="w-20 shrink-0">Time</dt>
-          <dd>{formatMountainTime(session.startsAt, "time")}</dd>
-        </div>
-        <div className="flex gap-2">
-          <dt className="w-20 shrink-0">Duration</dt>
-          <dd>{session.sessionType.durationMinutes} min</dd>
-        </div>
-        {session.instructor?.name && (
-          <div className="flex gap-2">
-            <dt className="w-20 shrink-0">Instructor</dt>
-            <dd>{session.instructor.name}</dd>
-          </div>
-        )}
-        <div className="flex gap-2">
-          <dt className="w-20 shrink-0">Spots left</dt>
-          <dd className={isFull ? "text-destructive" : undefined}>
-            {isFull ? "0" : spotsRemaining}
-          </dd>
-        </div>
-        <div className="flex gap-2">
-          <dt className="w-20 shrink-0">Drop-in</dt>
-          <dd>{formatPrice(session.sessionType.dropInPriceCents)}</dd>
-        </div>
-      </dl>
-
-      <Button
-        asChild
-        size="sm"
-        variant={isFull ? "secondary" : "default"}
-        className="w-full"
-      >
-        <Link href={`/schedule/${session.id}`}>
-          {isFull ? "Join Waitlist" : "Book"}
-        </Link>
-      </Button>
-    </div>
+        <Stack spacing={0.5}>
+          {[
+            { label: 'Time', value: formatMountainTime(session.startsAt, 'time') },
+            { label: 'Duration', value: `${session.sessionType.durationMinutes} min` },
+            ...(session.instructor?.name ? [{ label: 'Instructor', value: session.instructor.name }] : []),
+            {
+              label: 'Spots left',
+              value: isFull ? '0' : String(spotsRemaining),
+              error: isFull,
+            },
+            { label: 'Drop-in', value: formatPrice(session.sessionType.dropInPriceCents) },
+          ].map(({ label, value, error }) => (
+            <Box key={label} sx={{ display: 'flex', gap: 1.5 }}>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ width: 84, flexShrink: 0 }}
+              >
+                {label}
+              </Typography>
+              <Typography
+                variant="body2"
+                color={error ? 'error.main' : 'text.primary'}
+              >
+                {value}
+              </Typography>
+            </Box>
+          ))}
+        </Stack>
+      </CardContent>
+      <CardActions>
+        <Button
+          component={NextLink}
+          href={`/schedule/${session.id}`}
+          variant={isFull ? 'outlined' : 'contained'}
+          size="small"
+          fullWidth
+        >
+          {isFull ? 'Join Waitlist' : 'Book'}
+        </Button>
+      </CardActions>
+    </Card>
   );
 }
 
@@ -121,67 +125,69 @@ interface Props {
 
 export default async function SchedulePage({ searchParams }: Props) {
   const { type: typeSlug } = await searchParams;
-
-  const [sessionTypes, sessions] = await Promise.all([
-    getSessionTypes(),
-    getSessions(typeSlug),
-  ]);
-
+  const [sessionTypes, sessions] = await Promise.all([getSessionTypes(), getSessions(typeSlug)]);
   const grouped = groupByDate(sessions);
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-10">
-      <h1 className="mb-6 text-3xl font-bold">Schedule</h1>
+    <Container maxWidth="lg" sx={{ py: { xs: 5, md: 7 }, px: { xs: 3, md: 4 } }}>
+      <Typography variant="h1" sx={{ mb: 4, fontWeight: 700 }}>
+        Schedule
+      </Typography>
 
-      {/* Filter bar */}
+      {/* Filter pills */}
       {sessionTypes.length > 0 && (
-        <div className="mb-8 flex flex-wrap gap-2">
-          <Link
+        <Box sx={{ mb: 5, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+          <Chip
+            component={NextLink}
             href="/schedule"
-            className={cn(
-              "rounded-full border px-4 py-1.5 text-sm font-medium transition-colors",
-              !typeSlug
-                ? "border-foreground bg-foreground text-background"
-                : "hover:border-foreground hover:bg-accent",
-            )}
-          >
-            All
-          </Link>
+            label="All"
+            clickable
+            variant={!typeSlug ? 'filled' : 'outlined'}
+            color={!typeSlug ? 'primary' : 'default'}
+          />
           {sessionTypes.map((t) => (
-            <Link
+            <Chip
               key={t.id}
+              component={NextLink}
               href={`/schedule?type=${t.slug}`}
-              className={cn(
-                "rounded-full border px-4 py-1.5 text-sm font-medium transition-colors",
-                typeSlug === t.slug
-                  ? "border-foreground bg-foreground text-background"
-                  : "hover:border-foreground hover:bg-accent",
-              )}
-            >
-              {t.name}
-            </Link>
+              label={t.name}
+              clickable
+              variant={typeSlug === t.slug ? 'filled' : 'outlined'}
+              color={typeSlug === t.slug ? 'primary' : 'default'}
+            />
           ))}
-        </div>
+        </Box>
       )}
 
       {grouped.size === 0 ? (
-        <p className="text-muted-foreground">
+        <Typography color="text.secondary">
           No upcoming sessions scheduled. Check back soon.
-        </p>
+        </Typography>
       ) : (
-        <div className="space-y-10">
+        <Stack spacing={6}>
           {Array.from(grouped.entries()).map(([date, daySessions]) => (
-            <section key={date}>
-              <h2 className="mb-4 text-lg font-semibold">{date}</h2>
-              <div className="grid gap-4 sm:grid-cols-2">
+            <Box component="section" key={date}>
+              <Typography
+                variant="h5"
+                sx={{
+                  mb: 2,
+                  pb: 1,
+                  borderBottom: `2px solid ${md3.outlineVariant}`,
+                }}
+              >
+                {date}
+              </Typography>
+              <Grid container spacing={2}>
                 {daySessions.map((s) => (
-                  <SessionCard key={s.id} session={s} />
+                  <Grid key={s.id} size={{ xs: 12, sm: 6 }}>
+                    <SessionCard session={s} />
+                  </Grid>
                 ))}
-              </div>
-            </section>
+              </Grid>
+            </Box>
           ))}
-        </div>
+        </Stack>
       )}
-    </div>
+    </Container>
   );
 }

@@ -1,19 +1,21 @@
-import Link from "next/link";
-import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
-import { Button } from "@/components/ui/button";
-import { FeedClient } from "./_components/FeedClient";
+import NextLink from 'next/link';
+import { auth } from '@/auth';
+import { prisma } from '@/lib/prisma';
+import Container from '@mui/material/Container';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Button from '@mui/material/Button';
+import Alert from '@mui/material/Alert';
+import { FeedClient } from './_components/FeedClient';
 
-export const metadata = {
-  title: "Community — Throw",
-};
+export const metadata = { title: 'Community — Throw' };
 
 export default async function CommunityPage() {
   const session = await auth();
   const userId = session?.user?.id;
   const role = session?.user?.role;
   const isAuthenticated = !!userId;
-  const isStaffOrAdmin = role === "ADMIN" || role === "STAFF";
+  const isStaffOrAdmin = role === 'ADMIN' || role === 'STAFF';
 
   const where = isStaffOrAdmin ? {} : { isPublished: true };
 
@@ -23,7 +25,7 @@ export default async function CommunityPage() {
       author: { select: { name: true, role: true } },
       _count: { select: { likes: true, comments: true } },
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: { createdAt: 'desc' },
     take: 10,
   });
 
@@ -44,40 +46,42 @@ export default async function CommunityPage() {
   }));
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-10">
+    <Container maxWidth="sm" sx={{ py: { xs: 5, md: 7 }, px: { xs: 3, md: 4 } }}>
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Community</h1>
+      <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Typography variant="h2" sx={{ fontWeight: 700 }}>
+          Community
+        </Typography>
         {isStaffOrAdmin && (
-          <Button asChild>
-            <Link href="/admin/community/new">New Post</Link>
+          <Button component={NextLink} href="/admin/community/new" variant="contained" size="small">
+            New Post
           </Button>
         )}
-      </div>
+      </Box>
 
       {/* Auth banner */}
       {!isAuthenticated && (
-        <div className="mb-6 flex items-center justify-between rounded-lg border bg-muted/40 px-4 py-3">
-          <p className="text-sm text-muted-foreground">
-            Sign in to like and comment.
-          </p>
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/login">Login</Link>
-          </Button>
-        </div>
+        <Alert
+          severity="info"
+          sx={{ mb: 3 }}
+          action={
+            <Button component={NextLink} href="/login" size="small" variant="outlined" color="info">
+              Login
+            </Button>
+          }
+        >
+          Sign in to like and comment.
+        </Alert>
       )}
 
       {/* Feed */}
       {postsWithLiked.length === 0 ? (
-        <p className="text-center text-muted-foreground">
+        <Typography sx={{ textAlign: 'center' }} color="text.secondary">
           No posts yet. Check back soon!
-        </p>
+        </Typography>
       ) : (
-        <FeedClient
-          initialPosts={postsWithLiked}
-          isAuthenticated={isAuthenticated}
-        />
+        <FeedClient initialPosts={postsWithLiked} isAuthenticated={isAuthenticated} />
       )}
-    </div>
+    </Container>
   );
 }

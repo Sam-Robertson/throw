@@ -1,26 +1,25 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { useEffect, useState } from 'react';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import TextField from '@mui/material/TextField';
+import Table from '@mui/material/Table';
+import TableBody from '@mui/material/TableBody';
+import TableCell from '@mui/material/TableCell';
+import TableContainer from '@mui/material/TableContainer';
+import TableHead from '@mui/material/TableHead';
+import TableRow from '@mui/material/TableRow';
+import Typography from '@mui/material/Typography';
+import Alert from '@mui/material/Alert';
+import Paper from '@mui/material/Paper';
+import Grid from '@mui/material/Grid';
+import Stack from '@mui/material/Stack';
 
 interface MembershipPlan {
   id: string;
@@ -46,13 +45,13 @@ interface FormState {
 }
 
 const emptyForm: FormState = {
-  name: "",
-  slug: "",
-  description: "",
-  priceInCents: "",
-  billingIntervalDays: "30",
-  stripePriceId: "",
-  locationId: "",
+  name: '',
+  slug: '',
+  description: '',
+  priceInCents: '',
+  billingIntervalDays: '30',
+  stripePriceId: '',
+  locationId: '',
 };
 
 function formatPrice(priceInCents: number, billingIntervalDays: number): string {
@@ -72,7 +71,7 @@ export default function MembershipPlansPage() {
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
-    const res = await fetch("/api/admin/membership-plans");
+    const res = await fetch('/api/admin/membership-plans');
     if (res.ok) setPlans(await res.json());
     setLoading(false);
   }
@@ -91,11 +90,11 @@ export default function MembershipPlansPage() {
     setForm({
       name: plan.name,
       slug: plan.slug,
-      description: plan.description ?? "",
+      description: plan.description ?? '',
       priceInCents: String(plan.price),
       billingIntervalDays: String(plan.billingIntervalDays),
-      stripePriceId: plan.stripePriceId ?? "",
-      locationId: plan.locationId ?? "",
+      stripePriceId: plan.stripePriceId ?? '',
+      locationId: plan.locationId ?? '',
     });
     setError(null);
     setDialogOpen(true);
@@ -118,19 +117,19 @@ export default function MembershipPlansPage() {
 
     const res = editingId
       ? await fetch(`/api/admin/membership-plans/${editingId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         })
-      : await fetch("/api/admin/membership-plans", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+      : await fetch('/api/admin/membership-plans', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setError(data.error ?? "Something went wrong");
+      setError((data as { error?: string }).error ?? 'Something went wrong');
     } else {
       setDialogOpen(false);
       await load();
@@ -139,160 +138,168 @@ export default function MembershipPlansPage() {
   }
 
   async function handleToggle(plan: MembershipPlan) {
-    await fetch(`/api/admin/membership-plans/${plan.id}/toggle`, { method: "PATCH" });
+    await fetch(`/api/admin/membership-plans/${plan.id}/toggle`, { method: 'PATCH' });
     await load();
   }
 
   if (loading) {
     return (
-      <main className="p-6">
-        <p className="text-muted-foreground">Loading...</p>
-      </main>
+      <Box sx={{ p: 4 }}>
+        <Typography color="text.secondary">Loading…</Typography>
+      </Box>
     );
   }
 
   return (
-    <main className="p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Membership Plans</h1>
-        <Button onClick={openNew}>New Plan</Button>
-      </div>
+    <Box sx={{ p: { xs: 3, md: 4 } }}>
+      <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Typography variant="h2" sx={{ fontWeight: 700 }}>
+          Membership Plans
+        </Typography>
+        <Button variant="contained" onClick={openNew}>
+          New Plan
+        </Button>
+      </Box>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Price</TableHead>
-            <TableHead>Active Members</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Stripe Price ID</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {plans.map((plan) => (
-            <TableRow key={plan.id}>
-              <TableCell className="font-medium">{plan.name}</TableCell>
-              <TableCell>{formatPrice(plan.price, plan.billingIntervalDays)}</TableCell>
-              <TableCell>{plan._count.memberships}</TableCell>
-              <TableCell>
-                <Badge variant={plan.isActive ? "default" : "secondary"}>
-                  {plan.isActive ? "Active" : "Inactive"}
-                </Badge>
-              </TableCell>
-              <TableCell className="font-mono text-xs text-muted-foreground">
-                {plan.stripePriceId
-                  ? plan.stripePriceId.length > 12
-                    ? `${plan.stripePriceId.slice(0, 12)}...`
-                    : plan.stripePriceId
-                  : "—"}
-              </TableCell>
-              <TableCell className="text-right">
-                <div className="flex justify-end gap-2">
-                  <Button size="sm" variant="outline" onClick={() => openEdit(plan)}>
-                    Edit
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={plan.isActive ? "secondary" : "outline"}
-                    onClick={() => handleToggle(plan)}
-                  >
-                    {plan.isActive ? "Deactivate" : "Activate"}
-                  </Button>
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
-          {plans.length === 0 && (
+      <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 3 }}>
+        <Table size="small">
+          <TableHead>
             <TableRow>
-              <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-                No membership plans yet.
-              </TableCell>
+              <TableCell>Name</TableCell>
+              <TableCell>Price</TableCell>
+              <TableCell>Active Members</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell>Stripe Price ID</TableCell>
+              <TableCell align="right">Actions</TableCell>
             </TableRow>
-          )}
-        </TableBody>
-      </Table>
+          </TableHead>
+          <TableBody>
+            {plans.map((plan) => (
+              <TableRow key={plan.id}>
+                <TableCell sx={{ fontWeight: 600 }}>{plan.name}</TableCell>
+                <TableCell>{formatPrice(plan.price, plan.billingIntervalDays)}</TableCell>
+                <TableCell>{plan._count.memberships}</TableCell>
+                <TableCell>
+                  <Chip
+                    label={plan.isActive ? 'Active' : 'Inactive'}
+                    size="small"
+                    color={plan.isActive ? 'success' : 'default'}
+                    variant={plan.isActive ? 'filled' : 'outlined'}
+                  />
+                </TableCell>
+                <TableCell>
+                  <Typography
+                    variant="caption"
+                    sx={{ fontFamily: 'monospace', color: 'text.secondary' }}
+                  >
+                    {plan.stripePriceId
+                      ? plan.stripePriceId.length > 12
+                        ? `${plan.stripePriceId.slice(0, 12)}…`
+                        : plan.stripePriceId
+                      : '—'}
+                  </Typography>
+                </TableCell>
+                <TableCell align="right">
+                  <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
+                    <Button size="small" variant="outlined" onClick={() => openEdit(plan)}>
+                      Edit
+                    </Button>
+                    <Button
+                      size="small"
+                      variant={plan.isActive ? 'outlined' : 'contained'}
+                      color={plan.isActive ? 'error' : 'primary'}
+                      onClick={() => handleToggle(plan)}
+                    >
+                      {plan.isActive ? 'Deactivate' : 'Activate'}
+                    </Button>
+                  </Stack>
+                </TableCell>
+              </TableRow>
+            ))}
+            {plans.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} align="center">
+                  <Typography color="text.secondary" sx={{ py: 4 }}>
+                    No membership plans yet.
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editingId ? "Edit Plan" : "New Plan"}</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="name">Name</Label>
-                <Input
-                  id="name"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="slug">Slug</Label>
-                <Input
-                  id="slug"
-                  value={form.slug}
-                  onChange={(e) => setForm({ ...form, slug: e.target.value })}
-                  required
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{editingId ? 'Edit Plan' : 'New Plan'}</DialogTitle>
+        <DialogContent>
+          <Box component="form" id="plan-form" onSubmit={handleSubmit}>
+            <Stack spacing={2.5} sx={{ pt: 1 }}>
+              {error && <Alert severity="error">{error}</Alert>}
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 6 }}>
+                  <TextField
+                    label="Name"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    required
+                  />
+                </Grid>
+                <Grid size={{ xs: 6 }}>
+                  <TextField
+                    label="Slug"
+                    value={form.slug}
+                    onChange={(e) => setForm({ ...form, slug: e.target.value })}
+                    required
+                  />
+                </Grid>
+              </Grid>
+              <TextField
+                label="Description"
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
+                multiline
                 rows={2}
               />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="price">Price (cents)</Label>
-                <Input
-                  id="price"
-                  type="number"
-                  min={0}
-                  value={form.priceInCents}
-                  onChange={(e) => setForm({ ...form, priceInCents: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="interval">Billing Interval (days)</Label>
-                <Input
-                  id="interval"
-                  type="number"
-                  min={1}
-                  value={form.billingIntervalDays}
-                  onChange={(e) => setForm({ ...form, billingIntervalDays: e.target.value })}
-                  required
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="stripePriceId">Stripe Price ID</Label>
-              <Input
-                id="stripePriceId"
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 6 }}>
+                  <TextField
+                    label="Price (cents)"
+                    type="number"
+                    slotProps={{ htmlInput: { min: 0 } }}
+                    value={form.priceInCents}
+                    onChange={(e) => setForm({ ...form, priceInCents: e.target.value })}
+                    required
+                  />
+                </Grid>
+                <Grid size={{ xs: 6 }}>
+                  <TextField
+                    label="Billing Interval (days)"
+                    type="number"
+                    slotProps={{ htmlInput: { min: 1 } }}
+                    value={form.billingIntervalDays}
+                    onChange={(e) => setForm({ ...form, billingIntervalDays: e.target.value })}
+                    required
+                  />
+                </Grid>
+              </Grid>
+              <TextField
+                label="Stripe Price ID"
                 value={form.stripePriceId}
                 onChange={(e) => setForm({ ...form, stripePriceId: e.target.value })}
                 placeholder="price_..."
               />
-            </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? "Saving..." : "Save"}
-              </Button>
-            </DialogFooter>
-          </form>
+            </Stack>
+          </Box>
         </DialogContent>
+        <DialogActions>
+          <Button variant="outlined" onClick={() => setDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button type="submit" form="plan-form" variant="contained" disabled={saving}>
+            {saving ? 'Saving…' : 'Save'}
+          </Button>
+        </DialogActions>
       </Dialog>
-    </main>
+    </Box>
   );
 }

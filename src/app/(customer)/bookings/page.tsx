@@ -1,16 +1,25 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useState, Suspense } from "react";
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { formatMountainTime } from "@/lib/timezone";
+import { useCallback, useEffect, useState, Suspense } from 'react';
+import NextLink from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import Container from '@mui/material/Container';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
+import Paper from '@mui/material/Paper';
+import Divider from '@mui/material/Divider';
+import Tabs from '@mui/material/Tabs';
+import Tab from '@mui/material/Tab';
+import Stack from '@mui/material/Stack';
+import Alert from '@mui/material/Alert';
+import Link from '@mui/material/Link';
+import { formatMountainTime } from '@/lib/timezone';
 
-type Tab = "upcoming" | "past" | "cancelled";
-
-type BookingStatus = "CONFIRMED" | "WAITLIST" | "CANCELLED" | "NO_SHOW";
-type BookingSource = "MEMBERSHIP_CREDIT" | "MEMBER_FREE" | "DROP_IN" | "COMP";
+type TabValue = 'upcoming' | 'past' | 'cancelled';
+type BookingStatus = 'CONFIRMED' | 'WAITLIST' | 'CANCELLED' | 'NO_SHOW';
+type BookingSource = 'MEMBERSHIP_CREDIT' | 'MEMBER_FREE' | 'DROP_IN' | 'COMP';
 
 interface Booking {
   id: string;
@@ -27,18 +36,18 @@ interface Booking {
   };
 }
 
-const STATUS_VARIANT: Record<BookingStatus, "default" | "secondary" | "destructive" | "outline"> = {
-  CONFIRMED: "default",
-  WAITLIST: "outline",
-  CANCELLED: "destructive",
-  NO_SHOW: "secondary",
+const STATUS_COLOR: Record<BookingStatus, 'success' | 'warning' | 'error' | 'default'> = {
+  CONFIRMED: 'success',
+  WAITLIST: 'warning',
+  CANCELLED: 'error',
+  NO_SHOW: 'default',
 };
 
 const SOURCE_LABEL: Record<BookingSource, string> = {
-  MEMBERSHIP_CREDIT: "Member",
-  MEMBER_FREE: "Member",
-  DROP_IN: "Drop-in",
-  COMP: "Comp",
+  MEMBERSHIP_CREDIT: 'Member',
+  MEMBER_FREE: 'Member',
+  DROP_IN: 'Drop-in',
+  COMP: 'Comp',
 };
 
 function formatCents(cents: number) {
@@ -47,9 +56,9 @@ function formatCents(cents: number) {
 
 function BookingsInner() {
   const searchParams = useSearchParams();
-  const justTipped = searchParams.get("tipped") === "1";
+  const justTipped = searchParams.get('tipped') === '1';
 
-  const [tab, setTab] = useState<Tab>("upcoming");
+  const [tab, setTab] = useState<TabValue>('upcoming');
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -59,11 +68,7 @@ function BookingsInner() {
 
   const loadBookings = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams({
-      status: tab,
-      page: String(page),
-      limit: String(limit),
-    });
+    const params = new URLSearchParams({ status: tab, page: String(page), limit: String(limit) });
     const res = await fetch(`/api/bookings?${params}`);
     if (res.ok) {
       const data = await res.json() as { bookings: Booking[]; total: number };
@@ -73,29 +78,22 @@ function BookingsInner() {
     setLoading(false);
   }, [tab, page]);
 
-  useEffect(() => {
-    loadBookings();
-  }, [loadBookings]);
+  useEffect(() => { loadBookings(); }, [loadBookings]);
 
-  function handleTabChange(t: Tab) {
-    setTab(t);
+  function handleTabChange(_: React.SyntheticEvent, value: TabValue) {
+    setTab(value);
     setPage(1);
   }
 
   async function handleCancel(bookingId: string) {
     setCancellingId(bookingId);
-    const res = await fetch(`/api/bookings/${bookingId}/cancel`, {
-      method: "POST",
-    });
-    const data = await res.json().catch(() => ({})) as {
-      error?: string;
-      refundNote?: string;
-    };
+    const res = await fetch(`/api/bookings/${bookingId}/cancel`, { method: 'POST' });
+    const data = await res.json().catch(() => ({})) as { error?: string; refundNote?: string };
     if (res.ok) {
       if (data.refundNote) alert(data.refundNote);
       await loadBookings();
     } else {
-      alert(data.error ?? "Could not cancel booking");
+      alert(data.error ?? 'Could not cancel booking');
     }
     setCancellingId(null);
   }
@@ -105,156 +103,150 @@ function BookingsInner() {
   const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
 
   return (
-      <main className="mx-auto max-w-3xl p-8">
-        {justTipped && (
-          <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-            💚 Your tip was sent — thank you for supporting your instructor!
-          </div>
-        )}
-        <div className="mb-6 flex items-center gap-4">
-          <Link
-            href="/dashboard"
-            className="text-sm text-muted-foreground underline underline-offset-4"
-          >
-            ← Dashboard
-          </Link>
-          <h1 className="text-2xl font-semibold">My Bookings</h1>
-        </div>
+    <Container maxWidth="md" sx={{ py: 5, px: { xs: 3, md: 4 } }}>
+      {justTipped && (
+        <Alert severity="success" sx={{ mb: 3 }}>
+          💚 Your tip was sent — thank you for supporting your instructor!
+        </Alert>
+      )}
 
-        {/* Tabs */}
-        <div className="mb-6 flex gap-1 border-b">
-          {(["upcoming", "past", "cancelled"] as Tab[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => handleTabChange(t)}
-              className={`px-4 py-2 text-sm font-medium capitalize transition-colors ${
-                tab === t
-                  ? "border-b-2 border-foreground text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
+      <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 3 }}>
+        <Link component={NextLink} href="/dashboard" underline="always" variant="body2" color="text.secondary">
+          ← Dashboard
+        </Link>
+        <Typography variant="h2" sx={{ fontWeight: 700 }}>My Bookings</Typography>
+      </Box>
 
-        {loading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : bookings.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No bookings found.</p>
-        ) : (
-          <>
-            <div className="divide-y rounded-lg border">
-              {bookings.map((b) => {
-                const startsAt = new Date(b.studioSession.startsAt);
-                const canCancel =
-                  tab === "upcoming" && startsAt > twoHoursFromNow;
+      {/* Tabs */}
+      <Tabs value={tab} onChange={handleTabChange} sx={{ mb: 3 }}>
+        <Tab label="Upcoming" value="upcoming" />
+        <Tab label="Past" value="past" />
+        <Tab label="Cancelled" value="cancelled" />
+      </Tabs>
 
-                return (
-                  <div
-                    key={b.id}
-                    className="flex items-center justify-between gap-4 px-4 py-3"
+      {loading ? (
+        <Typography color="text.secondary">Loading…</Typography>
+      ) : bookings.length === 0 ? (
+        <Typography color="text.secondary">No bookings found.</Typography>
+      ) : (
+        <>
+          <Paper variant="outlined" sx={{ borderRadius: 3, overflow: 'hidden' }}>
+            {bookings.map((b, idx) => {
+              const startsAt = new Date(b.studioSession.startsAt);
+              const canCancel = tab === 'upcoming' && startsAt > twoHoursFromNow;
+
+              return (
+                <Box key={b.id}>
+                  {idx > 0 && <Divider />}
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 2,
+                      px: 2.5,
+                      py: 1.75,
+                    }}
                   >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {b.studioSession.sessionType.name}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {formatMountainTime(startsAt, "datetime")}
-                        {b.studioSession.location &&
-                          ` · ${b.studioSession.location.name}`}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <Badge variant="outline" className="text-xs">
-                        {SOURCE_LABEL[b.source]}
-                      </Badge>
-                      {b.source === "DROP_IN" && b.amountPaidCents > 0 && (
-                        <span className="text-xs text-muted-foreground">
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {formatMountainTime(startsAt, 'datetime')}
+                        {b.studioSession.location && ` · ${b.studioSession.location.name}`}
+                      </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }}>
+                      <Chip label={SOURCE_LABEL[b.source]} size="small" variant="outlined" />
+                      {b.source === 'DROP_IN' && b.amountPaidCents > 0 && (
+                        <Typography variant="caption" color="text.secondary">
                           {formatCents(b.amountPaidCents)}
-                        </span>
+                        </Typography>
                       )}
-                      <Badge
-                        variant={STATUS_VARIANT[b.status]}
-                        className="text-xs"
-                      >
-                        {b.status}
-                      </Badge>
-                      {tab === "past" && (() => {
+                      <Chip
+                        label={b.status}
+                        size="small"
+                        color={STATUS_COLOR[b.status]}
+                      />
+                      {tab === 'past' && (() => {
                         const endsAt = new Date(b.studioSession.endsAt);
                         const hasInstructor = !!b.studioSession.instructor;
-                        const sessionEnded = endsAt < now;
-                        if (!hasInstructor || !sessionEnded) return null;
+                        if (!hasInstructor || endsAt >= now) return null;
                         if (b.hasTip) {
                           return (
-                            <Badge variant="outline" className="text-xs text-green-700 border-green-300">
-                              Tip sent ✓
-                            </Badge>
+                            <Chip
+                              label="Tip sent ✓"
+                              size="small"
+                              variant="outlined"
+                              sx={{ color: 'success.main', borderColor: 'success.light' }}
+                            />
                           );
                         }
                         return (
-                          <Link href={`/bookings/${b.id}/tip`}>
-                            <Button size="sm" variant="ghost" className="text-xs">
-                              Leave a tip
-                            </Button>
-                          </Link>
+                          <Button
+                            component={NextLink}
+                            href={`/bookings/${b.id}/tip`}
+                            size="small"
+                            variant="text"
+                            sx={{ fontSize: '0.75rem' }}
+                          >
+                            Leave a tip
+                          </Button>
                         );
                       })()}
                       {canCancel && (
                         <Button
-                          size="sm"
-                          variant="ghost"
+                          size="small"
+                          color="error"
+                          variant="text"
                           disabled={cancellingId === b.id}
                           onClick={() => handleCancel(b.id)}
-                          className="text-destructive hover:text-destructive"
                         >
-                          {cancellingId === b.id ? "Cancelling…" : "Cancel"}
+                          {cancellingId === b.id ? 'Cancelling…' : 'Cancel'}
                         </Button>
                       )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                    </Stack>
+                  </Box>
+                </Box>
+              );
+            })}
+          </Paper>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="mt-4 flex items-center justify-between text-sm">
-                <p className="text-muted-foreground">
-                  {total} booking{total !== 1 ? "s" : ""}
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page <= 1}
-                    onClick={() => setPage((p) => p - 1)}
-                  >
-                    Previous
-                  </Button>
-                  <span className="flex items-center px-2 text-muted-foreground">
-                    {page} / {totalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page >= totalPages}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </main>
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <Box sx={{ mt: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Typography variant="body2" color="text.secondary">
+                {total} booking{total !== 1 ? 's' : ''}
+              </Typography>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                <Button variant="outlined" size="small" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                  Previous
+                </Button>
+                <Typography variant="body2" color="text.secondary">
+                  {page} / {totalPages}
+                </Typography>
+                <Button variant="outlined" size="small" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                  Next
+                </Button>
+              </Stack>
+            </Box>
+          )}
+        </>
+      )}
+    </Container>
   );
 }
 
 export default function BookingsPage() {
   return (
-    <Suspense fallback={<main className="mx-auto max-w-3xl p-8"><p className="text-sm text-muted-foreground">Loading…</p></main>}>
+    <Suspense
+      fallback={
+        <Container maxWidth="md" sx={{ py: 5, px: { xs: 3, md: 4 } }}>
+          <Typography color="text.secondary">Loading…</Typography>
+        </Container>
+      }
+    >
       <BookingsInner />
     </Suspense>
   );

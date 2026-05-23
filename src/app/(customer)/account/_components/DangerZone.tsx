@@ -1,15 +1,17 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogContentText from '@mui/material/DialogContentText';
+import DialogActions from '@mui/material/DialogActions';
+import Alert from '@mui/material/Alert';
+import Typography from '@mui/material/Typography';
+import { md3 } from '@/lib/theme';
 
 export function DangerZone() {
   const [open, setOpen] = useState(false);
@@ -20,59 +22,75 @@ export function DangerZone() {
   async function handleDelete() {
     setLoading(true);
     setError(null);
-    const res = await fetch("/api/account", { method: "DELETE" });
+    const res = await fetch('/api/account', { method: 'DELETE' });
     if (res.ok) {
-      router.push("/");
+      router.push('/');
     } else {
       const data = await res.json().catch(() => ({})) as { error?: string };
-      setError(data.error ?? "Something went wrong");
+      setError(data.error ?? 'Something went wrong');
       setLoading(false);
     }
   }
 
   return (
     <>
-      <div className="rounded-lg border border-destructive/30 p-4">
-        <p className="mb-3 text-sm text-muted-foreground">
-          Permanently delete your account and all associated data. Any active
-          membership will be cancelled. This action cannot be undone.
-        </p>
+      <Box
+        sx={{
+          borderRadius: 3,
+          border: `1px solid ${md3.errorContainer}`,
+          p: 2.5,
+          bgcolor: `${md3.errorContainer}40`,
+        }}
+      >
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Permanently delete your account and all associated data. Any active membership will be
+          cancelled. This action cannot be undone.
+        </Typography>
         <Button
-          variant="destructive"
-          size="sm"
+          variant="contained"
+          color="error"
+          size="small"
           onClick={() => setOpen(true)}
         >
           Delete my account
         </Button>
-      </div>
+      </Box>
 
-      <Dialog open={open} onOpenChange={(o) => { setOpen(o); setError(null); }}>
+      <Dialog
+        open={open}
+        onClose={() => { setOpen(false); setError(null); }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Delete your account?</DialogTitle>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete your account?</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            This will permanently delete your account, cancel any active
-            membership, and remove all your data. This cannot be undone.
-          </p>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setOpen(false)}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={loading}
-            >
-              {loading ? "Deleting…" : "Yes, delete my account"}
-            </Button>
-          </DialogFooter>
+          <DialogContentText>
+            This will permanently delete your account, cancel any active membership, and remove all
+            your data. This cannot be undone.
+          </DialogContentText>
+          {error && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {error}
+            </Alert>
+          )}
         </DialogContent>
+        <DialogActions>
+          <Button
+            variant="outlined"
+            onClick={() => setOpen(false)}
+            disabled={loading}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDelete}
+            disabled={loading}
+          >
+            {loading ? 'Deleting…' : 'Yes, delete my account'}
+          </Button>
+        </DialogActions>
       </Dialog>
     </>
   );

@@ -1,32 +1,35 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Menu } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import {
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+import { useState } from 'react';
+import NextLink from 'next/link';
+import { usePathname } from 'next/navigation';
+import AppBar from '@mui/material/AppBar';
+import Toolbar from '@mui/material/Toolbar';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
+import Drawer from '@mui/material/Drawer';
+import List from '@mui/material/List';
+import ListItemButton from '@mui/material/ListItemButton';
+import ListItemText from '@mui/material/ListItemText';
+import Divider from '@mui/material/Divider';
+import Typography from '@mui/material/Typography';
+import MenuIcon from '@mui/icons-material/Menu';
+import { md3 } from '@/lib/theme';
 
 const NAV = [
-  { href: "/admin", label: "Dashboard", exact: true },
-  { href: "/admin/class-types", label: "Class Types" },
-  { href: "/admin/schedule", label: "Schedule" },
-  { href: "/admin/membership-plans", label: "Membership Plans" },
-  { href: "/admin/memberships", label: "Memberships" },
-  { href: "/admin/waivers", label: "Waivers" },
-  { href: "/admin/automations", label: "Automations" },
-  { href: "/admin/customers", label: "Customers" },
-  { href: "/admin/tasks", label: "Tasks" },
-  { href: "/admin/community", label: "Community" },
-  { href: "/admin/landing-pages", label: "Landing Pages" },
-  { href: "/admin/reports", label: "Reports" },
+  { href: '/admin', label: 'Dashboard', exact: true },
+  { href: '/admin/class-types', label: 'Class Types' },
+  { href: '/admin/schedule', label: 'Schedule' },
+  { href: '/admin/membership-plans', label: 'Membership Plans' },
+  { href: '/admin/memberships', label: 'Memberships' },
+  { href: '/admin/waivers', label: 'Waivers' },
+  { href: '/admin/automations', label: 'Automations' },
+  { href: '/admin/customers', label: 'Customers' },
+  { href: '/admin/tasks', label: 'Tasks' },
+  { href: '/admin/community', label: 'Community' },
+  { href: '/admin/landing-pages', label: 'Landing Pages' },
+  { href: '/admin/reports', label: 'Reports' },
 ];
 
 export function AdminNav() {
@@ -34,90 +37,139 @@ export function AdminNav() {
   const [open, setOpen] = useState(false);
 
   return (
-    <nav className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="flex items-center justify-between px-4 py-3">
-        {/* Wordmark */}
-        <Link href="/admin" className="shrink-0 text-xl font-bold tracking-tight">
-          Throw{" "}
-          <span className="font-normal text-muted-foreground">— Admin</span>
-        </Link>
-
-        {/* Nav links — desktop, horizontally scrollable */}
-        <div className="mx-4 hidden flex-1 items-center gap-0.5 overflow-x-auto md:flex">
-          {NAV.map(({ href, label, exact }) => {
-            const active = exact ? pathname === href : pathname.startsWith(href);
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={cn(
-                  "shrink-0 rounded-md px-2.5 py-1.5 text-sm transition-colors",
-                  active
-                    ? "bg-accent font-medium text-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                )}
-              >
-                {label}
-              </Link>
-            );
-          })}
-        </div>
-
-        {/* Right: View Site + mobile hamburger */}
-        <div className="flex shrink-0 items-center gap-2">
-          <Link
-            href="/"
-            className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground md:block"
+    <>
+      <AppBar position="sticky" sx={{ zIndex: 40 }}>
+        <Toolbar sx={{ px: { xs: 2, md: 3 }, gap: 1 }}>
+          {/* Wordmark */}
+          <Typography
+            component={NextLink}
+            href="/admin"
+            variant="h6"
+            sx={{
+              fontWeight: 700,
+              letterSpacing: '-0.02em',
+              color: 'text.primary',
+              textDecoration: 'none',
+              flexShrink: 0,
+              mr: 2,
+            }}
           >
-            View Site
-          </Link>
+            Throw{' '}
+            <Box component="span" sx={{ fontWeight: 400, color: 'text.secondary' }}>
+              — Admin
+            </Box>
+          </Typography>
 
-          {/* Hamburger — mobile only */}
-          <div className="md:hidden">
-            <Sheet open={open} onOpenChange={setOpen}>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="sm" aria-label="Open admin navigation">
-                  <Menu className="h-5 w-5" />
+          {/* Nav links — desktop, scrollable */}
+          <Box
+            sx={{
+              display: { xs: 'none', md: 'flex' },
+              flex: 1,
+              gap: 0.25,
+              overflowX: 'auto',
+              '&::-webkit-scrollbar': { display: 'none' },
+              scrollbarWidth: 'none',
+            }}
+          >
+            {NAV.map(({ href, label, exact }) => {
+              const active = exact ? pathname === href : pathname.startsWith(href);
+              return (
+                <Button
+                  key={href}
+                  component={NextLink}
+                  href={href}
+                  size="small"
+                  sx={{
+                    flexShrink: 0,
+                    borderRadius: 2,
+                    px: 1.5,
+                    fontWeight: active ? 600 : 400,
+                    color: active ? 'text.primary' : 'text.secondary',
+                    bgcolor: active ? md3.surfaceContainerHigh : 'transparent',
+                    '&:hover': { bgcolor: md3.surfaceContainerHigh, color: 'text.primary' },
+                  }}
+                >
+                  {label}
                 </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-72">
-                <SheetTitle className="sr-only">Admin Navigation</SheetTitle>
-                <nav className="mt-6 flex flex-col gap-1">
-                  {NAV.map(({ href, label, exact }) => {
-                    const active = exact
-                      ? pathname === href
-                      : pathname.startsWith(href);
-                    return (
-                      <SheetClose key={href} asChild>
-                        <Link
-                          href={href}
-                          className={cn(
-                            "rounded-md px-3 py-2 text-sm font-medium hover:bg-accent",
-                            active && "bg-accent text-foreground",
-                          )}
-                          onClick={() => setOpen(false)}
-                        >
-                          {label}
-                        </Link>
-                      </SheetClose>
-                    );
-                  })}
-                  <div className="my-3 h-px bg-border" />
-                  <SheetClose asChild>
-                    <Link
-                      href="/"
-                      className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
-                      onClick={() => setOpen(false)}
-                    >
-                      View Site
-                    </Link>
-                  </SheetClose>
-                </nav>
-              </SheetContent>
-            </Sheet>
-          </div>
-        </div>
-      </div>
-    </nav>
+              );
+            })}
+          </Box>
+
+          {/* View Site link — desktop */}
+          <Box sx={{ display: { xs: 'none', md: 'flex' }, flexShrink: 0 }}>
+            <Button
+              component={NextLink}
+              href="/"
+              size="small"
+              sx={{ color: 'text.secondary', borderRadius: 100 }}
+            >
+              View Site
+            </Button>
+          </Box>
+
+          {/* Hamburger — mobile */}
+          <Box sx={{ display: { xs: 'flex', md: 'none' }, ml: 'auto' }}>
+            <IconButton
+              aria-label="Open admin navigation"
+              onClick={() => setOpen(true)}
+              sx={{ color: 'text.primary' }}
+            >
+              <MenuIcon />
+            </IconButton>
+          </Box>
+        </Toolbar>
+      </AppBar>
+
+      {/* Mobile drawer */}
+      <Drawer
+        anchor="right"
+        open={open}
+        onClose={() => setOpen(false)}
+        slotProps={{ paper: { sx: { width: 280 } } }}
+      >
+        <Box sx={{ pt: 2, pb: 3 }}>
+          <List dense>
+            {NAV.map(({ href, label, exact }) => {
+              const active = exact ? pathname === href : pathname.startsWith(href);
+              return (
+                <ListItemButton
+                  key={href}
+                  component={NextLink}
+                  href={href}
+                  onClick={() => setOpen(false)}
+                  selected={active}
+                  sx={{
+                    borderRadius: 2,
+                    mx: 1,
+                    '&.Mui-selected': {
+                      bgcolor: md3.surfaceContainerHigh,
+                    },
+                  }}
+                >
+                  <ListItemText
+                    primary={label}
+                    slotProps={{ primary: { sx: { fontWeight: active ? 600 : 400, fontSize: '0.875rem' } } }}
+                  />
+                </ListItemButton>
+              );
+            })}
+          </List>
+          <Divider sx={{ my: 1 }} />
+          <List dense>
+            <ListItemButton
+              component={NextLink}
+              href="/"
+              onClick={() => setOpen(false)}
+              sx={{ borderRadius: 2, mx: 1 }}
+            >
+              <ListItemText
+                primary="View Site"
+                slotProps={{ primary: { sx: { color: 'text.secondary', fontSize: '0.875rem' } } }}
+              />
+            </ListItemButton>
+          </List>
+        </Box>
+      </Drawer>
+    </>
   );
 }

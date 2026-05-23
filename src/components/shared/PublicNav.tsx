@@ -1,206 +1,278 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import Link from "next/link";
-import { signOut } from "next-auth/react";
-import { Menu } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import type { Role } from "@prisma/client";
+import { useState } from 'react';
+import NextLink from 'next/link';
+import { signOut } from 'next-auth/react';
+import AppBar from '@mui/material/AppBar';
+import Toolbar from '@mui/material/Toolbar';
+import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
+import Drawer from '@mui/material/Drawer';
+import Box from '@mui/material/Box';
+import List from '@mui/material/List';
+import ListItemButton from '@mui/material/ListItemButton';
+import ListItemText from '@mui/material/ListItemText';
+import Divider from '@mui/material/Divider';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
+import Typography from '@mui/material/Typography';
+import MenuIcon from '@mui/icons-material/Menu';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import type { Role } from '@prisma/client';
 
 interface NavUser {
   name?: string | null;
   role: Role;
 }
-
 interface Props {
   user: NavUser | null;
 }
 
 const NAV_LINKS = [
-  { href: "/schedule", label: "Schedule" },
-  { href: "/membership", label: "Memberships" },
-  { href: "/community", label: "Community" },
-  { href: "/about", label: "About" },
+  { href: '/schedule', label: 'Schedule' },
+  { href: '/membership', label: 'Memberships' },
+  { href: '/community', label: 'Community' },
+  { href: '/about', label: 'About' },
 ];
 
 const ACCOUNT_LINKS = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/bookings", label: "My Bookings" },
-  { href: "/membership/manage", label: "Manage Membership" },
-  { href: "/account", label: "Account Settings" },
+  { href: '/dashboard', label: 'Dashboard' },
+  { href: '/bookings', label: 'My Bookings' },
+  { href: '/membership/manage', label: 'Manage Membership' },
+  { href: '/account', label: 'Account Settings' },
 ];
 
 export function PublicNav({ user }: Props) {
-  const [open, setOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const menuOpen = Boolean(anchorEl);
 
-  const isStaffOrAdmin = user?.role === "STAFF" || user?.role === "ADMIN";
+  const isStaffOrAdmin = user?.role === 'STAFF' || user?.role === 'ADMIN';
 
+  function handleAccountOpen(e: React.MouseEvent<HTMLElement>) {
+    setAnchorEl(e.currentTarget);
+  }
+  function handleAccountClose() {
+    setAnchorEl(null);
+  }
   function handleSignOut() {
-    setOpen(false);
-    void signOut({ callbackUrl: "/" });
+    setDrawerOpen(false);
+    handleAccountClose();
+    void signOut({ callbackUrl: '/' });
   }
 
   return (
-    <nav className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-        {/* Wordmark */}
-        <Link href="/" className="text-xl font-bold tracking-tight">
-          Throw
-        </Link>
+    <>
+      <AppBar position="sticky" sx={{ zIndex: 40 }}>
+        <Toolbar sx={{ maxWidth: 1152, width: '100%', mx: 'auto', px: { xs: 2, md: 3 } }}>
+          {/* Wordmark */}
+          <Typography
+            component={NextLink}
+            href="/"
+            variant="h6"
+            sx={{
+              fontWeight: 700,
+              letterSpacing: '-0.02em',
+              color: 'text.primary',
+              textDecoration: 'none',
+              mr: 4,
+              flexShrink: 0,
+            }}
+          >
+            Throw
+          </Typography>
 
-        {/* Center links — desktop */}
-        <div className="hidden items-center gap-6 md:flex">
-          {NAV_LINKS.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              {l.label}
-            </Link>
-          ))}
-        </div>
+          {/* Center links — desktop */}
+          <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 0.5, flex: 1 }}>
+            {NAV_LINKS.map((l) => (
+              <Button
+                key={l.href}
+                component={NextLink}
+                href={l.href}
+                size="small"
+                sx={{
+                  color: 'text.secondary',
+                  '&:hover': { color: 'text.primary', bgcolor: 'action.hover' },
+                  borderRadius: 2,
+                  px: 1.5,
+                }}
+              >
+                {l.label}
+              </Button>
+            ))}
+          </Box>
 
-        {/* Right actions — desktop */}
-        <div className="hidden items-center gap-2 md:flex">
-          {user ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
+          {/* Right actions — desktop */}
+          <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 1, alignItems: 'center' }}>
+            {user ? (
+              <>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  endIcon={<KeyboardArrowDownIcon />}
+                  onClick={handleAccountOpen}
+                  sx={{ borderRadius: 100 }}
+                >
                   My Account
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                {ACCOUNT_LINKS.map((l) => (
-                  <DropdownMenuItem key={l.href} asChild>
-                    <Link href={l.href}>{l.label}</Link>
-                  </DropdownMenuItem>
-                ))}
-                {isStaffOrAdmin && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                      <Link href="/admin">Admin Panel</Link>
-                    </DropdownMenuItem>
-                  </>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={() => void signOut({ callbackUrl: "/" })}
-                  className="text-destructive focus:text-destructive"
+                <Menu
+                  anchorEl={anchorEl}
+                  open={menuOpen}
+                  onClose={handleAccountClose}
+                  anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                  transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                  slotProps={{ paper: { sx: { mt: 1, minWidth: 192, borderRadius: 3 } } }}
                 >
-                  Sign Out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/login">Sign In</Link>
-              </Button>
-              <Button size="sm" asChild>
-                <Link href="/membership">Join</Link>
-              </Button>
-            </>
-          )}
-        </div>
-
-        {/* Hamburger — mobile */}
-        <div className="md:hidden">
-          <Sheet open={open} onOpenChange={setOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="sm" aria-label="Open navigation menu">
-                <Menu className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right" className="w-72">
-              <SheetTitle className="sr-only">Navigation</SheetTitle>
-              <nav className="mt-6 flex flex-col gap-1">
-                {NAV_LINKS.map((l) => (
-                  <SheetClose key={l.href} asChild>
-                    <Link
+                  {ACCOUNT_LINKS.map((l) => (
+                    <MenuItem
+                      key={l.href}
+                      component={NextLink}
                       href={l.href}
-                      className="rounded-md px-3 py-2 text-sm font-medium hover:bg-accent"
+                      onClick={handleAccountClose}
+                      sx={{ fontSize: '0.875rem' }}
                     >
                       {l.label}
-                    </Link>
-                  </SheetClose>
-                ))}
-
-                <div className="my-3 h-px bg-border" />
-
-                {user ? (
-                  <>
-                    {ACCOUNT_LINKS.map((l) => (
-                      <SheetClose key={l.href} asChild>
-                        <Link
-                          href={l.href}
-                          className="rounded-md px-3 py-2 text-sm font-medium hover:bg-accent"
-                        >
-                          {l.label}
-                        </Link>
-                      </SheetClose>
-                    ))}
-                    {isStaffOrAdmin && (
-                      <>
-                        <div className="my-3 h-px bg-border" />
-                        <SheetClose asChild>
-                          <Link
-                            href="/admin"
-                            className="rounded-md px-3 py-2 text-sm font-medium hover:bg-accent"
-                          >
-                            Admin Panel
-                          </Link>
-                        </SheetClose>
-                      </>
-                    )}
-                    <div className="my-3 h-px bg-border" />
-                    <button
-                      onClick={handleSignOut}
-                      className="rounded-md px-3 py-2 text-left text-sm font-medium text-destructive hover:bg-accent"
+                    </MenuItem>
+                  ))}
+                  {isStaffOrAdmin && [
+                    <Divider key="div" />,
+                    <MenuItem
+                      key="admin"
+                      component={NextLink}
+                      href="/admin"
+                      onClick={handleAccountClose}
+                      sx={{ fontSize: '0.875rem' }}
                     >
-                      Sign Out
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <SheetClose asChild>
-                      <Link
-                        href="/login"
-                        className="rounded-md px-3 py-2 text-sm font-medium hover:bg-accent"
-                      >
-                        Sign In
-                      </Link>
-                    </SheetClose>
-                    <SheetClose asChild>
-                      <Link
-                        href="/membership"
-                        className="rounded-md bg-primary px-3 py-2 text-center text-sm font-medium text-primary-foreground hover:bg-primary/90"
-                      >
-                        Join
-                      </Link>
-                    </SheetClose>
-                  </>
-                )}
-              </nav>
-            </SheetContent>
-          </Sheet>
-        </div>
-      </div>
-    </nav>
+                      Admin Panel
+                    </MenuItem>,
+                  ]}
+                  <Divider />
+                  <MenuItem
+                    onClick={handleSignOut}
+                    sx={{ fontSize: '0.875rem', color: 'error.main' }}
+                  >
+                    Sign Out
+                  </MenuItem>
+                </Menu>
+              </>
+            ) : (
+              <>
+                <Button
+                  size="small"
+                  component={NextLink}
+                  href="/login"
+                  sx={{ color: 'text.secondary', borderRadius: 100 }}
+                >
+                  Sign In
+                </Button>
+                <Button
+                  size="small"
+                  variant="contained"
+                  component={NextLink}
+                  href="/membership"
+                >
+                  Join
+                </Button>
+              </>
+            )}
+          </Box>
+
+          {/* Hamburger — mobile */}
+          <Box sx={{ display: { xs: 'flex', md: 'none' }, ml: 'auto' }}>
+            <IconButton
+              aria-label="Open navigation menu"
+              onClick={() => setDrawerOpen(true)}
+              sx={{ color: 'text.primary' }}
+            >
+              <MenuIcon />
+            </IconButton>
+          </Box>
+        </Toolbar>
+      </AppBar>
+
+      {/* Mobile drawer */}
+      <Drawer
+        anchor="right"
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        slotProps={{ paper: { sx: { width: 280 } } }}
+      >
+        <Box sx={{ pt: 2, pb: 3 }}>
+          <List dense>
+            {NAV_LINKS.map((l) => (
+              <ListItemButton
+                key={l.href}
+                component={NextLink}
+                href={l.href}
+                onClick={() => setDrawerOpen(false)}
+                sx={{ borderRadius: 2, mx: 1 }}
+              >
+                <ListItemText primary={l.label} slotProps={{ primary: { sx: { fontWeight: 500 } } }} />
+              </ListItemButton>
+            ))}
+          </List>
+
+          <Divider sx={{ my: 1 }} />
+
+          {user ? (
+            <List dense>
+              {ACCOUNT_LINKS.map((l) => (
+                <ListItemButton
+                  key={l.href}
+                  component={NextLink}
+                  href={l.href}
+                  onClick={() => setDrawerOpen(false)}
+                  sx={{ borderRadius: 2, mx: 1 }}
+                >
+                  <ListItemText primary={l.label} slotProps={{ primary: { sx: { fontWeight: 500 } } }} />
+                </ListItemButton>
+              ))}
+              {isStaffOrAdmin && (
+                <>
+                  <Divider sx={{ my: 1 }} />
+                  <ListItemButton
+                    component={NextLink}
+                    href="/admin"
+                    onClick={() => setDrawerOpen(false)}
+                    sx={{ borderRadius: 2, mx: 1 }}
+                  >
+                    <ListItemText primary="Admin Panel" slotProps={{ primary: { sx: { fontWeight: 500 } } }} />
+                  </ListItemButton>
+                </>
+              )}
+              <Divider sx={{ my: 1 }} />
+              <ListItemButton
+                onClick={handleSignOut}
+                sx={{ borderRadius: 2, mx: 1, color: 'error.main' }}
+              >
+                <ListItemText primary="Sign Out" slotProps={{ primary: { sx: { color: 'error.main', fontWeight: 500 } } }} />
+              </ListItemButton>
+            </List>
+          ) : (
+            <List dense>
+              <ListItemButton
+                component={NextLink}
+                href="/login"
+                onClick={() => setDrawerOpen(false)}
+                sx={{ borderRadius: 2, mx: 1 }}
+              >
+                <ListItemText primary="Sign In" slotProps={{ primary: { sx: { fontWeight: 500 } } }} />
+              </ListItemButton>
+              <Box sx={{ px: 2, pt: 1 }}>
+                <Button
+                  component={NextLink}
+                  href="/membership"
+                  variant="contained"
+                  fullWidth
+                  onClick={() => setDrawerOpen(false)}
+                >
+                  Join
+                </Button>
+              </Box>
+            </List>
+          )}
+        </Box>
+      </Drawer>
+    </>
   );
 }

@@ -1,104 +1,138 @@
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import NextLink from 'next/link';
+import Box from '@mui/material/Box';
+import Container from '@mui/material/Container';
+import Typography from '@mui/material/Typography';
+import Button from '@mui/material/Button';
+import Stack from '@mui/material/Stack';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlineRounded';
+import { md3 } from '@/lib/theme';
 
-export const metadata = {
-  title: "About — Throw",
-};
+export const metadata = { title: 'About — Throw' };
+
+const OFFERINGS = [
+  {
+    title: 'Open Studio',
+    desc: 'Drop in and work on your own projects during scheduled open studio sessions.',
+  },
+  {
+    title: 'Classes & Workshops',
+    desc: 'Wheel throwing and hand building classes for all skill levels.',
+  },
+  {
+    title: 'Memberships',
+    desc: 'Recurring memberships with unlimited studio access and priority booking.',
+  },
+  {
+    title: 'Private Events',
+    desc: 'Private studio rentals and group events — coming soon.',
+  },
+];
 
 export default function AboutPage() {
   return (
     <>
       {/* Hero */}
-      <section className="bg-foreground px-4 py-20 text-background">
-        <div className="mx-auto max-w-3xl">
-          <h1 className="text-4xl font-bold sm:text-5xl">About Throw</h1>
-          <p className="mt-4 text-lg text-background/70">
-            Throw is a pottery studio in Provo, Utah offering open studio
-            sessions, wheel throwing classes, hand building workshops, and
-            memberships.
-          </p>
-        </div>
-      </section>
+      <Box
+        component="section"
+        sx={{ bgcolor: md3.inverseSurface, color: md3.inverseOnSurface, py: { xs: 8, md: 12 }, px: 3 }}
+      >
+        <Container maxWidth="md">
+          <Typography variant="h1" sx={{ color: md3.inverseOnSurface }}>
+            About Throw
+          </Typography>
+          <Typography
+            variant="body1"
+            sx={{ mt: 2.5, color: `${md3.inverseOnSurface}B3`, fontSize: { xs: '1rem', md: '1.125rem' } }}
+          >
+            Throw is a pottery studio in Provo, Utah offering open studio sessions, wheel throwing
+            classes, hand building workshops, and memberships.
+          </Typography>
+        </Container>
+      </Box>
 
       {/* What We Offer */}
-      <section className="px-4 py-16">
-        <div className="mx-auto max-w-3xl">
-          <h2 className="mb-6 text-2xl font-bold">What We Offer</h2>
-          <ul className="space-y-4">
-            {[
-              {
-                title: "Open Studio",
-                desc: "Drop in and work on your own projects during scheduled open studio sessions.",
-              },
-              {
-                title: "Classes & Workshops",
-                desc: "Wheel throwing and hand building classes for all skill levels.",
-              },
-              {
-                title: "Memberships",
-                desc: "Recurring memberships with unlimited studio access and priority booking.",
-              },
-              {
-                title: "Private Events",
-                desc: "Private studio rentals and group events — coming soon.",
-              },
-            ].map((item) => (
-              <li key={item.title} className="flex gap-4">
-                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-foreground text-xs text-background">
-                  ✓
-                </span>
-                <div>
-                  <p className="font-semibold">{item.title}</p>
-                  <p className="text-sm text-muted-foreground">{item.desc}</p>
-                </div>
-              </li>
+      <Box component="section" sx={{ py: { xs: 8, md: 10 }, px: 3 }}>
+        <Container maxWidth="md">
+          <Typography variant="h2" sx={{ mb: 4, fontWeight: 700 }}>
+            What We Offer
+          </Typography>
+          <Stack spacing={3}>
+            {OFFERINGS.map((item) => (
+              <Box key={item.title} sx={{ display: 'flex', gap: 2 }}>
+                <CheckCircleOutlineIcon
+                  sx={{ color: 'primary.main', mt: 0.25, flexShrink: 0 }}
+                />
+                <Box>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                    {item.title}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {item.desc}
+                  </Typography>
+                </Box>
+              </Box>
             ))}
-          </ul>
-        </div>
-      </section>
+          </Stack>
+        </Container>
+      </Box>
 
       {/* Find Us */}
-      <section className="bg-muted/40 px-4 py-16">
-        <div className="mx-auto max-w-3xl">
-          <h2 className="mb-6 text-2xl font-bold">Find Us</h2>
-          <div className="mb-4">
-            <p className="font-semibold">Address</p>
-            <p className="text-muted-foreground">Provo, Utah</p>
-          </div>
-          <div>
-            <p className="mb-2 font-semibold">Hours</p>
-            <ul className="space-y-1 text-sm text-muted-foreground">
-              {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map(
-                (day) => (
-                  <li key={day} className="flex gap-6">
-                    <span className="w-24 shrink-0">{day}</span>
-                    <span>See schedule for session times</span>
-                  </li>
-                ),
-              )}
-              <li className="flex gap-6">
-                <span className="w-24 shrink-0">Sunday</span>
-                <span>Closed</span>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </section>
+      <Box
+        component="section"
+        sx={{ bgcolor: md3.surfaceVariant, py: { xs: 8, md: 10 }, px: 3 }}
+      >
+        <Container maxWidth="md">
+          <Typography variant="h2" sx={{ mb: 4, fontWeight: 700 }}>
+            Find Us
+          </Typography>
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              Address
+            </Typography>
+            <Typography color="text.secondary">Provo, Utah</Typography>
+          </Box>
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+              Hours
+            </Typography>
+            <Stack spacing={0.5}>
+              {['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((day) => (
+                <Box key={day} sx={{ display: 'flex', gap: 4 }}>
+                  <Typography variant="body2" sx={{ width: 100, flexShrink: 0 }}>
+                    {day}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    See schedule for session times
+                  </Typography>
+                </Box>
+              ))}
+              <Box sx={{ display: 'flex', gap: 4 }}>
+                <Typography variant="body2" sx={{ width: 100, flexShrink: 0 }}>
+                  Sunday
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Closed
+                </Typography>
+              </Box>
+            </Stack>
+          </Box>
+        </Container>
+      </Box>
 
       {/* CTA */}
-      <section className="px-4 py-16 text-center">
-        <div className="mx-auto max-w-xl">
-          <h2 className="mb-3 text-2xl font-bold">
+      <Box component="section" sx={{ py: { xs: 8, md: 10 }, px: 3, textAlign: 'center' }}>
+        <Container maxWidth="sm">
+          <Typography variant="h2" sx={{ mb: 2, fontWeight: 700 }}>
             Ready to get your hands dirty?
-          </h2>
-          <p className="mb-6 text-muted-foreground">
+          </Typography>
+          <Typography color="text.secondary" sx={{ mb: 4 }}>
             Browse our upcoming sessions and book your spot today.
-          </p>
-          <Button size="lg" asChild>
-            <Link href="/schedule">See the Schedule</Link>
+          </Typography>
+          <Button component={NextLink} href="/schedule" variant="contained" size="large">
+            See the Schedule
           </Button>
-        </div>
-      </section>
+        </Container>
+      </Box>
     </>
   );
 }

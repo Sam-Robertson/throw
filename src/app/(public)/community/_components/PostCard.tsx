@@ -1,12 +1,19 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import Link from "next/link";
-import { formatDistanceToNow } from "date-fns";
-import { MessageCircle } from "lucide-react";
-import { LikeButton } from "./LikeButton";
-import { Badge } from "@/components/ui/badge";
-import type { Role } from "@prisma/client";
+import { useState } from 'react';
+import NextLink from 'next/link';
+import { formatDistanceToNow } from 'date-fns';
+import Box from '@mui/material/Box';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import Typography from '@mui/material/Typography';
+import Avatar from '@mui/material/Avatar';
+import Chip from '@mui/material/Chip';
+import Button from '@mui/material/Button';
+import Link from '@mui/material/Link';
+import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutlineRounded';
+import { LikeButton } from './LikeButton';
+import type { Role } from '@prisma/client';
 
 interface Post {
   id: string;
@@ -26,20 +33,14 @@ interface Props {
   truncate?: boolean;
 }
 
-const ROLE_LABELS: Record<Role, string | null> = {
-  ADMIN: "Owner",
-  STAFF: "Staff",
-  CUSTOMER: null,
+const ROLE_LABELS: Partial<Record<Role, string>> = {
+  ADMIN: 'Owner',
+  STAFF: 'Staff',
 };
 
 function getInitials(name: string | null): string {
-  if (!name) return "?";
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+  if (!name) return '?';
+  return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
 }
 
 const TRUNCATE_LENGTH = 300;
@@ -49,97 +50,128 @@ export function PostCard({ post, isAuthenticated, truncate = false }: Props) {
 
   const shouldTruncate = truncate && post.body.length > TRUNCATE_LENGTH;
   const displayBody =
-    shouldTruncate && !expanded
-      ? post.body.slice(0, TRUNCATE_LENGTH) + "…"
-      : post.body;
+    shouldTruncate && !expanded ? post.body.slice(0, TRUNCATE_LENGTH) + '…' : post.body;
 
   const roleLabel = ROLE_LABELS[post.author.role];
 
   return (
-    <div className="rounded-lg border bg-card p-5 shadow-sm">
-      {/* Author row */}
-      <div className="mb-3 flex items-center gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold">
-          {getInitials(post.author.name)}
-        </div>
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">
-              {post.author.name ?? "Unknown"}
-            </span>
-            {roleLabel && (
-              <Badge variant="secondary" className="text-xs">
-                {roleLabel}
-              </Badge>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
-          </p>
-        </div>
-        {!post.isPublished && (
-          <Badge variant="outline" className="ml-auto text-xs text-muted-foreground">
-            Draft
-          </Badge>
-        )}
-      </div>
-
-      {/* Title */}
-      {post.title && (
-        <h2 className="mb-2 text-lg font-bold leading-snug">{post.title}</h2>
-      )}
-
-      {/* Body */}
-      <p className="whitespace-pre-line text-sm text-muted-foreground">
-        {displayBody}
-      </p>
-      {shouldTruncate && !expanded && (
-        <button
-          onClick={() => setExpanded(true)}
-          className="mt-1 text-sm font-medium underline hover:text-foreground"
-        >
-          Read more
-        </button>
-      )}
-
-      {/* Image */}
-      {post.imageUrl && (
-        <div className="mt-3 overflow-hidden rounded-md">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={post.imageUrl}
-            alt=""
-            className="w-full object-cover"
-            style={{ maxHeight: 400 }}
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).style.display = "none";
+    <Card>
+      <CardContent>
+        {/* Author row */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+          <Avatar
+            sx={{
+              width: 36,
+              height: 36,
+              bgcolor: 'primary.light',
+              color: 'primary.main',
+              fontSize: '0.875rem',
+              fontWeight: 600,
             }}
-          />
-        </div>
-      )}
+          >
+            {getInitials(post.author.name)}
+          </Avatar>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                {post.author.name ?? 'Unknown'}
+              </Typography>
+              {roleLabel && (
+                <Chip label={roleLabel} size="small" variant="outlined" />
+              )}
+            </Box>
+            <Typography variant="caption" color="text.secondary">
+              {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
+            </Typography>
+          </Box>
+          {!post.isPublished && (
+            <Chip label="Draft" size="small" variant="outlined" sx={{ color: 'text.secondary' }} />
+          )}
+        </Box>
 
-      {/* Actions */}
-      <div className="mt-4 flex items-center gap-4">
-        <LikeButton
-          postId={post.id}
-          initialLiked={post.hasLiked}
-          initialCount={post._count.likes}
-          disabled={!isAuthenticated}
-        />
-        <Link
-          href={`/community/${post.id}`}
-          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        {/* Title */}
+        {post.title && (
+          <Typography variant="h6" sx={{ mb: 1, lineHeight: 1.35 }}>
+            {post.title}
+          </Typography>
+        )}
+
+        {/* Body */}
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ whiteSpace: 'pre-line' }}
         >
-          <MessageCircle className="h-4 w-4" />
-          <span>{post._count.comments}</span>
-        </Link>
-        <Link
-          href={`/community/${post.id}`}
-          className="ml-auto text-sm text-muted-foreground underline hover:text-foreground"
-        >
-          View post
-        </Link>
-      </div>
-    </div>
+          {displayBody}
+        </Typography>
+        {shouldTruncate && !expanded && (
+          <Button
+            size="small"
+            onClick={() => setExpanded(true)}
+            sx={{ mt: 0.5, p: 0, minWidth: 0, fontWeight: 600 }}
+          >
+            Read more
+          </Button>
+        )}
+
+        {/* Image */}
+        {post.imageUrl && (
+          <Box
+            sx={{
+              mt: 1.5,
+              borderRadius: 2,
+              overflow: 'hidden',
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={post.imageUrl}
+              alt=""
+              style={{ width: '100%', maxHeight: 400, objectFit: 'cover', display: 'block' }}
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+            />
+          </Box>
+        )}
+
+        {/* Actions */}
+        <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+          <LikeButton
+            postId={post.id}
+            initialLiked={post.hasLiked}
+            initialCount={post._count.likes}
+            disabled={!isAuthenticated}
+          />
+          <Link
+            component={NextLink}
+            href={`/community/${post.id}`}
+            underline="none"
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5,
+              color: 'text.secondary',
+              fontSize: '0.875rem',
+              '&:hover': { color: 'text.primary' },
+            }}
+          >
+            <ChatBubbleOutlineIcon sx={{ fontSize: 16 }} />
+            <span>{post._count.comments}</span>
+          </Link>
+          <Link
+            component={NextLink}
+            href={`/community/${post.id}`}
+            underline="always"
+            sx={{
+              ml: 'auto',
+              fontSize: '0.875rem',
+              color: 'text.secondary',
+              '&:hover': { color: 'text.primary' },
+            }}
+          >
+            View post
+          </Link>
+        </Box>
+      </CardContent>
+    </Card>
   );
 }

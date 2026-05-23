@@ -218,12 +218,14 @@ model WaiverVersion {
 }
 
 model WaiverSignature {
-  id              String   @id @default(cuid())
-  userId          String
-  waiverVersionId String
-  signedAt        DateTime
-  ipAddress       String
-  createdAt       DateTime @default(now())
+  id                  String   @id @default(cuid())
+  userId              String
+  waiverVersionId     String
+  signedAt            DateTime
+  ipAddress           String
+  createdAt           DateTime @default(now())
+  signatureImageData  String?  @db.Text
+  typedName           String?
 
   user          User          @relation(fields: [userId], references: [id])
   waiverVersion WaiverVersion @relation(fields: [waiverVersionId], references: [id])

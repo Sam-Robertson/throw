@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { WaiverSignForm } from "./_components/WaiverSignForm";
+import { WaiverSignatureForm } from "@/components/shared/WaiverSignatureForm";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +42,7 @@ export default async function WaiverPage({
       <p className="mb-8 text-sm text-muted-foreground">
         Please read and sign our waiver to continue.
       </p>
-      <WaiverSignForm
+      <WaiverSignatureForm
         waiverVersionId={activeVersion.id}
         content={activeVersion.content}
         userName={session.user.name ?? ""}

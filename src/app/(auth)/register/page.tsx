@@ -1,19 +1,19 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useState } from 'react';
+import { signIn } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import NextLink from 'next/link';
+import Box from '@mui/material/Box';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import CardActions from '@mui/material/CardActions';
+import Typography from '@mui/material/Typography';
+import TextField from '@mui/material/TextField';
+import Button from '@mui/material/Button';
+import Alert from '@mui/material/Alert';
+import Link from '@mui/material/Link';
+import Stack from '@mui/material/Stack';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -25,111 +25,124 @@ export default function RegisterPage() {
     setError(null);
 
     const form = new FormData(e.currentTarget);
-    const name = form.get("name") as string;
-    const email = form.get("email") as string;
-    const password = form.get("password") as string;
-    const confirmPassword = form.get("confirmPassword") as string;
+    const name = form.get('name') as string;
+    const email = form.get('email') as string;
+    const password = form.get('password') as string;
+    const confirmPassword = form.get('confirmPassword') as string;
 
     if (password !== confirmPassword) {
-      setError("Passwords do not match");
+      setError('Passwords do not match');
       return;
     }
 
     setPending(true);
 
-    const res = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, password }),
     });
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setError((data as { error?: string }).error ?? "Registration failed");
+      setError((data as { error?: string }).error ?? 'Registration failed');
       setPending(false);
       return;
     }
 
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
+    const result = await signIn('credentials', { email, password, redirect: false });
 
     if (result?.error) {
-      setError("Account created — please sign in.");
+      setError('Account created — please sign in.');
       setPending(false);
-      router.push("/login");
+      router.push('/login');
     } else {
-      router.push("/dashboard");
+      router.push('/dashboard');
       router.refresh();
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>Create account</CardTitle>
-        </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <div className="space-y-1">
-              <Label htmlFor="name">Name</Label>
-              <Input
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        px: 2,
+        bgcolor: 'background.default',
+      }}
+    >
+      <Card sx={{ width: '100%', maxWidth: 400 }}>
+        <Box component="form" onSubmit={handleSubmit}>
+          <CardContent>
+            <Typography variant="h5" sx={{ mb: 3, fontWeight: 700 }}>
+              Create account
+            </Typography>
+
+            {error && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
+            )}
+
+            <Stack spacing={2}>
+              <TextField
                 id="name"
                 name="name"
                 type="text"
+                label="Name"
                 required
                 autoComplete="name"
+                autoFocus
               />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="email">Email</Label>
-              <Input
+              <TextField
                 id="email"
                 name="email"
                 type="email"
+                label="Email"
                 required
                 autoComplete="email"
               />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="password">Password</Label>
-              <Input
+              <TextField
                 id="password"
                 name="password"
                 type="password"
+                label="Password"
                 required
-                minLength={8}
+                slotProps={{ htmlInput: { minLength: 8 } }}
                 autoComplete="new-password"
               />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="confirmPassword">Confirm password</Label>
-              <Input
+              <TextField
                 id="confirmPassword"
                 name="confirmPassword"
                 type="password"
+                label="Confirm password"
                 required
                 autoComplete="new-password"
               />
-            </div>
+            </Stack>
           </CardContent>
-          <CardFooter className="flex flex-col gap-3">
-            <Button type="submit" className="w-full" disabled={pending}>
-              {pending ? "Creating account…" : "Create account"}
+
+          <CardActions sx={{ flexDirection: 'column', gap: 1.5, px: 2.5, pb: 3 }}>
+            <Button
+              type="submit"
+              variant="contained"
+              fullWidth
+              size="large"
+              disabled={pending}
+            >
+              {pending ? 'Creating account…' : 'Create account'}
             </Button>
-            <p className="text-sm text-muted-foreground">
-              Already have an account?{" "}
-              <Link href="/login" className="underline underline-offset-4">
+            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
+              Already have an account?{' '}
+              <Link component={NextLink} href="/login" underline="always">
                 Sign in
               </Link>
-            </p>
-          </CardFooter>
-        </form>
+            </Typography>
+          </CardActions>
+        </Box>
       </Card>
-    </div>
+    </Box>
   );
 }

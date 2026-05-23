@@ -1,9 +1,12 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useState } from 'react';
+import Box from '@mui/material/Box';
+import Grid from '@mui/material/Grid';
+import TextField from '@mui/material/TextField';
+import Button from '@mui/material/Button';
+import Alert from '@mui/material/Alert';
+import Stack from '@mui/material/Stack';
 
 interface UserProfile {
   name: string | null;
@@ -14,10 +17,10 @@ interface UserProfile {
 }
 
 export function ProfileForm({ user }: { user: UserProfile }) {
-  const [name, setName] = useState(user.name ?? "");
-  const [phone, setPhone] = useState(user.phone ?? "");
-  const [ecName, setEcName] = useState(user.emergencyContactName ?? "");
-  const [ecPhone, setEcPhone] = useState(user.emergencyContactPhone ?? "");
+  const [name, setName] = useState(user.name ?? '');
+  const [phone, setPhone] = useState(user.phone ?? '');
+  const [ecName, setEcName] = useState(user.emergencyContactName ?? '');
+  const [ecPhone, setEcPhone] = useState(user.emergencyContactPhone ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -28,89 +31,80 @@ export function ProfileForm({ user }: { user: UserProfile }) {
     setError(null);
     setSuccess(false);
 
-    const res = await fetch("/api/account/profile", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name,
-        phone,
-        emergencyContactName: ecName,
-        emergencyContactPhone: ecPhone,
-      }),
+    const res = await fetch('/api/account/profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, phone, emergencyContactName: ecName, emergencyContactPhone: ecPhone }),
     });
 
     if (res.ok) {
       setSuccess(true);
     } else {
       const data = await res.json().catch(() => ({})) as { error?: string };
-      setError(data.error ?? "Something went wrong");
+      setError(data.error ?? 'Something went wrong');
     }
     setSaving(false);
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-1.5">
-        <Label htmlFor="profile-name">Name *</Label>
-        <Input
+    <Box component="form" onSubmit={handleSubmit}>
+      <Stack spacing={2.5}>
+        <TextField
           id="profile-name"
+          label="Name *"
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
         />
-      </div>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="profile-email">Email</Label>
-        <Input
+        <TextField
           id="profile-email"
+          label="Email"
           value={user.email}
           disabled
-          className="bg-muted"
+          helperText="Email cannot be changed."
         />
-        <p className="text-xs text-muted-foreground">
-          Email cannot be changed.
-        </p>
-      </div>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="profile-phone">Phone number</Label>
-        <Input
+        <TextField
           id="profile-phone"
+          label="Phone number"
           type="tel"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
         />
-      </div>
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField
+              id="ec-name"
+              label="Emergency contact name"
+              value={ecName}
+              onChange={(e) => setEcName(e.target.value)}
+              fullWidth
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField
+              id="ec-phone"
+              label="Emergency contact phone"
+              type="tel"
+              value={ecPhone}
+              onChange={(e) => setEcPhone(e.target.value)}
+              fullWidth
+            />
+          </Grid>
+        </Grid>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="ec-name">Emergency contact name</Label>
-          <Input
-            id="ec-name"
-            value={ecName}
-            onChange={(e) => setEcName(e.target.value)}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="ec-phone">Emergency contact phone</Label>
-          <Input
-            id="ec-phone"
-            type="tel"
-            value={ecPhone}
-            onChange={(e) => setEcPhone(e.target.value)}
-          />
-        </div>
-      </div>
+        {error && <Alert severity="error">{error}</Alert>}
+        {success && <Alert severity="success">Changes saved successfully.</Alert>}
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {success && (
-        <p className="text-sm text-green-600">Changes saved successfully.</p>
-      )}
-
-      <Button type="submit" disabled={saving || !name.trim()}>
-        {saving ? "Saving…" : "Save Changes"}
-      </Button>
-    </form>
+        <Box>
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={saving || !name.trim()}
+          >
+            {saving ? 'Saving…' : 'Save Changes'}
+          </Button>
+        </Box>
+      </Stack>
+    </Box>
   );
 }

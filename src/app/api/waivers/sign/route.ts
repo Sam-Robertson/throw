@@ -8,7 +8,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const userId = session.user.id;
-  const { waiverVersionId } = await request.json();
+  const body = await request.json();
+  const { waiverVersionId, typedName, signatureImageData } = body as {
+    waiverVersionId?: string;
+    typedName?: string;
+    signatureImageData?: string;
+  };
 
   if (!waiverVersionId)
     return NextResponse.json({ error: "waiverVersionId is required" }, { status: 400 });
@@ -28,6 +33,8 @@ export async function POST(request: NextRequest) {
       waiverVersionId,
       signedAt: new Date(),
       ipAddress,
+      typedName: typedName ?? null,
+      signatureImageData: signatureImageData ?? null,
     },
   });
 
