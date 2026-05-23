@@ -12,7 +12,12 @@
       "Bash(mkdir -p /Users/samrobertson/Desktop/throw/src/app/membership/manage/_components)",
       "Bash(npm list *)",
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\({**d.get\\('dependencies',{}\\), **d.get\\('devDependencies',{}\\)}, indent=2\\)\\)\")",
-      "Bash(xargs cat)"
+      "Bash(xargs cat)",
+      "Bash(mkdir -p src/app/\\\\\\(customer\\\\\\)/membership/subscribe/\\\\[planId\\\\]/_components)",
+      "Bash(mv src/app/membership/subscribe/\\\\[planId\\\\]/page.tsx                        src/app/\\\\\\(customer\\\\\\)/membership/subscribe/\\\\[planId\\\\]/page.tsx)",
+      "Bash(mv src/app/membership/subscribe/\\\\[planId\\\\]/_components/SubscribeButton.tsx src/app/\\\\\\(customer\\\\\\)/membership/subscribe/\\\\[planId\\\\]/_components/SubscribeButton.tsx)",
+      "Bash(mkdir -p src/app/\\\\\\(customer\\\\\\)/book/\\\\[id\\\\]/_components)",
+      "Bash(mv src/app/book/\\\\[id\\\\]/page.tsx                         src/app/\\\\\\(customer\\\\\\)/book/\\\\[id\\\\]/page.tsx)"
     ]
   }
 }
