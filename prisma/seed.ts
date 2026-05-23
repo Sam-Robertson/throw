@@ -885,6 +885,96 @@ these terms.`;
     },
   });
 
+  // ── Community Posts ───────────────────────────────────────────────────────────
+
+  await prisma.communityComment.deleteMany();
+  await prisma.communityLike.deleteMany();
+  await prisma.communityPost.deleteMany();
+
+  // Post 1: Welcome post by admin, 5 days ago
+  const post1 = await prisma.communityPost.create({
+    data: {
+      authorId:    admin.id,
+      title:       'Welcome to the Throw Community!',
+      body:        "We're so excited to have this space for our studio community. Share your progress, ask questions, and celebrate each other's work. This is a place for all of us who love getting our hands dirty. Can't wait to see what you're all making!",
+      isPublished: true,
+      createdAt:   daysAgo(5),
+      updatedAt:   daysAgo(5),
+    },
+  });
+
+  await prisma.communityLike.createMany({
+    data: [
+      { postId: post1.id, userId: sarah.id, createdAt: daysAgo(5) },
+      { postId: post1.id, userId: mike.id,  createdAt: daysAgo(5) },
+    ],
+  });
+
+  await prisma.communityComment.create({
+    data: {
+      postId:    post1.id,
+      authorId:  priya.id,
+      body:      'So excited for this! Just finished my first bowl last week.',
+      createdAt: daysAgo(4),
+      updatedAt: daysAgo(4),
+    },
+  });
+
+  // Post 2: Kiln firing announcement by maya, 3 days ago
+  const post2 = await prisma.communityPost.create({
+    data: {
+      authorId:    maya.id,
+      title:       'Kiln Firing This Weekend',
+      body:        "Heads up everyone — we're doing a big kiln firing this Saturday. If you have pieces ready to fire, make sure they're on the shelf by Friday at 5pm. We'll have everything out and ready for pickup by Sunday afternoon. Any questions just ask at the front desk!",
+      isPublished: true,
+      createdAt:   daysAgo(3),
+      updatedAt:   daysAgo(3),
+    },
+  });
+
+  await prisma.communityLike.create({
+    data: { postId: post2.id, userId: sarah.id, createdAt: daysAgo(3) },
+  });
+
+  await prisma.communityComment.createMany({
+    data: [
+      {
+        postId:    post2.id,
+        authorId:  mike.id,
+        body:      'Perfect timing, I have three mugs ready to go!',
+        createdAt: daysAgo(3),
+        updatedAt: daysAgo(3),
+      },
+      {
+        postId:    post2.id,
+        authorId:  claire.id,
+        body:      'Can I drop off a piece Thursday evening instead?',
+        createdAt: daysAgo(2),
+        updatedAt: daysAgo(2),
+      },
+    ],
+  });
+
+  // Post 3: Pro tip by diego, 1 day ago (no title)
+  const post3 = await prisma.communityPost.create({
+    data: {
+      authorId:    diego.id,
+      title:       null,
+      body:        'Pro tip from your friendly neighborhood instructor: if your clay keeps cracking while drying, try covering it loosely with plastic overnight to slow down the drying process. Even drying = fewer cracks. You\'re welcome 😊',
+      isPublished: true,
+      createdAt:   daysAgo(1),
+      updatedAt:   daysAgo(1),
+    },
+  });
+
+  await prisma.communityLike.createMany({
+    data: [
+      { postId: post3.id, userId: sarah.id, createdAt: daysAgo(1) },
+      { postId: post3.id, userId: mike.id,  createdAt: daysAgo(1) },
+      { postId: post3.id, userId: priya.id, createdAt: daysAgo(1) },
+    ],
+  });
+
   // ── Ad Tracking ───────────────────────────────────────────────────────────────
   // Note: AdTracking has no `landingPath` field in the schema; that spec field is omitted.
 

@@ -33,6 +33,7 @@ interface Props {
 const NAV_LINKS = [
   { href: "/schedule", label: "Schedule" },
   { href: "/membership", label: "Memberships" },
+  { href: "/community", label: "Community" },
   { href: "/about", label: "About" },
 ];
 

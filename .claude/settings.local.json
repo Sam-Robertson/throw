@@ -17,7 +17,10 @@
       "Bash(mv src/app/membership/subscribe/\\\\[planId\\\\]/page.tsx                        src/app/\\\\\\(customer\\\\\\)/membership/subscribe/\\\\[planId\\\\]/page.tsx)",
       "Bash(mv src/app/membership/subscribe/\\\\[planId\\\\]/_components/SubscribeButton.tsx src/app/\\\\\\(customer\\\\\\)/membership/subscribe/\\\\[planId\\\\]/_components/SubscribeButton.tsx)",
       "Bash(mkdir -p src/app/\\\\\\(customer\\\\\\)/book/\\\\[id\\\\]/_components)",
-      "Bash(mv src/app/book/\\\\[id\\\\]/page.tsx                         src/app/\\\\\\(customer\\\\\\)/book/\\\\[id\\\\]/page.tsx)"
+      "Bash(mv src/app/book/\\\\[id\\\\]/page.tsx                         src/app/\\\\\\(customer\\\\\\)/book/\\\\[id\\\\]/page.tsx)",
+      "Bash(mkdir -p \"/Users/samrobertson/Desktop/throw/src/app/\\(public\\)/community/[id]\")",
+      "Bash(mkdir -p \"/Users/samrobertson/Desktop/throw/src/app/admin/community/[id]/edit\")",
+      "Bash(npx tsx *)"
     ]
   }
 }
