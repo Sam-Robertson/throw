@@ -1,28 +1,25 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { formatInTimeZone } from "date-fns-tz";
-import { fromZonedTime } from "date-fns-tz";
+import { useEffect, useRef, useState } from 'react';
+import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import FormControl from '@mui/material/FormControl';
+import Grid from '@mui/material/Grid';
+import InputLabel from '@mui/material/InputLabel';
+import MenuItem from '@mui/material/MenuItem';
+import Paper from '@mui/material/Paper';
+import Select from '@mui/material/Select';
+import Stack from '@mui/material/Stack';
+import TextField from '@mui/material/TextField';
+import Typography from '@mui/material/Typography';
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
 
-const TZ = "America/Denver";
+const TZ = 'America/Denver';
+const STATUS_OPTIONS = ['OPEN', 'IN_PROGRESS', 'DONE', 'CANCELLED'] as const;
 
-const STATUS_OPTIONS = ["OPEN", "IN_PROGRESS", "DONE", "CANCELLED"] as const;
-
-interface StaffUser {
-  id: string;
-  name: string | null;
-  email: string;
-}
-
-interface CustomerResult {
-  id: string;
-  name: string | null;
-  email: string;
-}
+interface StaffUser { id: string; name: string | null; email: string; }
+interface CustomerResult { id: string; name: string | null; email: string; }
 
 export interface TaskFormValues {
   title: string;
@@ -45,65 +42,41 @@ interface Props {
 }
 
 function toInputValue(iso: string | null | undefined): string {
-  if (!iso) return "";
-  try {
-    return formatInTimeZone(new Date(iso), TZ, "yyyy-MM-dd'T'HH:mm");
-  } catch {
-    return "";
-  }
+  if (!iso) return '';
+  try { return formatInTimeZone(new Date(iso), TZ, "yyyy-MM-dd'T'HH:mm"); }
+  catch { return ''; }
 }
 
-export function TaskForm({
-  initialValues,
-  isEdit = false,
-  staffList,
-  saving,
-  error,
-  onSubmit,
-  onCancel,
-}: Props) {
-  const [title, setTitle] = useState(initialValues?.title ?? "");
-  const [description, setDescription] = useState(initialValues?.description ?? "");
-  const [assignedToId, setAssignedToId] = useState(initialValues?.assignedToId ?? "");
-  const [linkedCustomerId, setLinkedCustomerId] = useState(
-    initialValues?.linkedCustomerId ?? "",
-  );
-  const [customerQuery, setCustomerQuery] = useState(
-    initialValues?.linkedCustomerLabel ?? "",
-  );
+export function TaskForm({ initialValues, isEdit = false, staffList, saving, error, onSubmit, onCancel }: Props) {
+  const [title, setTitle] = useState(initialValues?.title ?? '');
+  const [description, setDescription] = useState(initialValues?.description ?? '');
+  const [assignedToId, setAssignedToId] = useState(initialValues?.assignedToId ?? '');
+  const [linkedCustomerId, setLinkedCustomerId] = useState(initialValues?.linkedCustomerId ?? '');
+  const [customerQuery, setCustomerQuery] = useState(initialValues?.linkedCustomerLabel ?? '');
   const [customerResults, setCustomerResults] = useState<CustomerResult[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [dueAt, setDueAt] = useState(toInputValue(initialValues?.dueAt));
-  const [status, setStatus] = useState(initialValues?.status ?? "OPEN");
+  const [status, setStatus] = useState(initialValues?.status ?? 'OPEN');
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+    function handleClick(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node))
         setShowDropdown(false);
-      }
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
   function handleCustomerInput(value: string) {
     setCustomerQuery(value);
-    setLinkedCustomerId("");
-    clearTimeout(searchTimer.current);
-    if (!value.trim()) {
-      setCustomerResults([]);
-      setShowDropdown(false);
-      return;
-    }
-    searchTimer.current = setTimeout(async () => {
+    setLinkedCustomerId('');
+    clearTimeout(timer.current);
+    if (!value.trim()) { setCustomerResults([]); setShowDropdown(false); return; }
+    timer.current = setTimeout(async () => {
       const res = await fetch(`/api/admin/customers?q=${encodeURIComponent(value)}`);
-      if (res.ok) {
-        const data: CustomerResult[] = await res.json();
-        setCustomerResults(data);
-        setShowDropdown(true);
-      }
+      if (res.ok) { setCustomerResults(await res.json() as CustomerResult[]); setShowDropdown(true); }
     }, 250);
   }
 
@@ -115,145 +88,125 @@ export function TaskForm({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    let dueAtIso = "";
-    if (dueAt) {
-      try {
-        dueAtIso = fromZonedTime(dueAt, TZ).toISOString();
-      } catch {
-        dueAtIso = "";
-      }
-    }
-    onSubmit({
-      title,
-      description,
-      assignedToId,
-      linkedCustomerId,
-      linkedCustomerLabel: customerQuery,
-      dueAt: dueAtIso,
-      status,
-    });
+    let dueAtIso = '';
+    if (dueAt) { try { dueAtIso = fromZonedTime(dueAt, TZ).toISOString(); } catch { dueAtIso = ''; } }
+    onSubmit({ title, description, assignedToId, linkedCustomerId, linkedCustomerLabel: customerQuery, dueAt: dueAtIso, status });
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-1.5">
-        <Label htmlFor="task-title">Title *</Label>
-        <Input
-          id="task-title"
+    <Box component="form" onSubmit={handleSubmit}>
+      <Stack spacing={2.5}>
+        {error && <Alert severity="error">{error}</Alert>}
+
+        <TextField
+          label="Title"
+          required
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          required
+          autoFocus
         />
-      </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="task-desc">Description</Label>
-        <Textarea
-          id="task-desc"
+        <TextField
+          label="Description"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
+          multiline
           rows={3}
         />
-      </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="task-assignee">Assigned to</Label>
-          <select
-            id="task-assignee"
-            value={assignedToId}
-            onChange={(e) => setAssignedToId(e.target.value)}
-            className="w-full rounded-md border px-3 py-2 text-sm"
-          >
-            <option value="">Unassigned</option>
-            {staffList.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name ?? s.email}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="task-due">Due date (Mountain Time)</Label>
-          <Input
-            id="task-due"
-            type="datetime-local"
-            value={dueAt}
-            onChange={(e) => setDueAt(e.target.value)}
-          />
-        </div>
-      </div>
-
-      <div className="space-y-1.5 relative" ref={dropdownRef}>
-        <Label htmlFor="task-customer">Linked customer</Label>
-        <Input
-          id="task-customer"
-          value={customerQuery}
-          onChange={(e) => handleCustomerInput(e.target.value)}
-          placeholder="Search by name or email…"
-          autoComplete="off"
-        />
-        {showDropdown && customerResults.length > 0 && (
-          <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md">
-            {customerResults.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                className="flex w-full flex-col px-3 py-2 text-left text-sm hover:bg-accent"
-                onMouseDown={() => selectCustomer(c)}
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <FormControl fullWidth>
+              <InputLabel id="assignee-label">Assigned to</InputLabel>
+              <Select
+                labelId="assignee-label"
+                value={assignedToId}
+                label="Assigned to"
+                onChange={(e) => setAssignedToId(e.target.value)}
               >
-                <span className="font-medium">{c.name ?? "—"}</span>
-                <span className="text-xs text-muted-foreground">{c.email}</span>
-              </button>
-            ))}
-          </div>
-        )}
-        {linkedCustomerId && (
-          <p className="text-xs text-muted-foreground">
-            Customer linked ·{" "}
-            <button
-              type="button"
-              className="underline"
-              onClick={() => {
-                setLinkedCustomerId("");
-                setCustomerQuery("");
+                <MenuItem value=""><em>Unassigned</em></MenuItem>
+                {staffList.map((s) => (
+                  <MenuItem key={s.id} value={s.id}>{s.name ?? s.email}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField
+              label="Due date (Mountain Time)"
+              type="datetime-local"
+              value={dueAt}
+              onChange={(e) => setDueAt(e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+              fullWidth
+            />
+          </Grid>
+        </Grid>
+
+        {/* Customer typeahead */}
+        <Box ref={dropdownRef} sx={{ position: 'relative' }}>
+          <TextField
+            label="Linked customer"
+            value={customerQuery}
+            onChange={(e) => handleCustomerInput(e.target.value)}
+            placeholder="Search by name or email…"
+            autoComplete="off"
+            fullWidth
+            helperText={linkedCustomerId ? 'Customer linked — type to change' : undefined}
+          />
+          {showDropdown && customerResults.length > 0 && (
+            <Paper
+              elevation={4}
+              sx={{
+                position: 'absolute',
+                zIndex: 1400,
+                mt: 0.5,
+                width: '100%',
+                maxHeight: 200,
+                overflowY: 'auto',
+                borderRadius: 2,
               }}
             >
-              clear
-            </button>
-          </p>
+              {customerResults.map((c) => (
+                <Box
+                  key={c.id}
+                  onMouseDown={() => selectCustomer(c)}
+                  sx={{
+                    px: 2,
+                    py: 1.25,
+                    cursor: 'pointer',
+                    '&:hover': { bgcolor: 'action.hover' },
+                  }}
+                >
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>{c.name ?? '—'}</Typography>
+                  <Typography variant="caption" color="text.secondary">{c.email}</Typography>
+                </Box>
+              ))}
+            </Paper>
+          )}
+        </Box>
+
+        {isEdit && (
+          <FormControl fullWidth>
+            <InputLabel id="status-label">Status</InputLabel>
+            <Select
+              labelId="status-label"
+              value={status}
+              label="Status"
+              onChange={(e) => setStatus(e.target.value)}
+            >
+              {STATUS_OPTIONS.map((s) => <MenuItem key={s} value={s}>{s.replace('_', ' ')}</MenuItem>)}
+            </Select>
+          </FormControl>
         )}
-      </div>
 
-      {isEdit && (
-        <div className="space-y-1.5">
-          <Label htmlFor="task-status">Status</Label>
-          <select
-            id="task-status"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            className="w-full rounded-md border px-3 py-2 text-sm"
-          >
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {error && <p className="text-sm text-destructive">{error}</p>}
-
-      <div className="flex justify-end gap-2 pt-2">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>
-          Cancel
-        </Button>
-        <Button type="submit" disabled={saving || !title.trim()}>
-          {saving ? "Saving…" : isEdit ? "Save changes" : "Create task"}
-        </Button>
-      </div>
-    </form>
+        <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', pt: 1 }}>
+          <Button variant="outlined" onClick={onCancel} disabled={saving}>Cancel</Button>
+          <Button type="submit" variant="contained" disabled={saving || !title.trim()}>
+            {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create task'}
+          </Button>
+        </Stack>
+      </Stack>
+    </Box>
   );
 }

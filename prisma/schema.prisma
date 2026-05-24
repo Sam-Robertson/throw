@@ -153,6 +153,7 @@ model User {
   communityPosts       CommunityPost[]
   communityLikes       CommunityLike[]
   communityComments    CommunityComment[]
+  payRates             PayRate[]
 }
 
 model Location {
@@ -164,17 +165,21 @@ model Location {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  sessionTypes    SessionType[]
-  studioSessions  StudioSession[]
-  memberships     Membership[]
-  membershipPlans MembershipPlan[]
-  staffRoles      StaffRole[]
-  waiverVersions  WaiverVersion[]
-  payments        Payment[]
-  tips            Tip[]
-  adTracking      AdTracking[]
-  smsAutomations  SmsAutomation[]
-  staffTasks      StaffTask[]
+  sessionTypes           SessionType[]
+  studioSessions         StudioSession[]
+  memberships            Membership[]
+  membershipPlans        MembershipPlan[]
+  staffRoles             StaffRole[]
+  waiverVersions         WaiverVersion[]
+  payments               Payment[]
+  tips                   Tip[]
+  adTracking             AdTracking[]
+  smsAutomations         SmsAutomation[]
+  staffTasks             StaffTask[]
+  retailProducts         RetailProduct[]
+  discountCodes          DiscountCode[]
+  giftCards              GiftCard[]
+  transactionalTemplates TransactionalTemplate[]
 }
 
 model StaffRole {
@@ -492,4 +497,86 @@ model LandingPage {
   locationId   String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Studio Set-up models
+// ---------------------------------------------------------------------------
+
+model PayRate {
+  id          String   @id @default(cuid())
+  userId      String
+  rateType    String   @default("hourly") // "hourly" | "per_session"
+  amountCents Int      // cents per hour or per session
+  notes       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RetailProduct {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  priceCents  Int
+  sku         String?
+  inventory   Int      @default(0)
+  imageUrl    String?
+  isActive    Boolean  @default(true)
+  locationId  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  location Location? @relation(fields: [locationId], references: [id])
+}
+
+model DiscountCode {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  description String?
+  type        String    @default("percent") // "percent" | "fixed_cents"
+  value       Int       // percent 0-100 OR fixed cents
+  maxUses     Int?
+  usedCount   Int       @default(0)
+  validFrom   DateTime?
+  validUntil  DateTime?
+  isActive    Boolean   @default(true)
+  locationId  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  location Location? @relation(fields: [locationId], references: [id])
+}
+
+model GiftCard {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  initialCents  Int
+  balanceCents  Int
+  purchasedById String?
+  redeemedById  String?
+  expiresAt     DateTime?
+  isActive      Boolean   @default(true)
+  locationId    String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  location Location? @relation(fields: [locationId], references: [id])
+}
+
+model TransactionalTemplate {
+  id         String   @id @default(cuid())
+  name       String
+  trigger    String   // e.g. "booking_confirmed", "membership_renewed"
+  channel    String   @default("email") // "email" | "sms"
+  subject    String?  // email subject
+  body       String   @db.Text
+  isActive   Boolean  @default(true)
+  locationId String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  location Location? @relation(fields: [locationId], references: [id])
 }

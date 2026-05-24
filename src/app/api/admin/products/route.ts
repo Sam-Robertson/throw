@@ -4,25 +4,15 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   const session = await auth();
-  if (!session)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (session.user.role !== "ADMIN" && session.user.role !== "STAFF")
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const locations = await prisma.location.findMany({
+  const products = await prisma.retailProduct.findMany({
     orderBy: { name: "asc" },
-    select: {
-      id: true,
-      name: true,
-      address: true,
-      timezone: true,
-      isActive: true,
-      createdAt: true,
-      _count: { select: { studioSessions: true, memberships: true } },
-    },
   });
 
-  return NextResponse.json(locations);
+  return NextResponse.json(products);
 }
 
 export async function POST(req: NextRequest) {
@@ -32,19 +22,27 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json() as {
     name: string;
-    address?: string;
-    timezone?: string;
+    description?: string;
+    priceCents: number;
+    sku?: string;
+    inventory?: number;
+    imageUrl?: string;
+    locationId?: string;
   };
 
   if (!body.name) return NextResponse.json({ error: "Name is required" }, { status: 400 });
 
-  const location = await prisma.location.create({
+  const product = await prisma.retailProduct.create({
     data: {
       name: body.name,
-      address: body.address ?? null,
-      timezone: body.timezone ?? "America/Denver",
+      description: body.description ?? null,
+      priceCents: body.priceCents ?? 0,
+      sku: body.sku ?? null,
+      inventory: body.inventory ?? 0,
+      imageUrl: body.imageUrl ?? null,
+      locationId: body.locationId ?? null,
     },
   });
 
-  return NextResponse.json(location, { status: 201 });
+  return NextResponse.json(product, { status: 201 });
 }

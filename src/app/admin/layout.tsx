@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { AdminNav } from "./_components/AdminNav";
+import Box from "@mui/material/Box";
+import { AdminNav, DRAWER_WIDTH } from "./_components/AdminNav";
 
 export default async function AdminLayout({
   children,
@@ -11,9 +12,19 @@ export default async function AdminLayout({
   if (!session) redirect("/login");
 
   return (
-    <div>
+    <Box sx={{ display: "flex", minHeight: "100vh" }}>
       <AdminNav />
-      <main>{children}</main>
-    </div>
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          minWidth: 0,
+          // On desktop, offset by the sidebar width
+          ml: { md: `${DRAWER_WIDTH}px` },
+        }}
+      >
+        {children}
+      </Box>
+    </Box>
   );
 }

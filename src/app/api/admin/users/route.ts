@@ -11,9 +11,26 @@ export async function GET() {
 
   const users = await prisma.user.findMany({
     where: { role: { in: ["ADMIN", "STAFF"] } },
-    select: { id: true, name: true, email: true, role: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      createdAt: true,
+      payRates: {
+        where: { isActive: true },
+        select: { id: true, rateType: true, amountCents: true },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
+    },
     orderBy: { name: "asc" },
   });
 
-  return NextResponse.json(users);
+  return NextResponse.json(
+    users.map((u) => ({
+      ...u,
+      defaultPayRate: u.payRates[0] ?? null,
+    })),
+  );
 }

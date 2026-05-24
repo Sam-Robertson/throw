@@ -4,25 +4,15 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   const session = await auth();
-  if (!session)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (session.user.role !== "ADMIN" && session.user.role !== "STAFF")
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const locations = await prisma.location.findMany({
+  const templates = await prisma.transactionalTemplate.findMany({
     orderBy: { name: "asc" },
-    select: {
-      id: true,
-      name: true,
-      address: true,
-      timezone: true,
-      isActive: true,
-      createdAt: true,
-      _count: { select: { studioSessions: true, memberships: true } },
-    },
   });
 
-  return NextResponse.json(locations);
+  return NextResponse.json(templates);
 }
 
 export async function POST(req: NextRequest) {
@@ -32,19 +22,27 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json() as {
     name: string;
-    address?: string;
-    timezone?: string;
+    trigger: string;
+    channel?: string;
+    subject?: string;
+    body: string;
+    locationId?: string;
   };
 
-  if (!body.name) return NextResponse.json({ error: "Name is required" }, { status: 400 });
+  if (!body.name || !body.trigger || !body.body) {
+    return NextResponse.json({ error: "name, trigger, and body are required" }, { status: 400 });
+  }
 
-  const location = await prisma.location.create({
+  const template = await prisma.transactionalTemplate.create({
     data: {
       name: body.name,
-      address: body.address ?? null,
-      timezone: body.timezone ?? "America/Denver",
+      trigger: body.trigger,
+      channel: body.channel ?? "email",
+      subject: body.subject ?? null,
+      body: body.body,
+      locationId: body.locationId ?? null,
     },
   });
 
-  return NextResponse.json(location, { status: 201 });
+  return NextResponse.json(template, { status: 201 });
 }
