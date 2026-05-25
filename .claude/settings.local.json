@@ -22,7 +22,8 @@
       "Bash(mkdir -p \"/Users/samrobertson/Desktop/throw/src/app/admin/community/[id]/edit\")",
       "Bash(npx tsx *)",
       "Bash(git -C /Users/samrobertson/Desktop/throw status --short)",
-      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(k,v\\) for k,v in {**d.get\\('dependencies',{}\\),**d.get\\('devDependencies',{}\\)}.items\\(\\) if any\\(x in k.lower\\(\\) for x in ['tiptap','quill','slate','draft','editor','prosemirror','resend','nodemailer']\\)]\")"
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(k,v\\) for k,v in {**d.get\\('dependencies',{}\\),**d.get\\('devDependencies',{}\\)}.items\\(\\) if any\\(x in k.lower\\(\\) for x in ['tiptap','quill','slate','draft','editor','prosemirror','resend','nodemailer']\\)]\")",
+      "Bash(npx next *)"
     ]
   }
 }

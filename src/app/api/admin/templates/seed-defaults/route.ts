@@ -2,10 +2,6 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
-const EMAIL_VARS = `Available variables: {{customer_name}}, {{customer_email}}, {{instructor_name}}, {{appointment_date}}, {{appointment_time}}, {{appointment_type}}, {{studio_name}}, {{studio_address}}, {{studio_phone}}, {{payment_link}}, {{penalty_amount}}, {{cancellation_reason}}`;
-
-const SMS_VARS = `Available variables: {{customer_name}}, {{instructor_name}}, {{appointment_date}}, {{appointment_time}}, {{appointment_type}}, {{studio_name}}, {{studio_phone}}`;
-
 const DEFAULT_TEMPLATES = [
   // ── EMAIL ─────────────────────────────────────────────────────────────
   {
@@ -279,5 +275,3 @@ export async function POST() {
   });
 }
 
-// Export vars so the page can display them
-export { EMAIL_VARS, SMS_VARS };

@@ -32,7 +32,6 @@ import SmsOutlinedIcon from '@mui/icons-material/SmsOutlined';
 import ChecklistOutlinedIcon from '@mui/icons-material/ChecklistOutlined';
 import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
 import PersonOutlinedIcon from '@mui/icons-material/PersonOutlined';
-import PaidOutlinedIcon from '@mui/icons-material/PaidOutlined';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
 import CardGiftcardOutlinedIcon from '@mui/icons-material/CardGiftcardOutlined';

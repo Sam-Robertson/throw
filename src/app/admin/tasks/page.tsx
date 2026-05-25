@@ -1,11 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import NextLink from 'next/link';
 import { formatInTimeZone } from 'date-fns-tz';
 import { formatDistanceToNow } from 'date-fns';
 
-import Alert from '@mui/material/Alert';
 import Avatar from '@mui/material/Avatar';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -43,7 +42,6 @@ import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
-import FilterListIcon from '@mui/icons-material/FilterList';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PlayArrowOutlinedIcon from '@mui/icons-material/PlayArrowOutlined';
 import SearchIcon from '@mui/icons-material/Search';
@@ -389,7 +387,11 @@ export default function AdminTasksPage() {
     });
   }
   function toggleRow(id: string) {
-    setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) { n.delete(id); } else { n.add(id); }
+      return n;
+    });
   }
 
   async function handleStatusChange(id: string, status: TaskStatus) {
@@ -443,7 +445,6 @@ export default function AdminTasksPage() {
   function openNew() { setEditingTask(null); setFormError(null); setFormOpen(true); }
   function openEdit(task: StaffTask) { setEditingTask(task); setFormError(null); setFormOpen(true); }
 
-  const activeFilterCount = [statusFilter !== 'OPEN', assigneeFilter !== 'all'].filter(Boolean).length;
 
   return (
     <Box sx={{ p: { xs: 3, md: 4 } }}>
