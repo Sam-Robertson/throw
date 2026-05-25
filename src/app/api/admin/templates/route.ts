@@ -9,7 +9,7 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const templates = await prisma.transactionalTemplate.findMany({
-    orderBy: { name: "asc" },
+    orderBy: [{ channel: "asc" }, { name: "asc" }],
   });
 
   return NextResponse.json(templates);
@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json() as {
     name: string;
+    description?: string;
     trigger: string;
     channel?: string;
     subject?: string;
@@ -36,6 +37,7 @@ export async function POST(req: NextRequest) {
   const template = await prisma.transactionalTemplate.create({
     data: {
       name: body.name,
+      description: body.description ?? null,
       trigger: body.trigger,
       channel: body.channel ?? "email",
       subject: body.subject ?? null,

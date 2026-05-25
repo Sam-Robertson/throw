@@ -10,6 +10,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   const body = await req.json() as {
     name?: string;
+    description?: string;
     trigger?: string;
     channel?: string;
     subject?: string;
@@ -22,9 +23,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     where: { id },
     data: {
       ...(body.name !== undefined && { name: body.name }),
+      ...(body.description !== undefined && { description: body.description || null }),
       ...(body.trigger !== undefined && { trigger: body.trigger }),
       ...(body.channel !== undefined && { channel: body.channel }),
-      ...(body.subject !== undefined && { subject: body.subject }),
+      ...(body.subject !== undefined && { subject: body.subject || null }),
       ...(body.body !== undefined && { body: body.body }),
       ...(body.isActive !== undefined && { isActive: body.isActive }),
       ...(body.locationId !== undefined && { locationId: body.locationId || null }),
