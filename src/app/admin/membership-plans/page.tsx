@@ -154,7 +154,7 @@ export default function MembershipPlansPage() {
     <Box sx={{ p: { xs: 3, md: 4 } }}>
       <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Typography variant="h2" sx={{ fontWeight: 700 }}>
-          Membership Plans
+          Subscriptions & Packs
         </Typography>
         <Button variant="contained" onClick={openNew}>
           New Plan

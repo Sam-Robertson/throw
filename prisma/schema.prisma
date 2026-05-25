@@ -154,6 +154,7 @@ model User {
   communityLikes       CommunityLike[]
   communityComments    CommunityComment[]
   payRates             PayRate[]
+  conversations        Conversation[]
 }
 
 model Location {
@@ -580,4 +581,34 @@ model TransactionalTemplate {
   updatedAt   DateTime @updatedAt
 
   location Location? @relation(fields: [locationId], references: [id])
+}
+
+// ---------------------------------------------------------------------------
+// Inbox / Conversations
+// ---------------------------------------------------------------------------
+
+model Conversation {
+  id            String    @id @default(cuid())
+  userId        String
+  channel       String    @default("in_app") // "email" | "sms" | "in_app"
+  subject       String?   // email thread subject
+  adminUnread   Int       @default(0)
+  lastMessageAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user     User                  @relation(fields: [userId], references: [id])
+  messages ConversationMessage[]
+}
+
+model ConversationMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  direction      String   @default("outbound") // "inbound" | "outbound"
+  body           String   @db.Text
+  subject        String?
+  isRead         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 }

@@ -118,7 +118,7 @@ export default function AdminMembershipsPage() {
   return (
     <main className="p-6">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Memberships</h1>
+        <h1 className="text-2xl font-semibold">Active Memberships</h1>
       </div>
 
       <div className="mb-4 flex gap-2">

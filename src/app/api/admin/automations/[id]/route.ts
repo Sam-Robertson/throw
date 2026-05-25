@@ -30,3 +30,14 @@ export async function PATCH(
   const updated = await prisma.smsAutomation.update({ where: { id }, data });
   return NextResponse.json(updated);
 }
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const guard = await requireStaff();
+  if (guard.error) return guard.error;
+  const { id } = await params;
+  await prisma.smsAutomation.delete({ where: { id } });
+  return new NextResponse(null, { status: 204 });
+}
