@@ -1,217 +1,128 @@
 'use client';
 import { createTheme } from '@mui/material/styles';
 
-// ─── Material 3 colour tokens for Throw pottery studio ───────────────────────
-// Built from a warm terracotta primary with sage secondary on a cream surface.
+// ─── Material 3 colour tokens — Throw pottery studio (Olive + Ivory palette) ─
+//
+// Source palette:
+//   Ivory Chill     #EDE6D9  — warm off-white background
+//   Classic Olive   #808000  — primary brand olive
+//   Sage Mist       #D0D4BC  — light sage surface accent
+//   Deep Forest     #1E2814  — near-black forest green
+
 const md3 = {
-  // Primary – deep clay terracotta
-  primary: '#7B4F31',
-  onPrimary: '#FFFFFF',
-  primaryContainer: '#FFDCC4',
-  onPrimaryContainer: '#2E1200',
+  // ── Primary — Classic Olive Core ────────────────────────────────────────────
+  primary:            '#808000',
+  onPrimary:          '#FFFFFF',
+  primaryContainer:   '#EAEAD0',   // very light olive tint
+  onPrimaryContainer: '#1F1D00',
 
-  // Secondary – sage green
-  secondary: '#56785A',
-  onSecondary: '#FFFFFF',
-  secondaryContainer: '#D9F0DA',
-  onSecondaryContainer: '#122015',
+  // ── Secondary — medium sage ──────────────────────────────────────────────────
+  secondary:            '#5A6432',
+  onSecondary:          '#FFFFFF',
+  secondaryContainer:   '#D0D4BC',   // Sage Mist
+  onSecondaryContainer: '#171B00',
 
-  // Tertiary – warm sand
-  tertiary: '#9E7C40',
-  onTertiary: '#FFFFFF',
-  tertiaryContainer: '#FAEBBE',
-  onTertiaryContainer: '#321F00',
+  // ── Tertiary — deep forest ───────────────────────────────────────────────────
+  tertiary:            '#3B4C22',
+  onTertiary:          '#FFFFFF',
+  tertiaryContainer:   '#C4CEAC',   // light forest tint
+  onTertiaryContainer: '#0A1400',
 
-  // Error
-  error: '#B3261E',
-  onError: '#FFFFFF',
-  errorContainer: '#F9DEDC',
+  // ── Error ────────────────────────────────────────────────────────────────────
+  error:            '#B3261E',
+  onError:          '#FFFFFF',
+  errorContainer:   '#F9DEDC',
   onErrorContainer: '#410E0B',
 
-  // Neutral surfaces
-  background: '#FFFBF8',
-  onBackground: '#201A17',
-  surface: '#FFFBF8',
-  onSurface: '#201A17',
-  surfaceVariant: '#F4E4D7',
-  onSurfaceVariant: '#52433A',
-  surfaceContainerHigh: '#EDE0D9',
-  surfaceContainerHighest: '#E8D8CF',
+  // ── Neutral surfaces — Ivory Chill family ────────────────────────────────────
+  background:              '#EDE6D9',   // Ivory Chill
+  onBackground:            '#1C1B0F',
+  surface:                 '#EDE6D9',
+  onSurface:               '#1C1B0F',
+  surfaceVariant:          '#DDD7C6',   // warm mid-ivory
+  onSurfaceVariant:        '#4C4A38',
+  surfaceContainerHigh:    '#E8E2D4',
+  surfaceContainerHighest: '#E0D9CB',
 
-  // Utility
-  outline: '#857469',
-  outlineVariant: '#D8C4B7',
-  inverseSurface: '#362E2B',
-  inverseOnSurface: '#FBEEE8',
-  inversePrimary: '#FFBA8F',
+  // ── Utility ──────────────────────────────────────────────────────────────────
+  outline:          '#7A7860',
+  outlineVariant:   '#CAC7B0',
+  inverseSurface:   '#1E2814',   // Deep Forest
+  inverseOnSurface: '#F4F0E3',
+  inversePrimary:   '#BDBF5E',   // light olive
 };
 
 const theme = createTheme({
   // ─── Colour palette ────────────────────────────────────────────────────────
   palette: {
     primary: {
-      main: md3.primary,
-      light: md3.primaryContainer,
+      main:         md3.primary,
+      light:        md3.primaryContainer,
       contrastText: md3.onPrimary,
     },
     secondary: {
-      main: md3.secondary,
-      light: md3.secondaryContainer,
+      main:         md3.secondary,
+      light:        md3.secondaryContainer,
       contrastText: md3.onSecondary,
     },
     error: {
-      main: md3.error,
-      light: md3.errorContainer,
+      main:         md3.error,
+      light:        md3.errorContainer,
       contrastText: md3.onError,
     },
     background: {
-      default: md3.background,
-      paper: '#FFFFFF',
+      default: md3.background,   // Ivory Chill page background
+      paper:   '#FFFFFF',        // white cards pop on the ivory bg
     },
     text: {
-      primary: md3.onSurface,
+      primary:   md3.onSurface,
       secondary: md3.onSurfaceVariant,
-      disabled: `${md3.onSurface}61`,
+      disabled:  `${md3.onSurface}61`,
     },
     divider: md3.outlineVariant,
-    // Custom tokens exposed via palette for easy sx usage
     action: {
-      hoverOpacity: 0.08,
-      focusOpacity: 0.12,
+      hoverOpacity:     0.08,
+      focusOpacity:     0.12,
       activatedOpacity: 0.12,
-      selectedOpacity: 0.08,
+      selectedOpacity:  0.08,
     },
   },
 
-  // ─── Shape (M3 shape scale) ─────────────────────────────────────────────────
-  shape: {
-    borderRadius: 12, // medium = default
-  },
+  // ─── Shape ─────────────────────────────────────────────────────────────────
+  shape: { borderRadius: 12 },
 
-  // ─── Typography (Geist + M3 type scale) ────────────────────────────────────
+  // ─── Typography ────────────────────────────────────────────────────────────
   typography: {
     fontFamily: 'var(--font-geist-sans), system-ui, -apple-system, sans-serif',
-    // Display – hero headlines
-    h1: {
-      fontSize: 'clamp(2rem, 5vw, 3.5625rem)',
-      fontWeight: 700,
-      lineHeight: 1.12,
-      letterSpacing: '-0.025em',
-    },
-    // Headline large
-    h2: {
-      fontSize: 'clamp(1.5rem, 3.5vw, 2.25rem)',
-      fontWeight: 700,
-      lineHeight: 1.2,
-      letterSpacing: '-0.015em',
-    },
-    // Headline medium
-    h3: {
-      fontSize: '1.75rem',
-      fontWeight: 600,
-      lineHeight: 1.3,
-      letterSpacing: '-0.01em',
-    },
-    // Headline small
-    h4: {
-      fontSize: '1.375rem',
-      fontWeight: 600,
-      lineHeight: 1.35,
-      letterSpacing: '-0.005em',
-    },
-    // Title large
-    h5: {
-      fontSize: '1.125rem',
-      fontWeight: 600,
-      lineHeight: 1.4,
-    },
-    // Title medium
-    h6: {
-      fontSize: '1rem',
-      fontWeight: 600,
-      lineHeight: 1.5,
-      letterSpacing: '0.005em',
-    },
-    subtitle1: {
-      fontSize: '1rem',
-      fontWeight: 500,
-      lineHeight: 1.5,
-      letterSpacing: '0.00938em',
-    },
-    subtitle2: {
-      fontSize: '0.875rem',
-      fontWeight: 600,
-      lineHeight: 1.57,
-      letterSpacing: '0.00714em',
-    },
-    body1: {
-      fontSize: '1rem',
-      lineHeight: 1.6,
-      letterSpacing: '0.00938em',
-    },
-    body2: {
-      fontSize: '0.875rem',
-      lineHeight: 1.57,
-      letterSpacing: '0.01071em',
-    },
-    button: {
-      fontSize: '0.875rem',
-      fontWeight: 600,
-      lineHeight: 1.75,
-      letterSpacing: '0.01em',
-      textTransform: 'none',
-    },
-    caption: {
-      fontSize: '0.75rem',
-      lineHeight: 1.43,
-      letterSpacing: '0.03333em',
-    },
-    overline: {
-      fontSize: '0.625rem',
-      fontWeight: 700,
-      lineHeight: 2.66,
-      letterSpacing: '0.08333em',
-      textTransform: 'uppercase',
-    },
+    h1: { fontSize: 'clamp(2rem, 5vw, 3.5625rem)', fontWeight: 700, lineHeight: 1.12, letterSpacing: '-0.025em' },
+    h2: { fontSize: 'clamp(1.5rem, 3.5vw, 2.25rem)', fontWeight: 700, lineHeight: 1.2, letterSpacing: '-0.015em' },
+    h3: { fontSize: '1.75rem', fontWeight: 600, lineHeight: 1.3, letterSpacing: '-0.01em' },
+    h4: { fontSize: '1.375rem', fontWeight: 600, lineHeight: 1.35, letterSpacing: '-0.005em' },
+    h5: { fontSize: '1.125rem', fontWeight: 600, lineHeight: 1.4 },
+    h6: { fontSize: '1rem', fontWeight: 600, lineHeight: 1.5, letterSpacing: '0.005em' },
+    subtitle1: { fontSize: '1rem', fontWeight: 500, lineHeight: 1.5, letterSpacing: '0.00938em' },
+    subtitle2: { fontSize: '0.875rem', fontWeight: 600, lineHeight: 1.57, letterSpacing: '0.00714em' },
+    body1: { fontSize: '1rem', lineHeight: 1.6, letterSpacing: '0.00938em' },
+    body2: { fontSize: '0.875rem', lineHeight: 1.57, letterSpacing: '0.01071em' },
+    button: { fontSize: '0.875rem', fontWeight: 600, lineHeight: 1.75, letterSpacing: '0.01em', textTransform: 'none' },
+    caption: { fontSize: '0.75rem', lineHeight: 1.43, letterSpacing: '0.03333em' },
+    overline: { fontSize: '0.625rem', fontWeight: 700, lineHeight: 2.66, letterSpacing: '0.08333em', textTransform: 'uppercase' },
   },
 
-  // ─── Component overrides ────────────────────────────────────────────────────
+  // ─── Component overrides ───────────────────────────────────────────────────
   components: {
     // ── Buttons ──────────────────────────────────────────────────────────────
     MuiButton: {
       defaultProps: { disableElevation: true },
       styleOverrides: {
-        root: {
-          borderRadius: 100, // M3 full pill
-          textTransform: 'none',
-          fontWeight: 600,
-        },
-        sizeSmall: {
-          paddingLeft: 16,
-          paddingRight: 16,
-          paddingTop: 5,
-          paddingBottom: 5,
-          fontSize: '0.8125rem',
-        },
-        sizeMedium: {
-          paddingLeft: 24,
-          paddingRight: 24,
-          paddingTop: 8,
-          paddingBottom: 8,
-        },
-        sizeLarge: {
-          paddingLeft: 32,
-          paddingRight: 32,
-          paddingTop: 12,
-          paddingBottom: 12,
-          fontSize: '1rem',
-        },
+        root: { borderRadius: 100, textTransform: 'none', fontWeight: 600 },
+        sizeSmall:  { paddingLeft: 16, paddingRight: 16, paddingTop: 5, paddingBottom: 5, fontSize: '0.8125rem' },
+        sizeMedium: { paddingLeft: 24, paddingRight: 24, paddingTop: 8, paddingBottom: 8 },
+        sizeLarge:  { paddingLeft: 32, paddingRight: 32, paddingTop: 12, paddingBottom: 12, fontSize: '1rem' },
       },
     },
     MuiIconButton: {
-      styleOverrides: {
-        root: { borderRadius: 12 },
-      },
+      styleOverrides: { root: { borderRadius: 12 } },
     },
 
     // ── Cards ─────────────────────────────────────────────────────────────────
@@ -228,67 +139,39 @@ const theme = createTheme({
     },
     MuiCardContent: {
       styleOverrides: {
-        root: {
-          padding: 20,
-          '&:last-child': { paddingBottom: 20 },
-        },
+        root: { padding: 20, '&:last-child': { paddingBottom: 20 } },
       },
     },
     MuiCardActions: {
-      styleOverrides: {
-        root: {
-          padding: '12px 20px 20px',
-        },
-      },
+      styleOverrides: { root: { padding: '12px 20px 20px' } },
     },
     MuiCardHeader: {
-      styleOverrides: {
-        root: { padding: '20px 20px 12px' },
-      },
+      styleOverrides: { root: { padding: '20px 20px 12px' } },
     },
 
     // ── Paper ─────────────────────────────────────────────────────────────────
     MuiPaper: {
       defaultProps: { elevation: 0 },
       styleOverrides: {
-        root: {
-          backgroundImage: 'none',
-        },
-        outlined: {
-          borderColor: md3.outlineVariant,
-        },
+        root: { backgroundImage: 'none' },
+        outlined: { borderColor: md3.outlineVariant },
       },
     },
 
     // ── Chips ─────────────────────────────────────────────────────────────────
     MuiChip: {
       styleOverrides: {
-        root: {
-          borderRadius: 8,
-          fontWeight: 500,
-          fontSize: '0.75rem',
-          height: 26,
-        },
-        sizeSmall: {
-          height: 22,
-          fontSize: '0.6875rem',
-        },
+        root: { borderRadius: 8, fontWeight: 500, fontSize: '0.75rem', height: 26 },
+        sizeSmall: { height: 22, fontSize: '0.6875rem' },
       },
     },
 
     // ── Text fields ───────────────────────────────────────────────────────────
     MuiTextField: {
-      defaultProps: {
-        variant: 'outlined',
-        size: 'small',
-        fullWidth: true,
-      },
+      defaultProps: { variant: 'outlined', size: 'small', fullWidth: true },
       styleOverrides: {
         root: {
-          '& .MuiOutlinedInput-root': {
-            borderRadius: 8,
-            backgroundColor: '#FFFFFF',
-          },
+          '& .MuiOutlinedInput-root': { borderRadius: 8, backgroundColor: '#FFFFFF' },
         },
       },
     },
@@ -299,64 +182,37 @@ const theme = createTheme({
       },
     },
     MuiInputLabel: {
-      styleOverrides: {
-        root: { fontSize: '0.875rem' },
-      },
+      styleOverrides: { root: { fontSize: '0.875rem' } },
     },
     MuiFormHelperText: {
-      styleOverrides: {
-        root: { marginLeft: 4 },
-      },
+      styleOverrides: { root: { marginLeft: 4 } },
     },
 
     // ── Select ────────────────────────────────────────────────────────────────
     MuiSelect: {
       defaultProps: { size: 'small' },
-      styleOverrides: {
-        root: { borderRadius: 8 },
-      },
+      styleOverrides: { root: { borderRadius: 8 } },
     },
 
     // ── Dialogs ───────────────────────────────────────────────────────────────
     MuiDialog: {
       styleOverrides: {
-        paper: {
-          borderRadius: 28, // M3 extraLarge
-          boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-        },
+        paper: { borderRadius: 28, boxShadow: '0 8px 32px rgba(0,0,0,0.12)' },
       },
     },
     MuiDialogTitle: {
-      styleOverrides: {
-        root: {
-          fontSize: '1.375rem',
-          fontWeight: 600,
-          padding: '24px 24px 12px',
-        },
-      },
+      styleOverrides: { root: { fontSize: '1.375rem', fontWeight: 600, padding: '24px 24px 12px' } },
     },
     MuiDialogContent: {
-      styleOverrides: {
-        root: { padding: '12px 24px' },
-      },
+      styleOverrides: { root: { padding: '12px 24px' } },
     },
     MuiDialogActions: {
-      styleOverrides: {
-        root: {
-          padding: '12px 24px 24px',
-          gap: 8,
-        },
-      },
+      styleOverrides: { root: { padding: '12px 24px 24px', gap: 8 } },
     },
 
     // ── Drawers ───────────────────────────────────────────────────────────────
     MuiDrawer: {
-      styleOverrides: {
-        paper: {
-          borderRadius: 0,
-          border: 'none',
-        },
-      },
+      styleOverrides: { paper: { borderRadius: 0, border: 'none' } },
     },
 
     // ── AppBar ────────────────────────────────────────────────────────────────
@@ -365,7 +221,7 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           borderBottom: `1px solid ${md3.outlineVariant}`,
-          backgroundColor: 'rgba(255,251,248,0.95)',
+          backgroundColor: `rgba(237,230,217,0.95)`,   // Ivory Chill with blur
           backdropFilter: 'blur(8px)',
           WebkitBackdropFilter: 'blur(8px)',
         },
@@ -373,10 +229,7 @@ const theme = createTheme({
     },
     MuiToolbar: {
       styleOverrides: {
-        root: {
-          minHeight: 56,
-          '@media (min-width: 600px)': { minHeight: 64 },
-        },
+        root: { minHeight: 56, '@media (min-width: 600px)': { minHeight: 64 } },
       },
     },
 
@@ -395,11 +248,7 @@ const theme = createTheme({
     },
     MuiTableCell: {
       styleOverrides: {
-        root: {
-          fontSize: '0.875rem',
-          borderColor: md3.outlineVariant,
-          padding: '10px 16px',
-        },
+        root: { fontSize: '0.875rem', borderColor: md3.outlineVariant, padding: '10px 16px' },
       },
     },
     MuiTableRow: {
@@ -413,9 +262,7 @@ const theme = createTheme({
 
     // ── Misc ──────────────────────────────────────────────────────────────────
     MuiDivider: {
-      styleOverrides: {
-        root: { borderColor: md3.outlineVariant },
-      },
+      styleOverrides: { root: { borderColor: md3.outlineVariant } },
     },
     MuiTooltip: {
       styleOverrides: {
@@ -429,22 +276,14 @@ const theme = createTheme({
       },
     },
     MuiAlert: {
-      styleOverrides: {
-        root: { borderRadius: 12 },
-      },
+      styleOverrides: { root: { borderRadius: 12 } },
     },
     MuiLinearProgress: {
-      styleOverrides: {
-        root: { borderRadius: 4 },
-      },
+      styleOverrides: { root: { borderRadius: 4 } },
     },
     MuiTab: {
       styleOverrides: {
-        root: {
-          textTransform: 'none',
-          fontWeight: 500,
-          fontSize: '0.875rem',
-        },
+        root: { textTransform: 'none', fontWeight: 500, fontSize: '0.875rem' },
       },
     },
     MuiSwitch: {
