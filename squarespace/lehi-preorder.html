@@ -1,0 +1,1625 @@
+<!--
+  Throw Art Studio - Lehi preorder widget
+  Paste this whole block into a Squarespace Code Block (or Code Injection).
+  Self-contained: inline styles + script, one Google Fonts import, no build step.
+  Everything is scoped under #throw-preorder so it can't collide with Squarespace's CSS.
+
+  Edit CONFIG below to set real dates, prices, and Stripe Price IDs, then point
+  CONFIG.checkoutEndpoint at your deployed /api/preorder/checkout route
+  (see src/app/api/preorder/checkout/route.ts in the Next.js project).
+-->
+<div id="throw-preorder">
+  <div class="tp-card">
+    <div class="tp-header">
+      <span class="tp-logo">throw<span class="tp-dot">.</span></span>
+      <span class="tp-header-sub">Lehi &mdash; Preorder</span>
+    </div>
+
+    <div class="tp-progress" role="progressbar" aria-label="Preorder progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="25">
+      <div class="tp-progress-fill"></div>
+    </div>
+
+    <div class="tp-step-row">
+      <button type="button" class="tp-back" aria-label="Go back">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3.5 5 8l5 4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Back
+      </button>
+      <span class="tp-stepnum"></span>
+    </div>
+
+    <h2 class="tp-title"></h2>
+    <p class="tp-subtitle"></p>
+
+    <div class="tp-error" role="alert" aria-live="assertive" hidden></div>
+
+    <div class="tp-panel" data-step-key="offering"></div>
+    <div class="tp-panel" data-step-key="options"></div>
+    <div class="tp-panel" data-step-key="cohort"></div>
+    <div class="tp-panel" data-step-key="contact"></div>
+    <div class="tp-panel" data-step-key="review"></div>
+  </div>
+
+  <p class="tp-footnote">Secure checkout powered by Stripe. Pieces &amp; firings billed separately unless noted.</p>
+</div>
+
+<style>
+  /* ---------- Google Fonts (single import) ---------- */
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&display=swap');
+
+  /* ---------- Scoped tokens & reset ---------- */
+  #throw-preorder {
+    --tp-cream: #F5F0EC;
+    --tp-white: #FFFFFF;
+    --tp-sage: #8B9D83;
+    --tp-sage-hover: #74876C;
+    --tp-sage-tint: #EEF1EB;
+    --tp-coral: #D56132;
+    --tp-ink: #3A2E24;
+    --tp-muted: #6F6355;
+    --tp-border: #E5DDD3;
+    --tp-error: #B3261E;
+    --tp-radius-lg: 20px;
+    --tp-radius-md: 14px;
+    --tp-radius-sm: 10px;
+    --tp-font-serif: 'Fraunces', Georgia, 'Times New Roman', serif;
+    --tp-font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+    background: var(--tp-cream);
+    color: var(--tp-ink);
+    font-family: var(--tp-font-sans);
+    padding: 32px 16px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #throw-preorder, #throw-preorder *, #throw-preorder *::before, #throw-preorder *::after {
+    box-sizing: border-box;
+  }
+
+  #throw-preorder ul, #throw-preorder ol { margin: 0; padding: 0; list-style: none; }
+  #throw-preorder p { margin: 0; }
+  #throw-preorder button { font: inherit; color: inherit; }
+  #throw-preorder .tp-icon { flex: none; display: block; }
+
+  /* ---------- Card shell ---------- */
+  #throw-preorder .tp-card {
+    width: 100%;
+    max-width: 480px;
+    background: var(--tp-white);
+    border-radius: var(--tp-radius-lg);
+    border: 1px solid var(--tp-border);
+    box-shadow: 0 1px 2px rgba(58,46,36,0.04), 0 12px 32px rgba(58,46,36,0.06);
+    padding: 28px 26px 30px;
+  }
+
+  #throw-preorder .tp-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 18px;
+  }
+  #throw-preorder .tp-logo {
+    font-family: var(--tp-font-serif);
+    font-weight: 600;
+    font-size: 22px;
+    letter-spacing: -0.01em;
+    color: var(--tp-ink);
+  }
+  #throw-preorder .tp-logo .tp-dot { color: var(--tp-coral); }
+  #throw-preorder .tp-header-sub {
+    font-size: 12px;
+    color: var(--tp-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  /* ---------- Progress bar ---------- */
+  #throw-preorder .tp-progress {
+    height: 4px;
+    width: 100%;
+    background: var(--tp-sage-tint);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 18px;
+  }
+  #throw-preorder .tp-progress-fill {
+    height: 100%;
+    width: 25%;
+    background: var(--tp-sage);
+    border-radius: 999px;
+    transition: width 0.35s ease;
+  }
+
+  /* ---------- Step header row ---------- */
+  #throw-preorder .tp-step-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 28px;
+    margin-bottom: 4px;
+  }
+  #throw-preorder .tp-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    padding: 4px 6px 4px 2px;
+    margin-left: -2px;
+    border-radius: var(--tp-radius-sm);
+    color: var(--tp-muted);
+    font-size: 14px;
+    cursor: pointer;
+  }
+  #throw-preorder .tp-back:hover { color: var(--tp-ink); }
+  #throw-preorder .tp-back[hidden] { visibility: hidden; }
+  #throw-preorder .tp-stepnum {
+    font-size: 12px;
+    color: var(--tp-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  #throw-preorder .tp-title {
+    font-family: var(--tp-font-serif);
+    font-weight: 600;
+    font-size: 26px;
+    line-height: 1.2;
+    margin: 6px 0 6px;
+  }
+  #throw-preorder .tp-subtitle {
+    font-size: 14px;
+    color: var(--tp-muted);
+    line-height: 1.5;
+    margin-bottom: 20px;
+  }
+
+  #throw-preorder .tp-error {
+    background: #FBEAE7;
+    border: 1px solid var(--tp-error);
+    color: var(--tp-error);
+    font-size: 13px;
+    padding: 10px 14px;
+    border-radius: var(--tp-radius-sm);
+    margin-bottom: 16px;
+  }
+
+  #throw-preorder .tp-panel { display: none; }
+  #throw-preorder .tp-panel.is-active { display: block; }
+
+  /* ---------- Offering / option cards ---------- */
+  #throw-preorder .tp-option-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  #throw-preorder .tp-option {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: var(--tp-white);
+    border: 1.5px solid var(--tp-border);
+    border-radius: var(--tp-radius-md);
+    padding: 16px 18px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+    position: relative;
+  }
+  #throw-preorder .tp-option:hover { border-color: var(--tp-sage); }
+  #throw-preorder .tp-option[aria-checked="true"] {
+    border-color: var(--tp-sage);
+    background: var(--tp-sage-tint);
+  }
+  #throw-preorder .tp-option-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  #throw-preorder .tp-option-heading {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+  }
+  #throw-preorder .tp-option-icon {
+    display: inline-flex;
+    flex: none;
+    color: var(--tp-sage);
+  }
+  #throw-preorder .tp-option-name {
+    font-family: var(--tp-font-serif);
+    font-weight: 600;
+    font-size: 18px;
+    color: var(--tp-ink);
+  }
+  #throw-preorder .tp-option-meta {
+    font-size: 13px;
+    color: var(--tp-muted);
+    margin-top: 8px;
+    line-height: 1.45;
+  }
+  #throw-preorder .tp-option-price {
+    font-family: var(--tp-font-serif);
+    font-weight: 600;
+    font-size: 17px;
+    color: var(--tp-coral);
+    white-space: nowrap;
+    text-align: right;
+    flex: none;
+  }
+  #throw-preorder .tp-option-price .tp-price-unit {
+    font-family: var(--tp-font-sans);
+    font-weight: 400;
+    font-size: 12px;
+    color: var(--tp-muted);
+  }
+  #throw-preorder .tp-radio-dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1.5px solid var(--tp-muted);
+    flex: none;
+    margin-top: 2px;
+    position: relative;
+  }
+  #throw-preorder .tp-option[aria-checked="true"] .tp-radio-dot {
+    border-color: var(--tp-sage);
+  }
+  #throw-preorder .tp-option[aria-checked="true"] .tp-radio-dot::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border-radius: 50%;
+    background: var(--tp-sage);
+  }
+
+  /* ---------- Buttons ---------- */
+  #throw-preorder .tp-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    border: none;
+    border-radius: 999px;
+    padding: 14px 20px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s ease, opacity 0.15s ease, transform 0.05s ease;
+    margin-top: 22px;
+  }
+  #throw-preorder .tp-btn-primary {
+    background: var(--tp-sage);
+    color: #fff;
+  }
+  #throw-preorder .tp-btn-primary:hover:not(:disabled) { background: var(--tp-sage-hover); }
+  #throw-preorder .tp-btn-primary:active:not(:disabled) { transform: translateY(1px); }
+  #throw-preorder .tp-btn-primary:disabled {
+    background: #C9CFC5;
+    cursor: not-allowed;
+  }
+  #throw-preorder .tp-link-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--tp-sage);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  #throw-preorder .tp-link-btn:hover { color: var(--tp-sage-hover); }
+
+  /* ---------- Options: location / people / wheels / date / time ---------- */
+  #throw-preorder .tp-field-section { margin-bottom: 22px; }
+  #throw-preorder .tp-field-section--locked { display: none; }
+  #throw-preorder .tp-section-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--tp-ink);
+    margin-bottom: 10px;
+  }
+  #throw-preorder .tp-section-label .tp-icon { color: var(--tp-muted); }
+  #throw-preorder .tp-static-value {
+    font-size: 14px;
+    color: var(--tp-muted);
+  }
+  #throw-preorder .tp-hint {
+    font-size: 12px;
+    color: var(--tp-muted);
+    margin-top: 8px;
+  }
+  #throw-preorder .tp-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  #throw-preorder .tp-chip {
+    min-width: 44px;
+    padding: 9px 14px;
+    border-radius: 999px;
+    border: 1.5px solid var(--tp-border);
+    background: var(--tp-white);
+    color: var(--tp-ink);
+    font-size: 14px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+  }
+  #throw-preorder .tp-chip:hover:not(:disabled) { border-color: var(--tp-sage); }
+  #throw-preorder .tp-chip[aria-pressed="true"] {
+    border-color: var(--tp-sage);
+    background: var(--tp-sage-tint);
+    font-weight: 600;
+  }
+  #throw-preorder .tp-chip:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  #throw-preorder .tp-chip small {
+    display: block;
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--tp-muted);
+    margin-top: 2px;
+  }
+
+  /* Number-of-wheels stepper (3+ people) */
+  #throw-preorder .tp-stepper {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border: 1.5px solid var(--tp-border);
+    border-radius: 999px;
+    padding: 8px 10px;
+    width: fit-content;
+  }
+  #throw-preorder .tp-stepper-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1.5px solid var(--tp-sage);
+    background: var(--tp-white);
+    color: var(--tp-sage);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #throw-preorder .tp-stepper-btn:hover:not(:disabled) { background: var(--tp-sage-tint); }
+  #throw-preorder .tp-stepper-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  #throw-preorder .tp-stepper-value {
+    min-width: 100px;
+    text-align: center;
+    font-size: 14px;
+  }
+  #throw-preorder .tp-stepper-value strong {
+    display: block;
+    font-family: var(--tp-font-serif);
+    font-size: 16px;
+  }
+  #throw-preorder .tp-stepper-value span {
+    display: block;
+    color: var(--tp-coral);
+    font-size: 13px;
+    margin-top: 1px;
+  }
+
+  #throw-preorder .tp-date-field-wrap {
+    position: relative;
+  }
+  #throw-preorder .tp-date-field {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1.5px solid var(--tp-border);
+    border-radius: var(--tp-radius-sm);
+    background: var(--tp-white);
+    color: var(--tp-ink);
+    font-size: 15px;
+    font-family: var(--tp-font-sans);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s ease;
+  }
+  #throw-preorder .tp-date-field:hover { border-color: var(--tp-sage); }
+  #throw-preorder .tp-date-field[aria-expanded="true"] { border-color: var(--tp-sage); }
+  #throw-preorder .tp-date-field svg { flex: none; color: var(--tp-muted); }
+  #throw-preorder .tp-date-field-placeholder { color: #A69C8E; }
+  #throw-preorder .tp-date-popover {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    background: var(--tp-white);
+    border: 1px solid var(--tp-border);
+    border-radius: var(--tp-radius-md);
+    box-shadow: 0 4px 10px rgba(58,46,36,0.06), 0 16px 32px rgba(58,46,36,0.12);
+    padding: 16px;
+  }
+  #throw-preorder .tp-date-popover[hidden] { display: none; }
+
+  #throw-preorder .tp-calendar-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  #throw-preorder .tp-calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+  #throw-preorder .tp-calendar-weekday {
+    font-size: 10.5px;
+    color: var(--tp-muted);
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 4px 0;
+  }
+  #throw-preorder .tp-calendar-day {
+    aspect-ratio: 1;
+    width: 100%;
+    border: none;
+    background: none;
+    border-radius: 50%;
+    font-size: 13px;
+    font-family: var(--tp-font-sans);
+    color: var(--tp-ink);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #throw-preorder .tp-calendar-day:hover:not(:disabled) { background: var(--tp-sage-tint); }
+  #throw-preorder .tp-calendar-day[aria-pressed="true"] {
+    background: var(--tp-sage);
+    color: #fff;
+    font-weight: 600;
+  }
+  #throw-preorder .tp-calendar-day:disabled {
+    color: #CFC6B8;
+    cursor: not-allowed;
+  }
+  #throw-preorder .tp-calendar-day.tp-calendar-empty {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  /* ---------- Form fields ---------- */
+  #throw-preorder .tp-field { margin-bottom: 16px; }
+  #throw-preorder .tp-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--tp-ink);
+    margin-bottom: 6px;
+  }
+  #throw-preorder .tp-label .tp-optional {
+    font-weight: 400;
+    color: var(--tp-muted);
+  }
+  #throw-preorder .tp-input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid var(--tp-border);
+    border-radius: var(--tp-radius-sm);
+    background: var(--tp-white);
+    color: var(--tp-ink);
+    font-size: 15px;
+    font-family: var(--tp-font-sans);
+    transition: border-color 0.15s ease;
+  }
+  #throw-preorder .tp-input::placeholder { color: #A69C8E; }
+  #throw-preorder .tp-input[aria-invalid="true"] { border-color: var(--tp-error); }
+  #throw-preorder .tp-input--with-icon { padding-right: 42px; }
+  #throw-preorder .tp-date-field-icon-btn {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 42px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: var(--tp-muted);
+    cursor: pointer;
+  }
+  #throw-preorder .tp-date-field-icon-btn:hover { color: var(--tp-sage); }
+  #throw-preorder .tp-calendar-nav {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: none;
+    background: none;
+    color: var(--tp-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  #throw-preorder .tp-calendar-nav:hover { background: var(--tp-sage-tint); color: var(--tp-ink); }
+  #throw-preorder .tp-field-error {
+    font-size: 12px;
+    color: var(--tp-error);
+    margin-top: 5px;
+    display: none;
+  }
+  #throw-preorder .tp-field-error.is-visible { display: block; }
+
+  #throw-preorder .tp-checkbox-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 16px;
+    cursor: pointer;
+  }
+  #throw-preorder .tp-checkbox-row input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin-top: 1px;
+    accent-color: var(--tp-sage);
+    flex: none;
+  }
+  #throw-preorder .tp-checkbox-row span {
+    font-size: 12.5px;
+    color: var(--tp-muted);
+    line-height: 1.5;
+  }
+
+  /* Keyboard focus states */
+  #throw-preorder button:focus-visible,
+  #throw-preorder .tp-option:focus-visible,
+  #throw-preorder .tp-input:focus-visible,
+  #throw-preorder input[type="checkbox"]:focus-visible {
+    outline: 2px solid var(--tp-coral);
+    outline-offset: 2px;
+  }
+  #throw-preorder .tp-input:focus:not(:focus-visible) {
+    outline: none;
+    border-color: var(--tp-sage);
+  }
+  #throw-preorder .tp-input:focus-visible {
+    border-color: var(--tp-sage);
+  }
+
+  /* ---------- Success redirect card ---------- */
+  #throw-preorder .tp-success {
+    text-align: center;
+    padding: 12px 4px 4px;
+  }
+  #throw-preorder .tp-success-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 18px;
+    border-radius: 50%;
+    background: var(--tp-sage-tint);
+    color: var(--tp-sage);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #throw-preorder .tp-success .tp-title { margin-bottom: 8px; }
+  #throw-preorder .tp-success .tp-subtitle { margin-bottom: 0; }
+  #throw-preorder .tp-success .tp-btn { margin-top: 26px; }
+
+  /* ---------- Review step ---------- */
+  #throw-preorder .tp-summary {
+    background: var(--tp-cream);
+    border-radius: var(--tp-radius-md);
+    padding: 16px 18px;
+    margin-bottom: 18px;
+  }
+  #throw-preorder .tp-summary-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  #throw-preorder .tp-summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 7px 0;
+  }
+  #throw-preorder .tp-summary-row.tp-total {
+    border-top: 1px solid var(--tp-border);
+    margin-top: 6px;
+    padding-top: 12px;
+  }
+  #throw-preorder .tp-summary-label {
+    font-size: 13px;
+    color: var(--tp-muted);
+  }
+  #throw-preorder .tp-summary-value {
+    font-size: 14px;
+    color: var(--tp-ink);
+    text-align: right;
+  }
+  #throw-preorder .tp-summary-row.tp-total .tp-summary-label,
+  #throw-preorder .tp-summary-row.tp-total .tp-summary-value {
+    font-family: var(--tp-font-serif);
+    font-weight: 600;
+    font-size: 17px;
+    color: var(--tp-ink);
+  }
+  #throw-preorder .tp-summary-row.tp-total .tp-summary-value { color: var(--tp-coral); }
+  #throw-preorder .tp-summary-title {
+    font-family: var(--tp-font-serif);
+    font-weight: 600;
+    font-size: 16px;
+    margin-bottom: 2px;
+  }
+  #throw-preorder .tp-summary-sub {
+    font-size: 12.5px;
+    color: var(--tp-muted);
+  }
+  #throw-preorder .tp-review-block { margin-bottom: 18px; }
+  #throw-preorder .tp-review-heading {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--tp-muted);
+    margin-bottom: 8px;
+  }
+  #throw-preorder .tp-review-line {
+    font-size: 14px;
+    color: var(--tp-ink);
+    padding: 4px 0;
+  }
+
+  #throw-preorder .tp-footnote {
+    max-width: 480px;
+    width: 100%;
+    text-align: center;
+    font-size: 12px;
+    color: var(--tp-muted);
+    margin-top: 14px;
+    padding: 0 10px;
+  }
+
+  /* ---------- Reduced motion ---------- */
+  @media (prefers-reduced-motion: reduce) {
+    #throw-preorder * {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+
+  @media (max-width: 400px) {
+    #throw-preorder .tp-card { padding: 22px 18px 24px; }
+    #throw-preorder .tp-title { font-size: 22px; }
+  }
+</style>
+
+<script>
+(function () {
+  'use strict';
+
+  /* =========================================================================
+     CONFIG - everything content/pricing/Stripe related lives here.
+     Replace TODO values before going live. No Stripe secret key ever lives
+     in this file - checkout sessions are created server-side.
+     ========================================================================= */
+  var CONFIG = {
+    studio: {
+      name: 'Throw Art Studio - Lehi',
+      smsBrand: 'Throw Art Studio'
+    },
+
+    // TODO: point at your deployed endpoint (see src/app/api/preorder/checkout/route.ts)
+    // Note: success/cancel redirect URLs are NOT sent from here - they're fixed
+    // server-side (PREORDER_SUCCESS_URL / PREORDER_CANCEL_URL) so a request forged
+    // from outside this widget can't redirect a Stripe session anywhere it wants.
+    checkoutEndpoint: 'https://YOUR-DEPLOYMENT.vercel.app/api/preorder/checkout',
+
+    // This widget only ever books the Lehi studio. Provo is shown (to match the
+    // shared Choose-your-options layout used studio-wide) but disabled.
+    location: { active: 'Lehi', disabled: 'Provo' },
+
+    offerings: [
+      {
+        id: 'classes',
+        type: 'classes',
+        iconName: 'wheel',
+        title: 'Classes',
+        description: 'Drop in any time. Your own wheel, our instruction, no experience needed.',
+        priceNote: 'per wheel',
+        priceFrom: 29.99, // TODO: confirm Lehi pricing
+        pricePerWheel: 29.99, // TODO: confirm Lehi pricing
+        priceId: 'price_1U2GjDCxNaqLWfy54aGfvF1x',
+        durationNote: '2 hrs',
+        // TODO: wire to real availability. Every future day in this month is
+        // currently selectable and the time slots below are static.
+        calendarMonth: { year: 2026, month: 9 },
+        timeSlots: [
+          { label: '11:00am\u20131:00pm', spotsLeft: 5 }, // TODO: confirm real slots/availability
+          { label: '4:00\u20136:00pm', spotsLeft: 6 },
+          { label: '6:30\u20138:30pm', spotsLeft: 6 }
+        ]
+      },
+      {
+        id: 'course',
+        type: 'course',
+        iconName: 'course',
+        title: '4 Week Course',
+        description: 'Designed for beginners! You\u2019ll learn the basics and get free studio time to practice outside of class.',
+        priceNote: '4 classes \u00b7 2.5 hrs each',
+        priceFrom: 220, // TODO: confirm Lehi pricing
+        cohorts: [
+          {
+            id: 'course-sept8',
+            label: 'Starts Mon, Sept 8',
+            meta: 'Mondays \u00b7 6:30\u20139:00pm \u00b7 4 weeks', // TODO: confirm cohort schedule
+            price: 220, // TODO
+            priceId: 'price_1U2DamCxNaqLWfy5YJSWNEO1',
+            spotsLeft: 6
+          },
+          {
+            id: 'course-sept24',
+            label: 'Starts Wed, Sept 24',
+            meta: 'Wednesdays \u00b7 6:30\u20139:00pm \u00b7 4 weeks', // TODO
+            price: 220, // TODO
+            priceId: 'price_1U2DbFCxNaqLWfy5x27CJeHq',
+            spotsLeft: 8
+          },
+          {
+            id: 'course-oct6',
+            label: 'Starts Tue, Oct 6',
+            meta: 'Tuesdays \u00b7 10:00am\u201312:30pm \u00b7 4 weeks', // TODO
+            price: 220, // TODO
+            priceId: 'price_1U2DbVCxNaqLWfy5a3IuGV8b',
+            spotsLeft: 4
+          }
+        ]
+      }
+    ]
+  };
+
+  /* ========================================================================= */
+
+  var root = document.getElementById('throw-preorder');
+  if (!root) return;
+
+  /* ---------------- Icons (inline SVG line icons -- no emoji) ---------------- */
+  var ICON_PATHS = {
+    pin: '<path d="M12 21s7-6.7 7-12a7 7 0 1 0-14 0c0 5.3 7 12 7 12Z"/><circle cx="12" cy="9" r="2.4"/>',
+    person: '<circle cx="12" cy="8" r="3.4"/><path d="M4.5 20c1.4-4 4.3-6 7.5-6s6.1 2 7.5 6"/>',
+    wheel: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.6"/>',
+    calendar: '<rect x="4" y="5.5" width="16" height="15" rx="2.2"/><path d="M4 10h16M8 3.5v4M16 3.5v4"/>',
+    clock: '<circle cx="12" cy="12" r="8.3"/><path d="M12 7.7V12l3 2"/>',
+    course: '<path d="M4 6.3A2.3 2.3 0 0 1 6.3 4H18a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6.3A2.3 2.3 0 0 1 4 17.7V6.3Z"/><path d="M4 17.7A2.3 2.3 0 0 1 6.3 15.4H19"/>'
+  };
+  function icon(name, size) {
+    size = size || 16;
+    return '<svg class="tp-icon" width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON_PATHS[name] + '</svg>';
+  }
+
+  var els = {
+    progressFill: root.querySelector('.tp-progress-fill'),
+    progress: root.querySelector('.tp-progress'),
+    back: root.querySelector('.tp-back'),
+    stepnum: root.querySelector('.tp-stepnum'),
+    title: root.querySelector('.tp-title'),
+    subtitle: root.querySelector('.tp-subtitle'),
+    error: root.querySelector('.tp-error'),
+    panels: {
+      offering: root.querySelector('.tp-panel[data-step-key="offering"]'),
+      options: root.querySelector('.tp-panel[data-step-key="options"]'),
+      cohort: root.querySelector('.tp-panel[data-step-key="cohort"]'),
+      contact: root.querySelector('.tp-panel[data-step-key="contact"]'),
+      review: root.querySelector('.tp-panel[data-step-key="review"]')
+    }
+  };
+
+  // Two different step sequences depending on what's chosen in step 1 -- a
+  // class goes straight to the options picker, a course picks a cohort instead.
+  var FLOWS = {
+    classes: ['offering', 'options', 'contact', 'review'],
+    course: ['offering', 'cohort', 'contact', 'review']
+  };
+
+  var state = {
+    flow: 'classes',
+    stepIndex: 0,
+    offering: null,
+    people: null,
+    wheels: null,
+    date: null,
+    dateLabel: null,
+    time: null,
+    option: null, // chosen cohort, for the course flow
+    name: '',
+    email: '',
+    birthday: '',
+    phone: '',
+    smsBooking: false,
+    smsOffers: false
+  };
+
+  function esc(str) {
+    var d = document.createElement('div');
+    d.textContent = str == null ? '' : String(str);
+    return d.innerHTML.replace(/"/g, '&quot;');
+  }
+
+  function formatPrice(n) {
+    return '$' + Number(n).toFixed(2).replace(/\.00$/, '');
+  }
+
+  function showError(msg) {
+    els.error.textContent = msg;
+    els.error.hidden = false;
+  }
+  function clearError() {
+    els.error.hidden = true;
+    els.error.textContent = '';
+  }
+
+  function findById(list, id) {
+    return list.filter(function (item) { return item.id === id; })[0] || null;
+  }
+
+  /* ---------------- Wheel-sharing logic ----------------
+     1 person: no wheel picker at all, always 1 wheel.
+     2 people: a two-way choice -- share one wheel, or a wheel each.
+     3+ people: a stepper, defaulting to one wheel per person and adjustable
+     down to one wheel per two people (sharing). ---------------------------- */
+  function wheelRangeFor(people) {
+    if (!people || people <= 1) return { min: 1, max: 1, def: 1, mode: 'none' };
+    if (people === 2) return { min: 1, max: 2, def: 2, mode: 'radio' };
+    return { min: Math.ceil(people / 2), max: people, def: people, mode: 'stepper' };
+  }
+
+  /* ---------------- Step: choose offering (Classes vs 4 Week Course) ---------------- */
+  function renderOffering() {
+    var html = '<div class="tp-option-list" role="radiogroup" aria-label="Choose an offering">';
+    CONFIG.offerings.forEach(function (o) {
+      var checked = !!(state.offering && state.offering.id === o.id);
+      html += '' +
+        '<button type="button" class="tp-option" role="radio" aria-checked="' + checked + '" data-offering="' + esc(o.id) + '">' +
+          '<div class="tp-option-top">' +
+            '<div class="tp-option-heading">' +
+              '<span class="tp-option-icon">' + icon(o.iconName, 22) + '</span>' +
+              '<span class="tp-option-name">' + esc(o.title) + '</span>' +
+            '</div>' +
+            '<div class="tp-option-price">' + formatPrice(o.priceFrom) + '<br><span class="tp-price-unit">' + esc(o.priceNote) + '</span></div>' +
+          '</div>' +
+          '<div class="tp-option-meta">' + esc(o.description) + '</div>' +
+        '</button>';
+    });
+    html += '</div>';
+    html += '<button type="button" class="tp-btn tp-btn-primary" data-action="continue"' + (state.offering ? '' : ' disabled') + '>Continue</button>';
+    els.panels.offering.innerHTML = html;
+
+    els.panels.offering.querySelectorAll('.tp-option').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var offeringId = btn.getAttribute('data-offering');
+        if (state.offering && state.offering.id === offeringId) return;
+        state.offering = findById(CONFIG.offerings, offeringId);
+        state.flow = state.offering.type === 'classes' ? 'classes' : 'course';
+        state.people = null;
+        state.wheels = null;
+        state.date = null;
+        state.dateLabel = null;
+        state.time = null;
+        state.option = null;
+        els.panels.offering.querySelectorAll('.tp-option').forEach(function (b) {
+          b.setAttribute('aria-checked', b === btn ? 'true' : 'false');
+        });
+        els.panels.offering.querySelector('[data-action="continue"]').disabled = false;
+      });
+    });
+    els.panels.offering.querySelector('[data-action="continue"]').addEventListener('click', function () {
+      if (!state.offering) return;
+      goNext();
+    });
+  }
+
+  /* ---------------- Course: choose a cohort start date ---------------- */
+  function renderCohort() {
+    if (!state.offering) { goToIndex(0); return; }
+    var html = '<div class="tp-option-list" role="radiogroup" aria-label="Choose a cohort">';
+
+    state.offering.cohorts.forEach(function (opt) {
+      var checked = !!(state.option && state.option.id === opt.id);
+      html += '' +
+        '<button type="button" class="tp-option" role="radio" aria-checked="' + checked + '" data-option="' + esc(opt.id) + '">' +
+          '<div class="tp-option-top">' +
+            '<div class="tp-radio-dot" aria-hidden="true"></div>' +
+            '<div style="flex:1">' +
+              '<div class="tp-option-name">' + esc(opt.label) + '</div>' +
+              '<div class="tp-option-meta">' + esc(opt.meta) + '</div>' +
+              '<div class="tp-option-meta">' + opt.spotsLeft + ' spots left</div>' +
+            '</div>' +
+            '<div class="tp-option-price">' + formatPrice(opt.price) + '</div>' +
+          '</div>' +
+        '</button>';
+    });
+
+    html += '</div>';
+    html += '<button type="button" class="tp-btn tp-btn-primary" data-action="continue"' + (state.option ? '' : ' disabled') + '>Continue</button>';
+    els.panels.cohort.innerHTML = html;
+
+    els.panels.cohort.querySelectorAll('.tp-option').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var optionId = btn.getAttribute('data-option');
+        state.option = findById(state.offering.cohorts, optionId);
+        els.panels.cohort.querySelectorAll('.tp-option').forEach(function (b) {
+          b.setAttribute('aria-checked', b === btn ? 'true' : 'false');
+        });
+        els.panels.cohort.querySelector('[data-action="continue"]').disabled = false;
+      });
+    });
+    els.panels.cohort.querySelector('[data-action="continue"]').addEventListener('click', function () {
+      if (!state.option) return;
+      goNext();
+    });
+  }
+
+  var WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  var MONTH_LABELS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+  function buildCalendarHtml(year, month) {
+    var firstWeekday = new Date(year, month - 1, 1).getDay();
+    var daysInMonth = new Date(year, month, 0).getDate();
+    var todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    var html = '<div class="tp-calendar-head">' + esc(MONTH_LABELS[month - 1]) + ' ' + year + '</div>';
+    html += '<div class="tp-calendar-grid">';
+    WEEKDAY_LABELS.forEach(function (w) { html += '<div class="tp-calendar-weekday">' + w + '</div>'; });
+
+    for (var i = 0; i < firstWeekday; i++) {
+      html += '<button type="button" class="tp-calendar-day tp-calendar-empty" tabindex="-1" disabled></button>';
+    }
+    for (var day = 1; day <= daysInMonth; day++) {
+      var cellDate = new Date(year, month - 1, day);
+      var isPast = cellDate < todayStart;
+      var iso = year + '-' + String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+      var pressed = state.date === iso;
+      html += '<button type="button" class="tp-calendar-day" data-date="' + iso + '"' +
+        ' aria-pressed="' + pressed + '"' + (isPast ? ' disabled' : '') + '>' + day + '</button>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  var CAL_NAV_ICON = {
+    left: '<path d="M10 3.5 5 8l5 4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+    right: '<path d="M6 3.5 11 8l-5 4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>'
+  };
+  function navChevron(dir) {
+    return '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">' + CAL_NAV_ICON[dir] + '</svg>';
+  }
+
+  function parseMmddyyyy(str) {
+    var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec((str || '').trim());
+    if (!m) return null;
+    var month = Number(m[1]), day = Number(m[2]), year = Number(m[3]);
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    return { year: year, month: month, day: day };
+  }
+
+  // A month calendar with prev/next navigation, for the free-typed Birthday
+  // field -- unlike the class-booking calendar (locked to one configured
+  // month), a birthday can be any month in any past year.
+  function buildBirthdayCalendarHtml(year, month, selectedIso) {
+    var firstWeekday = new Date(year, month - 1, 1).getDay();
+    var daysInMonth = new Date(year, month, 0).getDate();
+    var todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    var html = '<div class="tp-calendar-head">' +
+      '<button type="button" class="tp-calendar-nav" data-cal-nav="-1" aria-label="Previous month">' + navChevron('left') + '</button>' +
+      '<span>' + esc(MONTH_LABELS[month - 1]) + ' ' + year + '</span>' +
+      '<button type="button" class="tp-calendar-nav" data-cal-nav="1" aria-label="Next month">' + navChevron('right') + '</button>' +
+      '</div>';
+    html += '<div class="tp-calendar-grid">';
+    WEEKDAY_LABELS.forEach(function (w) { html += '<div class="tp-calendar-weekday">' + w + '</div>'; });
+
+    for (var i = 0; i < firstWeekday; i++) {
+      html += '<button type="button" class="tp-calendar-day tp-calendar-empty" tabindex="-1" disabled></button>';
+    }
+    for (var day = 1; day <= daysInMonth; day++) {
+      var cellDate = new Date(year, month - 1, day);
+      var isFuture = cellDate > todayStart;
+      var iso = year + '-' + String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+      var pressed = selectedIso === iso;
+      html += '<button type="button" class="tp-calendar-day" data-date="' + iso + '"' +
+        ' aria-pressed="' + pressed + '"' + (isFuture ? ' disabled' : '') + '>' + day + '</button>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  /* ---------------- Classes: location, people, wheels, date, time ---------------- */
+  function renderOptions() {
+    if (!state.offering) { goToIndex(0); return; }
+    var offering = state.offering;
+    var range = wheelRangeFor(state.people);
+
+    var html = '';
+
+    html += '<div class="tp-field-section">';
+    html += '<div class="tp-section-label">' + icon('pin') + ' Pick a location</div>';
+    html += '<div class="tp-chip-row" role="radiogroup" aria-label="Location">';
+    html += '<button type="button" class="tp-chip" aria-pressed="true" tabindex="-1">' + esc(CONFIG.location.active) + '</button>';
+    html += '<button type="button" class="tp-chip" aria-pressed="false" disabled aria-label="' + esc(CONFIG.location.disabled) + ' (not available)">' + esc(CONFIG.location.disabled) + '</button>';
+    html += '</div>';
+    html += '</div>';
+
+    html += '<div class="tp-field-section">';
+    html += '<div class="tp-section-label">' + icon('person') + ' People attending</div>';
+    html += '<div class="tp-chip-row" role="radiogroup" aria-label="People attending">';
+    for (var p = 1; p <= 7; p++) {
+      html += '<button type="button" class="tp-chip" data-people="' + p + '" aria-pressed="' + (state.people === p) + '">' + p + '</button>';
+    }
+    html += '<button type="button" class="tp-chip" data-people="8" aria-pressed="' + (state.people >= 8) + '">8+</button>';
+    html += '</div>';
+    html += '</div>';
+
+    if (range.mode !== 'none') {
+      html += '<div class="tp-field-section" id="tp-wheels-section">';
+      html += '<div class="tp-section-label">' + icon('wheel') + ' Number of wheels</div>';
+      html += renderWheelPicker(range);
+      html += '</div>';
+    }
+
+    html += '<div class="tp-field-section' + (state.people ? '' : ' tp-field-section--locked') + '" id="tp-date-section">';
+    html += '<div class="tp-section-label">' + icon('calendar') + ' Date</div>';
+    html += buildCalendarHtml(offering.calendarMonth.year, offering.calendarMonth.month);
+    html += '</div>';
+
+    html += '<div class="tp-field-section' + (state.date ? '' : ' tp-field-section--locked') + '" id="tp-time-section">';
+    html += '<div class="tp-section-label">' + icon('clock') + ' Time</div>';
+    html += '<div class="tp-chip-row" role="radiogroup" aria-label="Time">';
+    offering.timeSlots.forEach(function (slot) {
+      html += '<button type="button" class="tp-chip" data-time="' + esc(slot.label) + '" aria-pressed="' + (state.time === slot.label) + '">' +
+        esc(slot.label) + '<small>' + slot.spotsLeft + ' spots left</small></button>';
+    });
+    html += '</div>';
+    html += '</div>';
+
+    var canContinue = !!(state.people && state.date && state.time);
+    html += '<button type="button" class="tp-btn tp-btn-primary" data-action="continue"' + (canContinue ? '' : ' disabled') + '>Continue</button>';
+    els.panels.options.innerHTML = html;
+
+    wireOptionsEvents(offering);
+  }
+
+  function renderWheelPicker(range) {
+    var pricePerWheel = state.offering.pricePerWheel;
+    if (range.mode === 'radio') {
+      var html = '<div class="tp-option-list" role="radiogroup" aria-label="Number of wheels">';
+      [1, 2].forEach(function (w) {
+        var checked = state.wheels === w;
+        var name = w === 1 ? '1 (share a wheel)' : '2 (a wheel each)';
+        var meta = w === 1 ? 'Take turns on one wheel' : 'Throw side by side on your own wheel';
+        html += '' +
+          '<button type="button" class="tp-option" role="radio" aria-checked="' + checked + '" data-wheels="' + w + '">' +
+            '<div class="tp-option-top">' +
+              '<div class="tp-radio-dot" aria-hidden="true"></div>' +
+              '<div style="flex:1">' +
+                '<div class="tp-option-name">' + esc(name) + '</div>' +
+                '<div class="tp-option-meta">' + esc(meta) + '</div>' +
+              '</div>' +
+              '<div class="tp-option-price">' + formatPrice(pricePerWheel * w) + '</div>' +
+            '</div>' +
+          '</button>';
+      });
+      html += '</div>';
+      return html;
+    }
+
+    // stepper (3+ people)
+    var wheels = state.wheels || range.def;
+    return '' +
+      '<div class="tp-stepper">' +
+        '<button type="button" class="tp-stepper-btn" data-wheel-step="-1" aria-label="Fewer wheels"' + (wheels <= range.min ? ' disabled' : '') + '>-</button>' +
+        '<div class="tp-stepper-value"><strong>' + wheels + (wheels === 1 ? ' wheel' : ' wheels') + '</strong><span>' + formatPrice(pricePerWheel * wheels) + '</span></div>' +
+        '<button type="button" class="tp-stepper-btn" data-wheel-step="1" aria-label="More wheels"' + (wheels >= range.max ? ' disabled' : '') + '>+</button>' +
+      '</div>' +
+      '<p class="tp-hint">Sharing a wheel? Up to 2 people per wheel.</p>';
+  }
+
+  function wireOptionsEvents(offering) {
+    var panel = els.panels.options;
+
+    function refreshContinue() {
+      panel.querySelector('[data-action="continue"]').disabled = !(state.people && state.date && state.time);
+    }
+
+    function reveal(sectionId) {
+      var section = document.getElementById(sectionId);
+      if (!section || !section.classList.contains('tp-field-section--locked')) return;
+      section.classList.remove('tp-field-section--locked');
+      var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      section.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'nearest' });
+    }
+
+    function rerenderWheelsSection() {
+      var section = document.getElementById('tp-wheels-section');
+      var range = wheelRangeFor(state.people);
+      if (range.mode === 'none') {
+        if (section) section.remove();
+        return;
+      }
+      var html = '<div class="tp-section-label">' + icon('wheel') + ' Number of wheels</div>' + renderWheelPicker(range);
+      if (section) {
+        section.innerHTML = html;
+      } else {
+        section = document.createElement('div');
+        section.className = 'tp-field-section';
+        section.id = 'tp-wheels-section';
+        section.innerHTML = html;
+        panel.insertBefore(section, panel.querySelectorAll('.tp-field-section')[1].nextSibling);
+      }
+      wireWheelEvents();
+    }
+
+    function wireWheelEvents() {
+      panel.querySelectorAll('[data-wheels]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          state.wheels = Number(btn.getAttribute('data-wheels'));
+          panel.querySelectorAll('[data-wheels]').forEach(function (b) {
+            b.setAttribute('aria-checked', b === btn ? 'true' : 'false');
+          });
+        });
+      });
+      panel.querySelectorAll('[data-wheel-step]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var range = wheelRangeFor(state.people);
+          var delta = Number(btn.getAttribute('data-wheel-step'));
+          state.wheels = Math.max(range.min, Math.min(range.max, (state.wheels || range.def) + delta));
+          rerenderWheelsSection();
+        });
+      });
+    }
+
+    panel.querySelectorAll('[data-people]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.people = Number(btn.getAttribute('data-people'));
+        panel.querySelectorAll('[data-people]').forEach(function (b) {
+          b.setAttribute('aria-pressed', String(Number(b.getAttribute('data-people')) === state.people));
+        });
+        var range = wheelRangeFor(state.people);
+        state.wheels = range.def;
+        rerenderWheelsSection();
+        reveal('tp-date-section');
+        refreshContinue();
+      });
+    });
+
+    wireWheelEvents();
+
+    panel.querySelectorAll('.tp-calendar-day:not(.tp-calendar-empty)').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.date = btn.getAttribute('data-date');
+        var d = new Date(state.date + 'T00:00:00');
+        state.dateLabel = WEEKDAY_LABELS[d.getDay()] + ', ' + MONTH_LABELS[d.getMonth()] + ' ' + d.getDate();
+        panel.querySelectorAll('.tp-calendar-day').forEach(function (b) {
+          b.setAttribute('aria-pressed', b === btn ? 'true' : 'false');
+        });
+        reveal('tp-time-section');
+        refreshContinue();
+      });
+    });
+
+    panel.querySelectorAll('[data-time]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.time = btn.getAttribute('data-time');
+        panel.querySelectorAll('[data-time]').forEach(function (b) {
+          b.setAttribute('aria-pressed', b === btn ? 'true' : 'false');
+        });
+        refreshContinue();
+      });
+    });
+
+    panel.querySelector('[data-action="continue"]').addEventListener('click', function () {
+      if (!state.people || !state.date || !state.time) return;
+      goNext();
+    });
+  }
+
+  /* ---------------- Contact info ---------------- */
+  function renderContact() {
+    var html = '' +
+      '<div class="tp-field">' +
+        '<label class="tp-label" for="tp-name">Full name</label>' +
+        '<input class="tp-input" type="text" id="tp-name" name="name" autocomplete="name" placeholder="Jane Potter" value="' + esc(state.name) + '">' +
+        '<div class="tp-field-error" id="tp-name-error">Please enter your name.</div>' +
+      '</div>' +
+      '<div class="tp-field">' +
+        '<label class="tp-label" for="tp-email">Email</label>' +
+        '<input class="tp-input" type="email" id="tp-email" name="email" autocomplete="email" placeholder="jane@email.com" value="' + esc(state.email) + '">' +
+        '<div class="tp-field-error" id="tp-email-error">Please enter a valid email address.</div>' +
+      '</div>' +
+      '<div class="tp-field">' +
+        '<label class="tp-label" for="tp-birthday">Birthday <span class="tp-optional">(optional)</span></label>' +
+        '<div class="tp-date-field-wrap">' +
+          '<input class="tp-input tp-input--with-icon" type="text" id="tp-birthday" name="birthday" placeholder="MM/DD/YYYY" autocomplete="off" inputmode="numeric" value="' + esc(state.birthday) + '">' +
+          '<button type="button" class="tp-date-field-icon-btn" id="tp-birthday-trigger" aria-haspopup="dialog" aria-expanded="false" aria-controls="tp-birthday-popover" aria-label="Choose birthday from calendar">' + icon('calendar', 17) + '</button>' +
+          '<div class="tp-date-popover" id="tp-birthday-popover" role="dialog" aria-label="Choose your birthday" hidden></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="tp-field">' +
+        '<label class="tp-label" for="tp-phone">Mobile number</label>' +
+        '<input class="tp-input" type="tel" id="tp-phone" name="phone" autocomplete="tel" placeholder="(801) 555-0100" value="' + esc(state.phone) + '">' +
+        '<div class="tp-field-error" id="tp-phone-error">Please enter a valid 10-digit mobile number.</div>' +
+      '</div>' +
+      '<label class="tp-checkbox-row" for="tp-sms-booking">' +
+        '<input type="checkbox" id="tp-sms-booking" name="smsBooking"' + (state.smsBooking ? ' checked' : '') + '>' +
+        '<span>Text me booking updates from ' + esc(CONFIG.studio.smsBrand) + ' \u2014 ' + esc(CONFIG.location.active) + '. Msg &amp; data rates may apply. Msg frequency varies. Reply HELP for help, STOP to cancel.</span>' +
+      '</label>' +
+      '<label class="tp-checkbox-row" for="tp-sms-offers">' +
+        '<input type="checkbox" id="tp-sms-offers" name="smsOffers"' + (state.smsOffers ? ' checked' : '') + '>' +
+        '<span>Text me offers &amp; news from ' + esc(CONFIG.studio.smsBrand) + ' \u2014 ' + esc(CONFIG.location.active) + '. Msg &amp; data rates may apply. Msg frequency varies. Reply HELP for help, STOP to cancel.</span>' +
+      '</label>' +
+      '<button type="button" class="tp-btn tp-btn-primary" data-action="continue">Continue</button>';
+    els.panels.contact.innerHTML = html;
+
+    var nameInput = document.getElementById('tp-name');
+    var emailInput = document.getElementById('tp-email');
+    var birthdayInput = document.getElementById('tp-birthday');
+    var birthdayTrigger = document.getElementById('tp-birthday-trigger');
+    var birthdayPopover = document.getElementById('tp-birthday-popover');
+    var phoneInput = document.getElementById('tp-phone');
+    var smsBookingInput = document.getElementById('tp-sms-booking');
+    var smsOffersInput = document.getElementById('tp-sms-offers');
+
+    var today = new Date();
+    var parsedBirthday = parseMmddyyyy(state.birthday);
+    var birthdayCal = parsedBirthday
+      ? { year: parsedBirthday.year, month: parsedBirthday.month }
+      : { year: today.getFullYear() - 25, month: today.getMonth() + 1 };
+
+    function birthdaySelectedIso() {
+      var parsed = parseMmddyyyy(birthdayInput.value);
+      if (!parsed) return null;
+      return parsed.year + '-' + String(parsed.month).padStart(2, '0') + '-' + String(parsed.day).padStart(2, '0');
+    }
+
+    function renderBirthdayCalendar() {
+      birthdayPopover.innerHTML = buildBirthdayCalendarHtml(birthdayCal.year, birthdayCal.month, birthdaySelectedIso());
+      birthdayPopover.querySelectorAll('[data-cal-nav]').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var d = new Date(birthdayCal.year, birthdayCal.month - 1 + Number(btn.getAttribute('data-cal-nav')), 1);
+          birthdayCal.year = d.getFullYear();
+          birthdayCal.month = d.getMonth() + 1;
+          renderBirthdayCalendar();
+        });
+      });
+      birthdayPopover.querySelectorAll('.tp-calendar-day:not(.tp-calendar-empty):not(:disabled)').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var parts = btn.getAttribute('data-date').split('-');
+          birthdayInput.value = parts[1] + '/' + parts[2] + '/' + parts[0];
+          state.birthday = birthdayInput.value;
+          closeBirthdayPopover();
+        });
+      });
+    }
+
+    function openBirthdayPopover() {
+      if (!birthdayPopover.hidden) return;
+      renderBirthdayCalendar();
+      birthdayPopover.hidden = false;
+      birthdayTrigger.setAttribute('aria-expanded', 'true');
+    }
+    function closeBirthdayPopover() {
+      birthdayPopover.hidden = true;
+      birthdayTrigger.setAttribute('aria-expanded', 'false');
+    }
+
+    birthdayTrigger.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (birthdayPopover.hidden) openBirthdayPopover(); else closeBirthdayPopover();
+    });
+    birthdayInput.addEventListener('focus', openBirthdayPopover);
+    birthdayInput.addEventListener('click', openBirthdayPopover);
+
+    els.panels.contact.querySelector('[data-action="continue"]').addEventListener('click', function () {
+      state.name = nameInput.value.trim();
+      state.email = emailInput.value.trim();
+      state.birthday = birthdayInput.value.trim();
+      state.phone = phoneInput.value.trim();
+      state.smsBooking = smsBookingInput.checked;
+      state.smsOffers = smsOffersInput.checked;
+
+      var validName = validateName(state.name);
+      var validEmail = validateEmail(state.email);
+      var validPhone = validatePhone(state.phone);
+
+      toggleFieldError(nameInput, 'tp-name-error', !validName);
+      toggleFieldError(emailInput, 'tp-email-error', !validEmail);
+      toggleFieldError(phoneInput, 'tp-phone-error', !validPhone);
+
+      if (!validName || !validEmail || !validPhone) {
+        var firstInvalid = !validName ? nameInput : (!validEmail ? emailInput : phoneInput);
+        firstInvalid.focus();
+        return;
+      }
+      goNext();
+    });
+
+    [nameInput, emailInput, phoneInput].forEach(function (input) {
+      input.addEventListener('blur', function () {
+        if (input === nameInput) toggleFieldError(input, 'tp-name-error', !validateName(input.value.trim()));
+        if (input === emailInput) toggleFieldError(input, 'tp-email-error', !validateEmail(input.value.trim()));
+        if (input === phoneInput) toggleFieldError(input, 'tp-phone-error', !validatePhone(input.value.trim()));
+      });
+    });
+  }
+
+  function toggleFieldError(input, errorId, isInvalid) {
+    var errEl = document.getElementById(errorId);
+    input.setAttribute('aria-invalid', isInvalid ? 'true' : 'false');
+    if (errEl) errEl.classList.toggle('is-visible', isInvalid);
+  }
+
+  function validateName(v) { return v.length >= 2; }
+  function validateEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
+  function validatePhone(v) {
+    var digits = v.replace(/\D/g, '');
+    return digits.length === 10 || (digits.length === 11 && digits.charAt(0) === '1');
+  }
+
+  /* ---------------- Review + submit ---------------- */
+  // Builds a flow-agnostic description of what's being purchased so the rest
+  // of this function (and the payload builder below) doesn't need to branch
+  // on state.flow every time it wants a price, quantity, or label.
+  function getSelection() {
+    if (state.flow === 'classes') {
+      if (!state.people || !state.wheels) return null;
+      var offering = state.offering;
+      return {
+        priceId: offering.priceId,
+        quantity: state.wheels,
+        unitPrice: offering.pricePerWheel,
+        total: offering.pricePerWheel * state.wheels,
+        title: 'Drop-in class',
+        detail: esc(CONFIG.location.active) + ' \u00b7 ' + state.people + (state.people === 1 ? ' person' : ' people') +
+          ' \u00b7 ' + state.wheels + (state.wheels === 1 ? ' wheel' : ' wheels') +
+          ' \u00b7 ' + state.dateLabel + ' \u00b7 ' + state.time,
+        footnote: 'Pieces you keep are $10\u201315 each, paid at pickup.'
+      };
+    }
+    if (!state.option) return null;
+    return {
+      priceId: state.option.priceId,
+      quantity: 1,
+      unitPrice: state.option.price,
+      total: state.option.price,
+      title: state.option.label,
+      detail: state.option.meta,
+      footnote: ''
+    };
+  }
+
+  function renderReview() {
+    var sel = getSelection();
+    if (!state.offering || !sel) { goToIndex(0); return; }
+    var editStepIndex = 1; // 'options' or 'cohort' -- both sit at index 1 in their flow
+
+    var itemLine = sel.quantity > 1
+      ? esc(sel.title) + ' ' + formatPrice(sel.unitPrice) + ' x ' + sel.quantity
+      : esc(sel.title);
+
+    var html = '' +
+      '<div class="tp-summary">' +
+        '<div class="tp-summary-head">' +
+          '<div class="tp-summary-title">Your order</div>' +
+          '<button type="button" class="tp-link-btn" data-action="edit">Edit</button>' +
+        '</div>' +
+        '<div class="tp-summary-row">' +
+          '<span class="tp-summary-label">' + itemLine + '</span>' +
+          '<span class="tp-summary-value">' + formatPrice(sel.total) + '</span>' +
+        '</div>' +
+        '<div class="tp-summary-sub">' + sel.detail + '</div>' +
+        '<div class="tp-summary-row tp-total">' +
+          '<span class="tp-summary-label">Total</span>' +
+          '<span class="tp-summary-value">' + formatPrice(sel.total) + '</span>' +
+        '</div>' +
+        '<div class="tp-summary-sub">Tax, if applicable, is calculated at checkout.</div>' +
+        (sel.footnote ? '<div class="tp-summary-sub">*' + esc(sel.footnote) + '</div>' : '') +
+      '</div>' +
+      '<div class="tp-review-block">' +
+        '<div class="tp-review-heading">Contact info</div>' +
+        '<div class="tp-review-line">' + esc(state.name) + '</div>' +
+        '<div class="tp-review-line">' + esc(state.email) + '</div>' +
+        '<div class="tp-review-line">' + esc(state.phone) + '</div>' +
+      '</div>' +
+      '<button type="button" class="tp-btn tp-btn-primary" data-action="submit">Continue to payment</button>';
+
+    els.panels.review.innerHTML = html;
+    els.panels.review.querySelector('[data-action="submit"]').addEventListener('click', submitOrder);
+    els.panels.review.querySelector('[data-action="edit"]').addEventListener('click', function () {
+      goToIndex(editStepIndex);
+    });
+  }
+
+  function submitOrder(evt) {
+    clearError();
+    var sel = getSelection();
+    if (!sel) return;
+    var btn = evt.currentTarget;
+    btn.disabled = true;
+    var originalText = btn.textContent;
+    btn.textContent = 'Redirecting to payment...';
+
+    var payload = {
+      offering: state.offering.id,
+      offeringTitle: state.offering.title,
+      priceId: sel.priceId,
+      quantity: sel.quantity,
+      amount: sel.total,
+      selectionLabel: sel.title,
+      selectionDetail: sel.detail,
+      name: state.name,
+      email: state.email,
+      birthday: state.birthday,
+      phone: state.phone,
+      smsBooking: state.smsBooking,
+      smsOffers: state.smsOffers
+    };
+
+    fetch(CONFIG.checkoutEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error('Checkout request failed (' + res.status + ')');
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data || !data.url) throw new Error('No checkout URL returned');
+        window.location.href = data.url;
+      })
+      .catch(function (err) {
+        showError('Something went wrong starting checkout. Please try again. (' + err.message + ')');
+        btn.disabled = false;
+        btn.textContent = originalText;
+      });
+  }
+
+  /* ---------------- Step machine ---------------- */
+  var STEP_META = {
+    offering: { title: 'Choose your path', subtitle: 'Book a class or start a 4 week course.' },
+    options: { title: 'Choose your options', subtitle: 'Pick your headcount, date, and time.' },
+    cohort: { title: 'Choose your options', subtitle: 'Pick a cohort start date.' },
+    contact: { title: 'Your info', subtitle: 'We\u2019ll send your confirmation here.' },
+    review: { title: 'Review &amp; pay', subtitle: 'Double check the details, then head to secure checkout.' }
+  };
+
+  var STEP_RENDERERS = {
+    offering: renderOffering,
+    options: renderOptions,
+    cohort: renderCohort,
+    contact: renderContact,
+    review: renderReview
+  };
+
+  function currentSteps() {
+    return FLOWS[state.flow];
+  }
+
+  function render() {
+    clearError();
+    var steps = currentSteps();
+    var key = steps[state.stepIndex];
+
+    Object.keys(els.panels).forEach(function (panelKey) {
+      els.panels[panelKey].classList.toggle('is-active', panelKey === key);
+    });
+
+    var meta = STEP_META[key];
+    els.title.innerHTML = meta.title;
+    els.subtitle.innerHTML = meta.subtitle;
+    els.stepnum.textContent = 'Step ' + (state.stepIndex + 1) + ' / ' + steps.length;
+    els.back.hidden = state.stepIndex === 0;
+    var pct = (state.stepIndex + 1) / steps.length * 100;
+    els.progressFill.style.width = pct + '%';
+    els.progress.setAttribute('aria-valuenow', String(Math.round(pct)));
+
+    STEP_RENDERERS[key]();
+
+    var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    root.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'nearest' });
+  }
+
+  function goToIndex(index) {
+    state.stepIndex = index;
+    render();
+  }
+
+  function goNext() {
+    state.stepIndex = Math.min(state.stepIndex + 1, currentSteps().length - 1);
+    render();
+  }
+
+  els.back.addEventListener('click', function () {
+    if (state.stepIndex > 0) {
+      state.stepIndex -= 1;
+      render();
+    }
+  });
+
+  // Closes the birthday date popover on an outside click / Escape. Defined
+  // once here (rather than inside renderContact) so re-rendering that step
+  // doesn't stack up duplicate document-level listeners.
+  document.addEventListener('click', function (e) {
+    var popover = document.getElementById('tp-birthday-popover');
+    if (!popover || popover.hidden) return;
+    var trigger = document.getElementById('tp-birthday-trigger');
+    var input = document.getElementById('tp-birthday');
+    if (popover.contains(e.target) || (trigger && trigger.contains(e.target)) || (input && input.contains(e.target))) return;
+    popover.hidden = true;
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    var popover = document.getElementById('tp-birthday-popover');
+    if (!popover || popover.hidden) return;
+    popover.hidden = true;
+    var trigger = document.getElementById('tp-birthday-trigger');
+    if (trigger) { trigger.setAttribute('aria-expanded', 'false'); trigger.focus(); }
+  });
+
+  // Stripe's success_url points back at this same embedded page with
+  // ?status=success rather than straight at the homepage, so there's a
+  // moment to confirm the booking actually went through before handing the
+  // customer off. cancel_url skips this entirely and goes to the homepage
+  // directly (set server-side in src/app/api/preorder/checkout/route.ts).
+  var HOME_URL = 'https://www.throwartstudio.com/';
+  var SUCCESS_REDIRECT_DELAY_MS = 6000;
+
+  function renderSuccessCard() {
+    var card = root.querySelector('.tp-card');
+    card.innerHTML = '' +
+      '<div class="tp-header"><span class="tp-logo">throw<span class="tp-dot">.</span></span></div>' +
+      '<div class="tp-success">' +
+        '<div class="tp-success-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.6"/><path d="M8 12.5l2.5 2.5 5.5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>' +
+        '<h2 class="tp-title">You&rsquo;re all set</h2>' +
+        '<p class="tp-subtitle">Your booking went through and a confirmation email is on its way. Taking you back to throwartstudio.com&hellip;</p>' +
+        '<a class="tp-btn tp-btn-primary" href="' + HOME_URL + '">Return to homepage now</a>' +
+      '</div>';
+
+    var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!reduceMotion) {
+      setTimeout(function () { window.location.href = HOME_URL; }, SUCCESS_REDIRECT_DELAY_MS);
+    }
+  }
+
+  function showingSuccessRedirect() {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('status') !== 'success') return false;
+    renderSuccessCard();
+    return true;
+  }
+
+  if (!showingSuccessRedirect()) {
+    render();
+  }
+})();
+</script>
