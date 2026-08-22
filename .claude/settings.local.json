@@ -23,7 +23,15 @@
       "Bash(npx tsx *)",
       "Bash(git -C /Users/samrobertson/Desktop/throw status --short)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(k,v\\) for k,v in {**d.get\\('dependencies',{}\\),**d.get\\('devDependencies',{}\\)}.items\\(\\) if any\\(x in k.lower\\(\\) for x in ['tiptap','quill','slate','draft','editor','prosemirror','resend','nodemailer']\\)]\")",
-      "Bash(npx next *)"
+      "Bash(npx next *)",
+      "Bash(npx ts-node *)",
+      "Bash(cat)",
+      "Bash(python3 /tmp/check_imports.py)",
+      "Bash(grep -n \"export default\\\\|function.*Page\\\\|fetch\\(\\\\`\\\\?/api\\\\|Tab ===\\\\|<h1\\\\|title=\" \"/Users/samrobertson/Desktop/throw/src/app/admin/customers/[id]/page.tsx\")",
+      "Bash(xargs -I{} sh -c 'echo \"--- {} ---\"; grep -n \"redirect\\\\|role\" {}')",
+      "Bash(mkdir -p \"/Users/samrobertson/Desktop/throw/src/app/api/pos/orders/[id]/items/[itemId]\")",
+      "Bash(mkdir -p \"/Users/samrobertson/Desktop/throw/src/app/api/pos/orders/[id]/void\")",
+      "Bash(printenv)"
     ]
   }
 }

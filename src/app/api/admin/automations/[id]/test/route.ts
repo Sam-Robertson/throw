@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { twilioClient, TWILIO_PHONE } from "@/lib/twilio";
+import { sendSms } from "@/lib/sms";
 
 const SAMPLE: Record<string, string> = {
   customer_name: "Jane Smith",
@@ -41,7 +41,16 @@ export async function POST(
   if (!automation) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const filled = fillVars(automation.messageTemplate);
-  await twilioClient.messages.create({ body: filled, from: TWILIO_PHONE, to: body.to.trim() });
+  const result = await sendSms({
+    to: body.to.trim(),
+    message: filled,
+    userId: session.user.id,
+    automationId: automation.id,
+    kind: "transactional",
+  });
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error ?? "Failed to send" }, { status: 502 });
+  }
 
   return NextResponse.json({ ok: true });
 }

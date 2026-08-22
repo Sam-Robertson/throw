@@ -136,6 +136,12 @@ model User {
   hashedPassword        String?
   role                  Role      @default(CUSTOMER)
   stripeCustomerId      String?
+  smsMarketingOptIn        Boolean   @default(false)
+  smsMarketingOptInAt      DateTime?
+  smsMarketingOptInSource  String?
+  emailMarketingOptIn      Boolean   @default(false)
+  emailMarketingOptInAt    DateTime?
+  emailMarketingOptInSource String?
   createdAt             DateTime  @default(now()) // UTC
   updatedAt             DateTime  @updatedAt      // UTC
 
@@ -155,6 +161,10 @@ model User {
   communityComments    CommunityComment[]
   payRates             PayRate[]
   conversations        Conversation[]
+  posOrdersAsCustomer  PosOrder[]            @relation("PosOrderCustomer")
+  posOrdersAsStaff     PosOrder[]            @relation("PosOrderStaff")
+  openedCashDrawers    PosCashDrawer[]       @relation("PosCashDrawerOpenedBy")
+  closedCashDrawers    PosCashDrawer[]       @relation("PosCashDrawerClosedBy")
 }
 
 model Location {
@@ -181,6 +191,10 @@ model Location {
   discountCodes          DiscountCode[]
   giftCards              GiftCard[]
   transactionalTemplates TransactionalTemplate[]
+  posOrders              PosOrder[]
+  posCashDrawers         PosCashDrawer[]
+  shelfSpaces            ShelfSpace[]
+  shelfWaitlistEntries   ShelfWaitlistEntry[]
 }
 
 model StaffRole {
@@ -252,6 +266,17 @@ model MembershipPlan {
   isActive             Boolean  @default(true)
   stripePriceId        String?
   locationId           String?
+  classTicketsPerPeriod   Int?     // null means unlimited
+  ticketRolloverEnabled   Boolean  @default(false)
+  ticketRolloverMaxTickets Int?    // cap on carried-over tickets, null = no cap
+  joiningFeeCents      Int      @default(0)
+  commitmentMonths     Int?     // null means month to month
+  retailDiscountPercent Int     @default(0)
+  shelfType            String?  // "FULL" | "HALF" | null for none
+  includesGuestPass    Boolean  @default(false)
+  includesOnlineCourse Boolean  @default(false)
+  billingAnchorDay     Int?     // 1 means bill on the 1st, null means anniversary
+  perks                Json?    // array of strings for the marketing page
   createdAt            DateTime @default(now()) // UTC
   updatedAt            DateTime @updatedAt      // UTC
 
@@ -273,6 +298,8 @@ model Membership {
   pausedAt             DateTime?        // UTC
   resumesAt            DateTime?        // UTC
   cancelledAt          DateTime?        // UTC
+  commitmentEndsAt     DateTime?
+  joiningFeePaid       Boolean          @default(false)
   createdAt            DateTime         @default(now()) // UTC
   updatedAt            DateTime         @updatedAt      // UTC
 
@@ -281,6 +308,34 @@ model Membership {
   location         Location?         @relation(fields: [locationId], references: [id])
   membershipEvents MembershipEvent[]
   bookings         Booking[]
+  creditLedger     MembershipCreditLedger[]
+  shelfSpace       ShelfSpace?
+  shelfWaitlistEntries ShelfWaitlistEntry[]
+}
+
+// type vocabulary, enforced in code:
+//   ALLOWANCE  granted at the start of a billing period, positive
+//   ROLLOVER   carried from the prior period, positive
+//   BOOKING    consumed by a booking, negative
+//   REFUND     returned when a booking is cancelled, positive
+//   ADJUSTMENT manual grant or deduction by an admin, either sign
+//   EXPIRY     zeroing out unused tickets at period end, negative
+model MembershipCreditLedger {
+  id            String   @id @default(cuid())
+  membershipId  String
+  type          String
+  delta         Int
+  bookingId     String?
+  periodStart   DateTime
+  periodEnd     DateTime
+  note          String?
+  createdById   String?
+  createdAt     DateTime @default(now())
+
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([membershipId, createdAt])
+  @@index([membershipId, periodStart])
 }
 
 model MembershipEvent {
@@ -288,8 +343,38 @@ model MembershipEvent {
   membershipId String
   eventType    MembershipEventType
   note         String?
+  metadata     Json?
   createdAt    DateTime            @default(now()) // UTC
 
+  membership Membership @relation(fields: [membershipId], references: [id])
+}
+
+model ShelfSpace {
+  id           String   @id @default(cuid())
+  locationId   String
+  number       Int
+  shelfType    String   // "FULL" | "HALF"
+  membershipId String?  @unique
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  location   Location    @relation(fields: [locationId], references: [id])
+  membership Membership? @relation(fields: [membershipId], references: [id])
+
+  @@unique([locationId, number])
+}
+
+model ShelfWaitlistEntry {
+  id           String   @id @default(cuid())
+  locationId   String
+  membershipId String
+  requestedType String  // "FULL" | "HALF"
+  notifiedAt   DateTime?
+  resolvedAt   DateTime?
+  createdAt    DateTime @default(now())
+
+  location   Location   @relation(fields: [locationId], references: [id])
   membership Membership @relation(fields: [membershipId], references: [id])
 }
 
@@ -434,14 +519,22 @@ model AdTracking {
 }
 
 model SmsLog {
-  id           String   @id @default(cuid())
-  userId       String
-  toPhone      String
-  message      String   @db.Text
-  twilioSid    String?
-  status       String   @default("sent")
-  automationId String?
-  createdAt    DateTime @default(now())
+  id                String   @id @default(cuid())
+  userId            String
+  toPhone           String
+  message           String   @db.Text
+  // Sendblue's message_handle (was Twilio's message SID before the provider swap).
+  providerMessageId String?
+  // Sendblue reports which rail actually carried the message: "iMessage" or "SMS".
+  providerService   String?
+  status            String   @default("sent")
+  // "transactional" (booking/membership/receipt sends, never consent-gated) or
+  // "marketing" (campaign sends — must be checked against canSendMarketing()
+  // before sending; that enforcement doesn't exist yet, this field is just
+  // the audit trail for when it does).
+  kind              String   @default("transactional")
+  automationId      String?
+  createdAt         DateTime @default(now())
 }
 
 model CommunityPost {
@@ -611,4 +704,113 @@ model ConversationMessage {
   createdAt      DateTime @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Marketing consent / suppression
+// ---------------------------------------------------------------------------
+
+model SuppressionEntry {
+  id        String   @id @default(cuid())
+  channel   String   // "SMS" | "EMAIL"
+  value     String   // normalized phone (E.164) or lowercased email
+  reason    String   // "USER_UNSUBSCRIBED" | "STOP_REPLY" | "BOUNCE" | "COMPLAINT" | "MANUAL"
+  userId    String?
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@unique([channel, value])
+  @@index([value])
+}
+
+// ---------------------------------------------------------------------------
+// Point of sale
+// ---------------------------------------------------------------------------
+// Value vocabularies below are enforced in application code, not the DB:
+//   PosOrder.status:      OPEN | COMPLETED | VOIDED | REFUNDED
+//   PosOrderItem.itemType: RETAIL | DROP_IN | MEMBERSHIP | GIFT_CARD | CUSTOM
+//   PosPayment.method:     CASH | CARD_TERMINAL | CARD_MANUAL | GIFT_CARD | COMP
+//   PosPayment.status:     PENDING | SUCCEEDED | FAILED | REFUNDED
+
+model PosOrder {
+  id            String    @id @default(cuid())
+  orderNumber   Int       @unique @default(autoincrement())
+  locationId    String
+  customerId    String?
+  staffId       String
+  status        String    @default("OPEN")
+  subtotalCents Int       @default(0)
+  discountCents Int       @default(0)
+  taxCents      Int       @default(0)
+  tipCents      Int       @default(0)
+  totalCents    Int       @default(0)
+  note          String?
+  completedAt   DateTime?
+  voidedAt      DateTime?
+  voidReason    String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  location Location       @relation(fields: [locationId], references: [id])
+  customer User?          @relation("PosOrderCustomer", fields: [customerId], references: [id])
+  staff    User           @relation("PosOrderStaff", fields: [staffId], references: [id])
+  items    PosOrderItem[]
+  payments PosPayment[]
+
+  @@index([locationId, createdAt])
+  @@index([status])
+}
+
+model PosOrderItem {
+  id             String   @id @default(cuid())
+  orderId        String
+  itemType       String
+  refId          String?
+  name           String
+  quantity       Int      @default(1)
+  unitPriceCents Int
+  discountCents  Int      @default(0)
+  totalCents     Int
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  order PosOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model PosPayment {
+  id                    String   @id @default(cuid())
+  orderId               String
+  method                String
+  amountCents           Int
+  status                String   @default("PENDING")
+  stripePaymentIntentId String?
+  giftCardId            String?
+  cashTenderedCents     Int?
+  cashChangeCents       Int?
+  externalRef           String?
+  createdAt             DateTime @default(now())
+
+  order PosOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+model PosCashDrawer {
+  id                String    @id @default(cuid())
+  locationId        String
+  openedById        String
+  closedById        String?
+  openingFloatCents Int
+  expectedCashCents Int?
+  countedCashCents  Int?
+  varianceCents     Int?
+  openedAt          DateTime  @default(now())
+  closedAt          DateTime?
+  note              String?
+
+  location Location @relation(fields: [locationId], references: [id])
+  openedBy User     @relation("PosCashDrawerOpenedBy", fields: [openedById], references: [id])
+  closedBy User?    @relation("PosCashDrawerClosedBy", fields: [closedById], references: [id])
+
+  @@index([locationId, openedAt])
 }

@@ -28,6 +28,9 @@ export async function PATCH(
   if (!membership.stripeSubscriptionId)
     return NextResponse.json({ error: "No Stripe subscription found" }, { status: 400 });
 
+  const isCommitmentOverride =
+    membership.commitmentEndsAt !== null && membership.commitmentEndsAt > new Date();
+
   await stripe.subscriptions.cancel(membership.stripeSubscriptionId);
 
   const updated = await prisma.membership.update({
@@ -39,7 +42,8 @@ export async function PATCH(
     data: {
       membershipId: id,
       eventType: "CANCELLED",
-      note: `Cancelled by admin`,
+      note: isCommitmentOverride ? "Cancelled by admin (commitment override)" : "Cancelled by admin",
+      ...(isCommitmentOverride && { metadata: { commitmentOverride: true } }),
     },
   });
 

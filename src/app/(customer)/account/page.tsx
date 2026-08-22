@@ -1,6 +1,7 @@
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
+import { isSuppressed, normalizePhone, normalizeEmail } from '@/lib/consent';
 import NextLink from 'next/link';
 import Container from '@mui/material/Container';
 import Box from '@mui/material/Box';
@@ -10,6 +11,7 @@ import Divider from '@mui/material/Divider';
 import { ProfileForm } from './_components/ProfileForm';
 import { PasswordForm } from './_components/PasswordForm';
 import { DangerZone } from './_components/DangerZone';
+import { CommunicationPreferencesForm } from './_components/CommunicationPreferencesForm';
 
 export default async function AccountPage() {
   const session = await auth();
@@ -23,10 +25,17 @@ export default async function AccountPage() {
       phone: true,
       emergencyContactName: true,
       emergencyContactPhone: true,
+      smsMarketingOptIn: true,
+      emailMarketingOptIn: true,
     },
   });
 
   if (!user) redirect('/login');
+
+  const [smsSuppressed, emailSuppressed] = await Promise.all([
+    user.phone ? isSuppressed('SMS', normalizePhone(user.phone)) : Promise.resolve(false),
+    isSuppressed('EMAIL', normalizeEmail(user.email)),
+  ]);
 
   return (
     <Container maxWidth="sm" sx={{ py: 5, px: { xs: 3, md: 4 } }}>
@@ -50,6 +59,20 @@ export default async function AccountPage() {
           Profile
         </Typography>
         <ProfileForm user={user} />
+      </Box>
+
+      <Divider sx={{ mb: 5 }} />
+
+      <Box component="section" sx={{ mb: 5 }}>
+        <Typography variant="h5" sx={{ mb: 3, fontWeight: 600 }}>
+          Communication Preferences
+        </Typography>
+        <CommunicationPreferencesForm
+          initialSms={user.smsMarketingOptIn}
+          initialEmail={user.emailMarketingOptIn}
+          smsSuppressed={smsSuppressed}
+          emailSuppressed={emailSuppressed}
+        />
       </Box>
 
       <Divider sx={{ mb: 5 }} />

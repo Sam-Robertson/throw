@@ -24,11 +24,32 @@ export async function POST(request: Request) {
   if (session.user.role !== "ADMIN" && session.user.role !== "STAFF")
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { name, slug, description, priceInCents, billingIntervalDays, stripePriceId, locationId } =
-    await request.json();
+  const {
+    name,
+    slug,
+    description,
+    priceInCents,
+    billingIntervalDays,
+    stripePriceId,
+    locationId,
+    classTicketsPerPeriod,
+    ticketRolloverEnabled,
+    ticketRolloverMaxTickets,
+  } = await request.json();
 
   const plan = await prisma.membershipPlan.create({
-    data: { name, slug, description, price: priceInCents, billingIntervalDays, stripePriceId, locationId },
+    data: {
+      name,
+      slug,
+      description,
+      price: priceInCents,
+      billingIntervalDays,
+      stripePriceId,
+      locationId,
+      classTicketsPerPeriod: classTicketsPerPeriod ?? null,
+      ticketRolloverEnabled: ticketRolloverEnabled ?? false,
+      ticketRolloverMaxTickets: ticketRolloverMaxTickets ?? null,
+    },
   });
 
   return NextResponse.json(plan, { status: 201 });

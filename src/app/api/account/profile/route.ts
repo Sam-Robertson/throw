@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { normalizePhone } from "@/lib/consent";
 
 export async function PATCH(req: NextRequest) {
   const session = await auth();
@@ -23,7 +24,7 @@ export async function PATCH(req: NextRequest) {
     where: { id: session.user.id },
     data: {
       name: body.name.trim(),
-      phone: body.phone?.trim() || null,
+      phone: body.phone?.trim() ? normalizePhone(body.phone.trim()) : null,
       emergencyContactName: body.emergencyContactName?.trim() || null,
       emergencyContactPhone: body.emergencyContactPhone?.trim() || null,
     },

@@ -15,9 +15,16 @@ import {
 interface Props {
   status: string;
   currentPeriodEndFormatted: string;
+  inCommitment: boolean;
+  commitmentEndsAtFormatted: string | null;
 }
 
-export function MembershipActions({ status, currentPeriodEndFormatted }: Props) {
+export function MembershipActions({
+  status,
+  currentPeriodEndFormatted,
+  inCommitment,
+  commitmentEndsAtFormatted,
+}: Props) {
   const router = useRouter();
   const [pauseOpen, setPauseOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -86,11 +93,25 @@ export function MembershipActions({ status, currentPeriodEndFormatted }: Props) 
           </Button>
         )}
         {(status === "ACTIVE" || status === "PAUSED") && (
-          <Button variant="destructive" onClick={() => setCancelOpen(true)}>
+          <Button
+            variant="destructive"
+            onClick={() => setCancelOpen(true)}
+            disabled={inCommitment}
+            title={
+              inCommitment && commitmentEndsAtFormatted
+                ? `Commitment through ${commitmentEndsAtFormatted}`
+                : undefined
+            }
+          >
             Cancel Membership
           </Button>
         )}
       </div>
+      {inCommitment && commitmentEndsAtFormatted && (status === "ACTIVE" || status === "PAUSED") && (
+        <p className="mt-2 text-sm text-muted-foreground">
+          Commitment through {commitmentEndsAtFormatted}. Cancellation is unavailable until then.
+        </p>
+      )}
 
       {/* Pause dialog */}
       <Dialog open={pauseOpen} onOpenChange={setPauseOpen}>

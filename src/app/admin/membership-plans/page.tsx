@@ -9,6 +9,8 @@ import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import TextField from '@mui/material/TextField';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import Switch from '@mui/material/Switch';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
@@ -31,6 +33,9 @@ interface MembershipPlan {
   stripePriceId: string | null;
   locationId: string | null;
   isActive: boolean;
+  classTicketsPerPeriod: number | null;
+  ticketRolloverEnabled: boolean;
+  ticketRolloverMaxTickets: number | null;
   _count: { memberships: number };
 }
 
@@ -42,6 +47,9 @@ interface FormState {
   billingIntervalDays: string;
   stripePriceId: string;
   locationId: string;
+  classTicketsPerPeriod: string;
+  ticketRolloverEnabled: boolean;
+  ticketRolloverMaxTickets: string;
 }
 
 const emptyForm: FormState = {
@@ -52,6 +60,9 @@ const emptyForm: FormState = {
   billingIntervalDays: '30',
   stripePriceId: '',
   locationId: '',
+  classTicketsPerPeriod: '',
+  ticketRolloverEnabled: false,
+  ticketRolloverMaxTickets: '',
 };
 
 function formatPrice(priceInCents: number, billingIntervalDays: number): string {
@@ -95,6 +106,11 @@ export default function MembershipPlansPage() {
       billingIntervalDays: String(plan.billingIntervalDays),
       stripePriceId: plan.stripePriceId ?? '',
       locationId: plan.locationId ?? '',
+      classTicketsPerPeriod:
+        plan.classTicketsPerPeriod === null ? '' : String(plan.classTicketsPerPeriod),
+      ticketRolloverEnabled: plan.ticketRolloverEnabled,
+      ticketRolloverMaxTickets:
+        plan.ticketRolloverMaxTickets === null ? '' : String(plan.ticketRolloverMaxTickets),
     });
     setError(null);
     setDialogOpen(true);
@@ -113,6 +129,13 @@ export default function MembershipPlansPage() {
       billingIntervalDays: parseInt(form.billingIntervalDays, 10),
       stripePriceId: form.stripePriceId || null,
       locationId: form.locationId || null,
+      classTicketsPerPeriod:
+        form.classTicketsPerPeriod.trim() === '' ? null : parseInt(form.classTicketsPerPeriod, 10),
+      ticketRolloverEnabled: form.ticketRolloverEnabled,
+      ticketRolloverMaxTickets:
+        form.ticketRolloverMaxTickets.trim() === ''
+          ? null
+          : parseInt(form.ticketRolloverMaxTickets, 10),
     };
 
     const res = editingId
@@ -167,6 +190,7 @@ export default function MembershipPlansPage() {
             <TableRow>
               <TableCell>Name</TableCell>
               <TableCell>Price</TableCell>
+              <TableCell>Class Tickets</TableCell>
               <TableCell>Active Members</TableCell>
               <TableCell>Status</TableCell>
               <TableCell>Stripe Price ID</TableCell>
@@ -178,6 +202,26 @@ export default function MembershipPlansPage() {
               <TableRow key={plan.id}>
                 <TableCell sx={{ fontWeight: 600 }}>{plan.name}</TableCell>
                 <TableCell>{formatPrice(plan.price, plan.billingIntervalDays)}</TableCell>
+                <TableCell>
+                  {plan.classTicketsPerPeriod === null ? (
+                    'Unlimited'
+                  ) : (
+                    <>
+                      {plan.classTicketsPerPeriod}/period
+                      {plan.ticketRolloverEnabled && (
+                        <Chip
+                          label={
+                            plan.ticketRolloverMaxTickets !== null
+                              ? `Rollover ≤${plan.ticketRolloverMaxTickets}`
+                              : 'Rollover'
+                          }
+                          size="small"
+                          sx={{ ml: 1 }}
+                        />
+                      )}
+                    </>
+                  )}
+                </TableCell>
                 <TableCell>{plan._count.memberships}</TableCell>
                 <TableCell>
                   <Chip
@@ -218,7 +262,7 @@ export default function MembershipPlansPage() {
             ))}
             {plans.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} align="center">
+                <TableCell colSpan={7} align="center">
                   <Typography color="text.secondary" sx={{ py: 4 }}>
                     No membership plans yet.
                   </Typography>
@@ -288,6 +332,40 @@ export default function MembershipPlansPage() {
                 onChange={(e) => setForm({ ...form, stripePriceId: e.target.value })}
                 placeholder="price_..."
               />
+
+              <TextField
+                label="Class tickets per period"
+                type="number"
+                slotProps={{ htmlInput: { min: 0 } }}
+                value={form.classTicketsPerPeriod}
+                onChange={(e) => setForm({ ...form, classTicketsPerPeriod: e.target.value })}
+                helperText="Empty means unlimited classes"
+              />
+
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={form.ticketRolloverEnabled}
+                    onChange={(e) =>
+                      setForm({ ...form, ticketRolloverEnabled: e.target.checked })
+                    }
+                  />
+                }
+                label="Allow unused tickets to roll over to the next period"
+              />
+
+              {form.ticketRolloverEnabled && (
+                <TextField
+                  label="Rollover cap"
+                  type="number"
+                  slotProps={{ htmlInput: { min: 0 } }}
+                  value={form.ticketRolloverMaxTickets}
+                  onChange={(e) =>
+                    setForm({ ...form, ticketRolloverMaxTickets: e.target.value })
+                  }
+                  helperText="Empty means no cap on carried-over tickets"
+                />
+              )}
             </Stack>
           </Box>
         </DialogContent>

@@ -12,7 +12,9 @@ import Chip from '@mui/material/Chip';
 import Divider from '@mui/material/Divider';
 import Stack from '@mui/material/Stack';
 import Link from '@mui/material/Link';
+import LinearProgress from '@mui/material/LinearProgress';
 import { formatMountainTime } from '@/lib/timezone';
+import { getTicketBalance } from '@/lib/credits';
 import { SignOutButton } from './_components/SignOutButton';
 import { CancelBookingButton } from './_components/CancelBookingButton';
 
@@ -34,7 +36,7 @@ export default async function DashboardPage() {
   const [membership, activeWaiver, upcomingCount, upcomingBookings] = await Promise.all([
     prisma.membership.findFirst({
       where: { userId, status: { in: ['ACTIVE', 'PAUSED'] } },
-      include: { plan: { select: { name: true } } },
+      include: { plan: { select: { name: true, classTicketsPerPeriod: true } } },
       orderBy: { createdAt: 'desc' },
     }),
     prisma.waiverVersion.findFirst({
@@ -70,6 +72,8 @@ export default async function DashboardPage() {
 
   const waiverSigned = !activeWaiver || activeWaiver.signatures.length > 0;
 
+  const ticketBalance = membership ? await getTicketBalance(membership.id) : null;
+
   return (
     <Container maxWidth="md" sx={{ py: 5, px: { xs: 3, md: 4 } }}>
       {/* Header */}
@@ -102,6 +106,34 @@ export default async function DashboardPage() {
                     ? 'Paused'
                     : `Renews ${formatMountainTime(membership.currentPeriodEnd, 'date')}`}
                 </Typography>
+                {ticketBalance && (
+                  <Box sx={{ mt: 1.5 }}>
+                    {ticketBalance.unlimited ? (
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        Unlimited classes
+                      </Typography>
+                    ) : (
+                      <>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {Math.max(0, (ticketBalance.balance ?? 0))} of {ticketBalance.allowance} class
+                          tickets remaining
+                        </Typography>
+                        <LinearProgress
+                          variant="determinate"
+                          value={
+                            ticketBalance.allowance > 0
+                              ? Math.min(100, (Math.max(0, ticketBalance.balance ?? 0) / ticketBalance.allowance) * 100)
+                              : 0
+                          }
+                          sx={{ mt: 0.75, mb: 0.75, height: 6, borderRadius: 3 }}
+                        />
+                      </>
+                    )}
+                    <Typography variant="caption" color="text.secondary">
+                      Resets {formatMountainTime(membership.currentPeriodEnd, 'date')}
+                    </Typography>
+                  </Box>
+                )}
               </>
             ) : (
               <>

@@ -1,11 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { refundTicket } from "@/lib/credits";
 import type { BookingStatus } from "@prisma/client";
 
 const ALLOWED_TRANSITIONS: Partial<Record<BookingStatus, BookingStatus[]>> = {
   CONFIRMED: ["NO_SHOW", "CANCELLED"],
   WAITLIST: ["CANCELLED"],
+  NO_SHOW: ["CONFIRMED"],
 };
 
 export async function PATCH(
@@ -52,6 +54,12 @@ export async function PATCH(
       },
     },
   });
+
+  // Admin-side cancellation refunds the ticket regardless of the 2-hour
+  // window (staff cancellations are usually studio-side); NO_SHOW never does.
+  if (newStatus === "CANCELLED" && booking.source === "MEMBERSHIP_CREDIT" && booking.membershipId) {
+    await refundTicket(booking.membershipId, booking.id);
+  }
 
   return NextResponse.json(updated);
 }

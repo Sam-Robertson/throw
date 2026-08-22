@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { inngest } from "@/lib/inngest";
+import { refundTicket } from "@/lib/credits";
 
 export async function POST(
   _req: NextRequest,
@@ -57,6 +58,18 @@ export async function POST(
   if (booking.source === "DROP_IN" && booking.amountPaidCents > 0) {
     refundNote =
       "Your booking has been cancelled. Refund requests must be made directly with the studio.";
+  }
+
+  if (booking.source === "MEMBERSHIP_CREDIT" && booking.membershipId) {
+    // The 2-hour block above already guarantees we only reach here outside
+    // the window, but this check is spelled out explicitly so the rule
+    // (late cancellations forfeit the ticket) stays correct even if that
+    // block's behavior ever changes.
+    const outsideCancellationWindow = booking.studioSession.startsAt > twoHoursFromNow;
+    if (outsideCancellationWindow) {
+      await refundTicket(booking.membershipId, booking.id);
+      refundNote = "Your booking has been cancelled and your class ticket was returned.";
+    }
   }
 
   return NextResponse.json({ success: true, ...(refundNote && { refundNote }) });

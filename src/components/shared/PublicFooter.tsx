@@ -14,6 +14,8 @@ const FOOTER_LINKS = [
   { href: '/membership', label: 'Memberships' },
   { href: '/about', label: 'About' },
   { href: '/login', label: 'Login' },
+  { href: '/privacy', label: 'Privacy' },
+  { href: '/terms', label: 'Terms' },
 ];
 
 export function PublicFooter() {

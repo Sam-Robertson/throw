@@ -461,6 +461,23 @@
     font-size: 14px;
     font-weight: 600;
   }
+  #throw-preorder .tp-calendar-head-selects {
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+  }
+  #throw-preorder .tp-cal-select {
+    border: 1.5px solid var(--tp-border);
+    border-radius: var(--tp-radius-sm);
+    background: var(--tp-white);
+    color: var(--tp-ink);
+    font-family: var(--tp-font-sans);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 5px 6px;
+    cursor: pointer;
+  }
+  #throw-preorder .tp-cal-select:hover { border-color: var(--tp-sage); }
   #throw-preorder .tp-calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
@@ -590,6 +607,7 @@
   #throw-preorder button:focus-visible,
   #throw-preorder .tp-option:focus-visible,
   #throw-preorder .tp-input:focus-visible,
+  #throw-preorder select:focus-visible,
   #throw-preorder input[type="checkbox"]:focus-visible {
     outline: 2px solid var(--tp-coral);
     outline-offset: 2px;
@@ -730,7 +748,7 @@
     // Note: success/cancel redirect URLs are NOT sent from here - they're fixed
     // server-side (PREORDER_SUCCESS_URL / PREORDER_CANCEL_URL) so a request forged
     // from outside this widget can't redirect a Stripe session anywhere it wants.
-    checkoutEndpoint: 'https://YOUR-DEPLOYMENT.vercel.app/api/preorder/checkout',
+    checkoutEndpoint: 'https://throw-kappa.vercel.app/api/preorder/checkout',
 
     // This widget only ever books the Lehi studio. Provo is shown (to match the
     // shared Choose-your-options layout used studio-wide) but disabled.
@@ -1029,9 +1047,25 @@
     var todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
+    var todayYear = todayStart.getFullYear();
     var html = '<div class="tp-calendar-head">' +
       '<button type="button" class="tp-calendar-nav" data-cal-nav="-1" aria-label="Previous month">' + navChevron('left') + '</button>' +
-      '<span>' + esc(MONTH_LABELS[month - 1]) + ' ' + year + '</span>' +
+      '<span class="tp-calendar-head-selects">' +
+        '<select class="tp-cal-select" data-cal-select="month" aria-label="Month">' +
+          MONTH_LABELS.map(function (m, i) {
+            return '<option value="' + (i + 1) + '"' + (i + 1 === month ? ' selected' : '') + '>' + m + '</option>';
+          }).join('') +
+        '</select>' +
+        '<select class="tp-cal-select" data-cal-select="year" aria-label="Year">' +
+          (function () {
+            var opts = '';
+            for (var y = todayYear; y >= todayYear - 100; y--) {
+              opts += '<option value="' + y + '"' + (y === year ? ' selected' : '') + '>' + y + '</option>';
+            }
+            return opts;
+          })() +
+        '</select>' +
+      '</span>' +
       '<button type="button" class="tp-calendar-nav" data-cal-nav="1" aria-label="Next month">' + navChevron('right') + '</button>' +
       '</div>';
     html += '<div class="tp-calendar-grid">';
@@ -1307,6 +1341,17 @@
           var d = new Date(birthdayCal.year, birthdayCal.month - 1 + Number(btn.getAttribute('data-cal-nav')), 1);
           birthdayCal.year = d.getFullYear();
           birthdayCal.month = d.getMonth() + 1;
+          renderBirthdayCalendar();
+        });
+      });
+      birthdayPopover.querySelectorAll('[data-cal-select]').forEach(function (sel) {
+        sel.addEventListener('click', function (e) { e.stopPropagation(); });
+        sel.addEventListener('change', function () {
+          if (sel.getAttribute('data-cal-select') === 'month') {
+            birthdayCal.month = Number(sel.value);
+          } else {
+            birthdayCal.year = Number(sel.value);
+          }
           renderBirthdayCalendar();
         });
       });

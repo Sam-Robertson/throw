@@ -19,8 +19,31 @@ const ALLOWED_ORIGIN = "https://www.throwartstudio.com";
 // ?status=success flag the widget reads to show a confirmation before it
 // forwards them to the homepage) rather than straight to the homepage, so
 // there's a moment to confirm the booking actually went through.
-const SUCCESS_URL = "https://www.throwartstudio.com/lehipreorder?status=success";
-const CANCEL_URL = "https://www.throwartstudio.com/";
+//
+// The old combined widget (squarespace/lehi-preorder.html, still live at
+// /lehipreorder as of this change) only ever sent `offering`, never `widget`.
+// The two new split widgets (squarespace/lehi-drop-in.html and
+// lehi-course.html) send both, so they can be routed to their own pages
+// without touching where the old widget's customers land. Once /lehipreorder
+// is retired, DEFAULT_SUCCESS_URL/DEFAULT_CANCEL_URL can move to the
+// homepage and this comment can go.
+// TODO: /lehi-drop-in and /lehi-course are placeholder slugs — swap for the
+// real published page URLs before go-live.
+const LEHIPREORDER_SUCCESS_URL = "https://www.throwartstudio.com/lehipreorder?status=success";
+const LEHIPREORDER_CANCEL_URL = "https://www.throwartstudio.com/";
+const DEFAULT_SUCCESS_URL = LEHIPREORDER_SUCCESS_URL;
+const DEFAULT_CANCEL_URL = LEHIPREORDER_CANCEL_URL;
+
+function successUrlFor(widget: unknown): string {
+  if (widget === "drop-in") return "https://www.throwartstudio.com/lehi-drop-in?status=success";
+  if (widget === "course") return "https://www.throwartstudio.com/lehi-course?status=success";
+  return DEFAULT_SUCCESS_URL;
+}
+function cancelUrlFor(widget: unknown): string {
+  if (widget === "drop-in") return "https://www.throwartstudio.com/lehi-drop-in";
+  if (widget === "course") return "https://www.throwartstudio.com/lehi-course";
+  return DEFAULT_CANCEL_URL;
+}
 
 const MAX_QUANTITY = 20;
 
@@ -39,6 +62,7 @@ export async function OPTIONS() {
 }
 
 interface PreorderCheckoutBody {
+  widget?: string;
   offering?: string;
   offeringTitle?: string;
   priceId?: string;
@@ -67,6 +91,7 @@ export async function POST(request: NextRequest) {
   }
 
   const {
+    widget,
     offering,
     offeringTitle,
     priceId,
@@ -100,8 +125,9 @@ export async function POST(request: NextRequest) {
       mode: "payment",
       line_items: [{ price: priceId, quantity: qty }],
       customer_email: email,
-      success_url: SUCCESS_URL,
-      cancel_url: CANCEL_URL,
+      success_url: successUrlFor(widget),
+      cancel_url: cancelUrlFor(widget),
+      allow_promotion_codes: true,
       metadata: {
         offering: offering ?? "",
         offeringTitle: offeringTitle ?? "",

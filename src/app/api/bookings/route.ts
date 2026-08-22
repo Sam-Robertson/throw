@@ -1,7 +1,9 @@
+import { randomUUID } from "crypto";
 import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { inngest } from "@/lib/inngest";
+import { consumeTicket } from "@/lib/credits";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -111,6 +113,7 @@ export async function POST(req: NextRequest) {
   const studioSession = await prisma.studioSession.findUnique({
     where: { id: studioSessionId },
     include: {
+      sessionType: { select: { dropInPriceCents: true } },
       _count: { select: { bookings: { where: { status: "CONFIRMED" } } } },
     },
   });
@@ -130,8 +133,11 @@ export async function POST(req: NextRequest) {
       status: "ACTIVE",
       currentPeriodEnd: { gt: new Date() },
     },
+    include: { plan: true },
   });
   if (!membership) {
+    // Existing drop-in path is unchanged: this route is member-only, so a
+    // 403 here signals the client to fall back to the paid drop-in flow.
     return NextResponse.json(
       { error: "No active membership" },
       { status: 403 },
@@ -142,13 +148,41 @@ export async function POST(req: NextRequest) {
   const bookingStatus =
     confirmedCount >= studioSession.capacity ? "WAITLIST" : "CONFIRMED";
 
+  const unlimited = membership.plan.classTicketsPerPeriod === null;
+
+  // Ticket bookings and their refunds are keyed off the booking's `source`,
+  // so for finite plans the ticket must be reserved before the booking row
+  // exists (and this route's own bookingId is passed into consumeTicket's
+  // ledger entry, since the row can't be created until after that succeeds).
+  const bookingId = unlimited ? undefined : randomUUID();
+
+  if (!unlimited) {
+    const result = await consumeTicket(
+      membership.id,
+      bookingId!,
+      membership.currentPeriodStart,
+      membership.currentPeriodEnd,
+    );
+    if (!result.ok) {
+      return NextResponse.json(
+        {
+          error: "NO_TICKETS_REMAINING",
+          dropInPriceCents: studioSession.sessionType.dropInPriceCents,
+        },
+        { status: 402 },
+      );
+    }
+  }
+
   const booking = await prisma.booking.create({
     data: {
+      ...(bookingId ? { id: bookingId } : {}),
       userId,
       studioSessionId,
       membershipId: membership.id,
       status: bookingStatus,
-      source: "MEMBER_FREE",
+      source: unlimited ? "MEMBER_FREE" : "MEMBERSHIP_CREDIT",
+      creditUsed: !unlimited,
     },
   });
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
+import { formatMountainTime } from "@/lib/timezone";
 
 export async function POST() {
   const session = await auth();
@@ -16,6 +17,15 @@ export async function POST() {
 
   if (!membership)
     return NextResponse.json({ error: "No active or paused membership found" }, { status: 404 });
+
+  if (membership.commitmentEndsAt && membership.commitmentEndsAt > new Date()) {
+    return NextResponse.json(
+      {
+        error: `This membership has a commitment through ${formatMountainTime(membership.commitmentEndsAt, "date")}. It cannot be cancelled until then.`,
+      },
+      { status: 400 },
+    );
+  }
 
   if (!membership.stripeSubscriptionId)
     return NextResponse.json({ error: "No Stripe subscription found" }, { status: 400 });

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { resend } from "@/lib/resend";
-import { twilioClient, TWILIO_PHONE } from "@/lib/twilio";
+import { sendSms } from "@/lib/sms";
 
 // Sample values used to fill template variables in test sends
 const SAMPLE: Record<string, string> = {
@@ -46,11 +46,15 @@ export async function POST(
   const filledBody = fillVars(template.body);
 
   if (template.channel === "sms") {
-    await twilioClient.messages.create({
-      body: filledBody,
-      from: TWILIO_PHONE,
+    const result = await sendSms({
       to: body.to.trim(),
+      message: filledBody,
+      userId: session.user.id,
+      kind: "transactional",
     });
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error ?? "Failed to send" }, { status: 502 });
+    }
   } else {
     const rawSubject = template.subject ?? template.name;
     const filledSubject = fillVars(rawSubject);

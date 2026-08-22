@@ -8,6 +8,8 @@ import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import CardActions from '@mui/material/CardActions';
+import Checkbox from '@mui/material/Checkbox';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
@@ -19,6 +21,8 @@ export default function RegisterPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [smsMarketingOptIn, setSmsMarketingOptIn] = useState(false);
+  const [emailMarketingOptIn, setEmailMarketingOptIn] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -40,7 +44,7 @@ export default function RegisterPage() {
     const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ name, email, password, smsMarketingOptIn, emailMarketingOptIn }),
     });
 
     if (!res.ok) {
@@ -120,6 +124,39 @@ export default function RegisterPage() {
                 label="Confirm password"
                 required
                 autoComplete="new-password"
+              />
+
+              <Box>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={smsMarketingOptIn}
+                      onChange={(e) => setSmsMarketingOptIn(e.target.checked)}
+                    />
+                  }
+                  label={
+                    <Typography variant="body2">
+                      Send me text messages about classes and promotions
+                    </Typography>
+                  }
+                />
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 5 }}>
+                  Message and data rates may apply. Reply STOP to opt out.
+                </Typography>
+              </Box>
+
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={emailMarketingOptIn}
+                    onChange={(e) => setEmailMarketingOptIn(e.target.checked)}
+                  />
+                }
+                label={
+                  <Typography variant="body2">
+                    Send me emails about classes and promotions
+                  </Typography>
+                }
               />
             </Stack>
           </CardContent>

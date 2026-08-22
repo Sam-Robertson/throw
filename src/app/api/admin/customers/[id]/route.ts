@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { normalizePhone } from "@/lib/consent";
+import { getTicketBalance } from "@/lib/credits";
 
 export async function GET(
   _req: NextRequest,
@@ -27,7 +29,7 @@ export async function GET(
       createdAt: true,
       memberships: {
         include: {
-          plan: { select: { name: true, price: true } },
+          plan: { select: { name: true, price: true, classTicketsPerPeriod: true } },
           membershipEvents: { orderBy: { createdAt: "desc" } },
         },
         orderBy: { createdAt: "desc" },
@@ -63,7 +65,23 @@ export async function GET(
     return NextResponse.json({ error: "Customer not found" }, { status: 404 });
   }
 
-  return NextResponse.json(customer);
+  const currentMembership = customer.memberships.find(
+    (m) => m.status === "ACTIVE" || m.status === "PAUSED",
+  );
+
+  let ticketBalance = null;
+  let creditLedger: unknown[] = [];
+  if (currentMembership) {
+    ticketBalance = await getTicketBalance(currentMembership.id);
+    if (!ticketBalance.unlimited) {
+      creditLedger = await prisma.membershipCreditLedger.findMany({
+        where: { membershipId: currentMembership.id },
+        orderBy: { createdAt: "desc" },
+      });
+    }
+  }
+
+  return NextResponse.json({ ...customer, ticketBalance, creditLedger });
 }
 
 export async function PATCH(
@@ -88,7 +106,9 @@ export async function PATCH(
     where: { id },
     data: {
       ...(body.name !== undefined && { name: body.name.trim() || null }),
-      ...(body.phone !== undefined && { phone: body.phone.trim() || null }),
+      ...(body.phone !== undefined && {
+        phone: body.phone.trim() ? normalizePhone(body.phone.trim()) : null,
+      }),
       ...(body.emergencyContactName !== undefined && {
         emergencyContactName: body.emergencyContactName.trim() || null,
       }),

@@ -37,3 +37,6 @@ next-env.d.ts
 # prisma
 prisma/*.db
 prisma/*.db-journal
+
+# momence export output (contains customer PII, never commit)
+/momence-export/

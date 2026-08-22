@@ -5,6 +5,9 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { inngest } from "@/lib/inngest";
 import { sendSms } from "@/lib/sms";
+import { maybeCompletePosOrder } from "@/lib/pos";
+import { grantPeriodAllowance } from "@/lib/credits";
+import { addMonths } from "date-fns";
 import type Stripe from "stripe";
 
 // App Router reads raw body via req.text() — no bodyParser config needed
@@ -34,7 +37,7 @@ export async function POST(req: NextRequest) {
 
   if (event.type === "customer.subscription.created") {
     const subscription = event.data.object as Stripe.Subscription;
-    const { userId, planId } = subscription.metadata ?? {};
+    const { userId, planId, joiningFeeCharged } = subscription.metadata ?? {};
     if (userId && planId) {
       const customerId =
         typeof subscription.customer === "string"
@@ -42,6 +45,9 @@ export async function POST(req: NextRequest) {
           : subscription.customer.id;
       try {
         const item = subscription.items.data[0];
+        const currentPeriodStart = new Date(item.current_period_start * 1000);
+        const currentPeriodEnd = new Date(item.current_period_end * 1000);
+        const plan = await prisma.membershipPlan.findUnique({ where: { id: planId } });
         const membership = await prisma.membership.create({
           data: {
             userId,
@@ -49,14 +55,28 @@ export async function POST(req: NextRequest) {
             status: "ACTIVE",
             stripeSubscriptionId: subscription.id,
             stripeCustomerId: customerId,
-            currentPeriodStart: new Date(item.current_period_start * 1000),
-            currentPeriodEnd: new Date(item.current_period_end * 1000),
+            currentPeriodStart,
+            currentPeriodEnd,
             creditsRemaining: 0,
+            // The joining-fee decision is made once, at checkout time in the
+            // subscribe route (based on whether the user had ever held a
+            // membership before) — it's carried here via subscription
+            // metadata rather than re-derived, so the two never disagree.
+            joiningFeePaid: joiningFeeCharged === "true",
+            commitmentEndsAt:
+              plan?.commitmentMonths != null
+                ? addMonths(currentPeriodStart, plan.commitmentMonths)
+                : null,
           },
         });
         await prisma.membershipEvent.create({
           data: { membershipId: membership.id, eventType: "CREATED" },
         });
+        await grantPeriodAllowance(
+          membership.id,
+          membership.currentPeriodStart,
+          membership.currentPeriodEnd,
+        );
         await inngest.send({
           name: "membership/created",
           data: { membershipId: membership.id, userId },
@@ -174,16 +194,19 @@ export async function POST(req: NextRequest) {
         where: { stripeSubscriptionId: subscriptionId },
       });
       if (membership) {
+        const newPeriodStart = new Date(invoice.period_start * 1000);
+        const newPeriodEnd = new Date(invoice.period_end * 1000);
         await prisma.membership.update({
           where: { id: membership.id },
           data: {
-            currentPeriodStart: new Date(invoice.period_start * 1000),
-            currentPeriodEnd: new Date(invoice.period_end * 1000),
+            currentPeriodStart: newPeriodStart,
+            currentPeriodEnd: newPeriodEnd,
           },
         });
         await prisma.membershipEvent.create({
           data: { membershipId: membership.id, eventType: "RENEWED" },
         });
+        await grantPeriodAllowance(membership.id, newPeriodStart, newPeriodEnd);
       }
     }
   } else if (event.type === "checkout.session.completed") {
@@ -249,6 +272,7 @@ export async function POST(req: NextRequest) {
             to: instructor.phone,
             message: `You received a ${dollars} tip! Thank you for teaching a great class.`,
             userId: instructorId,
+            kind: "transactional",
           }).catch(() => {
             // Non-fatal: SMS failure should not block the tip record
           });
@@ -332,6 +356,29 @@ export async function POST(req: NextRequest) {
         })
         .catch(() => {});
     }
+  } else if (event.type === "payment_intent.succeeded") {
+    // ── POS card-manual payment (separate from the tip/drop-in Checkout flows
+    //    above, which use checkout.session.completed instead) ───────────────
+    const intent = event.data.object as Stripe.PaymentIntent;
+    if (intent.metadata?.type === "pos") {
+      const payment = await prisma.posPayment.findFirst({
+        where: { stripePaymentIntentId: intent.id },
+      });
+      if (payment && payment.status !== "SUCCEEDED") {
+        const { count } = await prisma.posPayment.updateMany({
+          where: { id: payment.id, status: "PENDING" },
+          data: { status: "SUCCEEDED" },
+        });
+        if (count > 0) {
+          await maybeCompletePosOrder(payment.orderId);
+        }
+      }
+      // If no matching PosPayment or it's already SUCCEEDED, this is a no-op —
+      // either a race already settled by the confirm endpoint, or a retry.
+    }
+    // Non-POS payment_intent.succeeded events (e.g. the PaymentIntent behind a
+    // tip/drop-in Checkout Session) are handled via checkout.session.completed
+    // above and intentionally ignored here.
   }
 
   return NextResponse.json({ received: true });

@@ -2,6 +2,8 @@ import { formatInTimeZone } from "date-fns-tz";
 import { inngest, type BookingEventData, type MembershipEventData } from "@/lib/inngest";
 import { prisma } from "@/lib/prisma";
 import { interpolateTemplate, sendSms } from "@/lib/sms";
+import { resend } from "@/lib/resend";
+import { formatMoney } from "@/lib/pos";
 
 const STUDIO_TZ = "America/Denver";
 
@@ -66,7 +68,7 @@ async function handleBookingSms(
   };
 
   const message = interpolateTemplate(automation.messageTemplate, vars);
-  await sendSms({ to: phone, message, userId, automationId: automation.id });
+  await sendSms({ to: phone, message, userId, automationId: automation.id, kind: "transactional" });
   return { sent: true };
 }
 
@@ -147,7 +149,7 @@ export const sendMembershipWelcome = inngest.createFunction(
         plan_name: membership.plan.name,
       };
       const message = interpolateTemplate(automation.messageTemplate, vars);
-      await sendSms({ to: phone, message, userId, automationId: automation.id });
+      await sendSms({ to: phone, message, userId, automationId: automation.id, kind: "transactional" });
       return { sent: true };
     });
   },
@@ -192,7 +194,7 @@ export const sendMembershipPaused = inngest.createFunction(
         name: membership.user.name?.split(" ")[0] ?? "",
       };
       const message = interpolateTemplate(automation.messageTemplate, vars);
-      await sendSms({ to: phone, message, userId, automationId: automation.id });
+      await sendSms({ to: phone, message, userId, automationId: automation.id, kind: "transactional" });
       return { sent: true };
     });
   },
@@ -231,5 +233,82 @@ export const scheduleBookingReminder = inngest.createFunction(
     });
 
     return { scheduled: true, reminderTime: reminderTime.toISOString() };
+  },
+);
+
+// ── pos/order.completed ──────────────────────────────────────────────────────
+
+export const sendPosReceipt = inngest.createFunction(
+  { id: "send-pos-receipt", triggers: [{ event: "pos/order.completed" }] },
+  async ({ event, step }) => {
+    const { orderId } = event.data as { orderId: string };
+
+    return step.run("send-receipt", async () => {
+      const order = await prisma.posOrder.findUnique({
+        where: { id: orderId },
+        include: {
+          items: { orderBy: { createdAt: "asc" } },
+          payments: { orderBy: { createdAt: "asc" } },
+          customer: { select: { id: true, name: true, email: true, phone: true } },
+          location: { select: { name: true, address: true } },
+        },
+      });
+      if (!order) return { skipped: true, reason: "order not found" };
+      if (!order.customer) return { skipped: true, reason: "no customer on order" };
+      if (!order.customer.email && !order.customer.phone) {
+        return { skipped: true, reason: "customer has neither email nor phone" };
+      }
+
+      const dateStr = formatInTimeZone(
+        order.completedAt ?? order.createdAt,
+        STUDIO_TZ,
+        "MMMM d, yyyy h:mm a",
+      );
+      const paymentMethods = [...new Set(order.payments.map((p) => p.method))].join(", ");
+
+      // Receipts are transactional (the customer just completed a purchase),
+      // so no marketing consent check applies. Prefer email; SMS is the
+      // fallback only when there is no email on file.
+      if (order.customer.email) {
+        const lines = order.items
+          .map((i) => `  ${i.quantity}x ${i.name} — ${formatMoney(i.totalCents)}`)
+          .join("\n");
+        const body = [
+          `Throw Art Studio — Receipt #${order.orderNumber}`,
+          order.location.name,
+          order.location.address ?? "",
+          dateStr,
+          "",
+          lines,
+          "",
+          `Subtotal: ${formatMoney(order.subtotalCents)}`,
+          order.discountCents > 0 ? `Discount: -${formatMoney(order.discountCents)}` : null,
+          order.tipCents > 0 ? `Tip: ${formatMoney(order.tipCents)}` : null,
+          `Total: ${formatMoney(order.totalCents)}`,
+          "",
+          `Paid via: ${paymentMethods || "—"}`,
+          "",
+          "Thank you!",
+        ]
+          .filter((line): line is string => line !== null)
+          .join("\n");
+
+        await resend.emails.send({
+          from: process.env.RESEND_FROM_EMAIL ?? "noreply@throw.studio",
+          to: order.customer.email,
+          subject: `Your receipt from ${order.location.name} — #${order.orderNumber}`,
+          text: body,
+        });
+        return { sent: "email" };
+      }
+
+      await sendSms({
+        to: order.customer.phone!,
+        message: `Throw Art Studio receipt #${order.orderNumber}. Total ${formatMoney(order.totalCents)}. Thanks!`,
+        userId: order.customer.id,
+        kind: "transactional",
+      });
+      return { sent: "sms" };
+    });
   },
 );

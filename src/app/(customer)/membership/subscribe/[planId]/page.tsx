@@ -32,6 +32,11 @@ export default async function SubscribePage({
 
   if (!plan) redirect("/membership");
 
+  const priorMembershipCount = await prisma.membership.count({
+    where: { userId: session.user.id },
+  });
+  const chargeJoiningFee = plan.joiningFeeCents > 0 && priorMembershipCount === 0;
+
   return (
     <main className="mx-auto max-w-md px-4 py-16">
       <Link
@@ -55,6 +60,22 @@ export default async function SubscribePage({
           <p className="text-xs text-muted-foreground">
             Billed every {plan.billingIntervalDays} days
           </p>
+          {chargeJoiningFee && (
+            <p className="text-sm">
+              Plus a one-time{" "}
+              <span className="font-semibold">
+                ${(plan.joiningFeeCents / 100).toFixed(2)}
+              </span>{" "}
+              joining fee.
+            </p>
+          )}
+          {plan.billingAnchorDay && (
+            <p className="text-xs text-muted-foreground">
+              You&apos;ll be charged a prorated amount today, then $
+              {(plan.price / 100).toFixed(2)} on the {plan.billingAnchorDay}
+              {plan.billingAnchorDay === 1 ? "st" : "th"} of each month.
+            </p>
+          )}
         </CardContent>
       </Card>
       <SubscribeButton planId={planId} />

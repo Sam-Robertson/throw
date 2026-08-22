@@ -61,6 +61,11 @@ interface Customer {
   email: string;
 }
 
+interface StaffAssignment {
+  userId: string;
+  staffRoleName: string;
+}
+
 function initials(name: string | null, email: string) {
   if (name) {
     const parts = name.trim().split(/\s+/);
@@ -133,6 +138,7 @@ function RowMenu({
 export default function InstructorsPage() {
   const [instructors, setInstructors] = useState<Instructor[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [staffRoleNames, setStaffRoleNames] = useState<Map<string, string[]>>(new Map());
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -147,14 +153,23 @@ export default function InstructorsPage() {
   const [removeTarget, setRemoveTarget] = useState<Instructor | null>(null);
 
   const load = useCallback(async () => {
-    const [staffRes, custRes] = await Promise.all([
+    const [staffRes, custRes, assignRes] = await Promise.all([
       fetch('/api/admin/users'),
       fetch('/api/admin/customers?page=1&limit=500'),
+      fetch('/api/admin/staff-assignments'),
     ]);
     if (staffRes.ok) setInstructors(await staffRes.json() as Instructor[]);
     if (custRes.ok) {
       const data = await custRes.json() as { customers: Customer[] };
       setCustomers(data.customers ?? []);
+    }
+    if (assignRes.ok) {
+      const data = await assignRes.json() as StaffAssignment[];
+      const map = new Map<string, string[]>();
+      for (const a of data) {
+        map.set(a.userId, [...(map.get(a.userId) ?? []), a.staffRoleName]);
+      }
+      setStaffRoleNames(map);
     }
     setLoading(false);
   }, []);
@@ -320,19 +335,22 @@ export default function InstructorsPage() {
                 <TableCell sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem' }}>
                   Default pay rate
                 </TableCell>
+                <TableCell sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem' }}>
+                  Staff role
+                </TableCell>
                 <TableCell padding="checkbox" />
               </TableRow>
             </TableHead>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
                     <Typography color="text.secondary">Loading…</Typography>
                   </TableCell>
                 </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ py: 6 }}>
+                  <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
                     <PersonAddAlt1OutlinedIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1, display: 'block', mx: 'auto' }} />
                     <Typography color="text.secondary" sx={{ fontWeight: 500 }}>
                       {search ? 'No instructors match your search' : 'No instructors yet'}
@@ -409,6 +427,19 @@ export default function InstructorsPage() {
                           ) : (
                             <Typography variant="body2" color="text.disabled">—</Typography>
                           )}
+                        </Stack>
+                      </TableCell>
+                      <TableCell>
+                        <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body2" color={staffRoleNames.get(instructor.id)?.length ? 'text.primary' : 'text.disabled'}>
+                            {staffRoleNames.get(instructor.id)?.join(', ') || 'No role assigned'}
+                          </Typography>
+                          <NextLink
+                            href="/admin/studio-setup/roles"
+                            style={{ fontSize: '0.75rem', textDecoration: 'underline', whiteSpace: 'nowrap' }}
+                          >
+                            Manage
+                          </NextLink>
                         </Stack>
                       </TableCell>
                       <TableCell padding="checkbox" sx={{ pr: 1 }}>

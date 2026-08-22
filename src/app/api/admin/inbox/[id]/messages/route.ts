@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { twilioClient, TWILIO_PHONE } from "@/lib/twilio";
+import { sendSms } from "@/lib/sms";
 import { resend } from "@/lib/resend";
 
 // POST /api/admin/inbox/[id]/messages — send a reply
@@ -33,11 +33,15 @@ export async function POST(
   if (conversation.channel === "sms") {
     if (!conversation.user.phone)
       return NextResponse.json({ error: "Customer has no phone number" }, { status: 422 });
-    await twilioClient.messages.create({
-      body: body.body.trim(),
-      from: TWILIO_PHONE,
+    const result = await sendSms({
       to: conversation.user.phone,
+      message: body.body.trim(),
+      userId: conversation.userId,
+      kind: "transactional",
     });
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error ?? "Failed to send" }, { status: 502 });
+    }
   } else if (conversation.channel === "email") {
     await resend.emails.send({
       from: "Throw Studio <hello@throwstudio.com>",

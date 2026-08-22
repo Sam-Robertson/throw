@@ -1,6 +1,6 @@
 import { BookingSource, BookingStatus, MembershipEventType, MembershipStatus, PaymentStatus, PaymentType, Role, TaskStatus, TaskTriggerType } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { addDays, startOfWeek, subDays } from 'date-fns';
+import { addDays, addMonths, startOfWeek, subDays } from 'date-fns';
 import { fromZonedTime } from 'date-fns-tz';
 import { prisma } from '../src/lib/prisma';
 
@@ -209,153 +209,288 @@ these terms.`;
   }
 
   // ── Membership Plans ──────────────────────────────────────────────────────────
+  // All tiers include: 24/6 studio access, clay & firing discounts, studio
+  // glazes, workshops and member events. Billed on the 1st of the month.
 
-  const planOpenStudio = await prisma.membershipPlan.upsert({
-    where: { slug: 'open-studio-monthly' },
+  const commonPerks = [
+    '24/6 studio access',
+    'Clay & firing discounts',
+    'Studio glazes',
+    'Workshops & member events',
+  ];
+
+  const planExpert = await prisma.membershipPlan.upsert({
+    where: { slug: 'expert-monthly' },
     update: {
-      name: 'Open Studio Monthly',
-      description: 'Unlimited open studio access. Perfect for regular practitioners.',
-      price: 8900,
+      name: 'Expert',
+      description: 'Full shelf space and our largest class ticket allowance.',
+      price: 12000,
       billingIntervalDays: 30,
-      stripePriceId: 'price_placeholder_monthly',
+      billingAnchorDay: 1,
+      stripePriceId: 'price_placeholder_expert',
       isActive: true,
       locationId: location.id,
+      classTicketsPerPeriod: 12,
+      shelfType: 'FULL',
+      joiningFeeCents: 2500,
+      perks: commonPerks,
     },
     create: {
-      slug: 'open-studio-monthly',
-      name: 'Open Studio Monthly',
-      description: 'Unlimited open studio access. Perfect for regular practitioners.',
-      price: 8900,
+      slug: 'expert-monthly',
+      name: 'Expert',
+      description: 'Full shelf space and our largest class ticket allowance.',
+      price: 12000,
       billingIntervalDays: 30,
-      stripePriceId: 'price_placeholder_monthly',
+      billingAnchorDay: 1,
+      stripePriceId: 'price_placeholder_expert',
       isActive: true,
       locationId: location.id,
+      classTicketsPerPeriod: 12,
+      shelfType: 'FULL',
+      joiningFeeCents: 2500,
+      perks: commonPerks,
     },
   });
 
-  const planStudioPlus = await prisma.membershipPlan.upsert({
-    where: { slug: 'studio-plus-monthly' },
+  const planPro = await prisma.membershipPlan.upsert({
+    where: { slug: 'pro-monthly' },
     update: {
-      name: 'Studio Plus',
-      description: 'Unlimited access to open studio and all standard classes.',
-      price: 14900,
+      name: 'Pro',
+      description: 'Half shelf space and a generous class ticket allowance.',
+      price: 9000,
       billingIntervalDays: 30,
-      stripePriceId: 'price_placeholder_plus',
+      billingAnchorDay: 1,
+      stripePriceId: 'price_placeholder_pro',
       isActive: true,
       locationId: location.id,
+      classTicketsPerPeriod: 10,
+      shelfType: 'HALF',
+      joiningFeeCents: 2500,
+      perks: commonPerks,
     },
     create: {
-      slug: 'studio-plus-monthly',
-      name: 'Studio Plus',
-      description: 'Unlimited access to open studio and all standard classes.',
-      price: 14900,
+      slug: 'pro-monthly',
+      name: 'Pro',
+      description: 'Half shelf space and a generous class ticket allowance.',
+      price: 9000,
       billingIntervalDays: 30,
-      stripePriceId: 'price_placeholder_plus',
+      billingAnchorDay: 1,
+      stripePriceId: 'price_placeholder_pro',
       isActive: true,
       locationId: location.id,
+      classTicketsPerPeriod: 10,
+      shelfType: 'HALF',
+      joiningFeeCents: 2500,
+      perks: commonPerks,
     },
   });
 
-  const planAnnual = await prisma.membershipPlan.upsert({
-    where: { slug: 'annual-membership' },
+  const planBasic = await prisma.membershipPlan.upsert({
+    where: { slug: 'basic-monthly' },
     update: {
-      name: 'Annual Membership',
-      description: 'Full year of unlimited studio access. Best value.',
-      price: 89900,
-      billingIntervalDays: 365,
-      stripePriceId: 'price_placeholder_annual',
+      name: 'Basic',
+      description: 'No shelf space, our lowest-cost membership.',
+      price: 7000,
+      billingIntervalDays: 30,
+      billingAnchorDay: 1,
+      stripePriceId: 'price_placeholder_basic',
       isActive: true,
       locationId: location.id,
+      classTicketsPerPeriod: 8,
+      shelfType: null,
+      joiningFeeCents: 2500,
+      perks: commonPerks,
     },
     create: {
-      slug: 'annual-membership',
-      name: 'Annual Membership',
-      description: 'Full year of unlimited studio access. Best value.',
-      price: 89900,
-      billingIntervalDays: 365,
-      stripePriceId: 'price_placeholder_annual',
+      slug: 'basic-monthly',
+      name: 'Basic',
+      description: 'No shelf space, our lowest-cost membership.',
+      price: 7000,
+      billingIntervalDays: 30,
+      billingAnchorDay: 1,
+      stripePriceId: 'price_placeholder_basic',
       isActive: true,
       locationId: location.id,
+      classTicketsPerPeriod: 8,
+      shelfType: null,
+      joiningFeeCents: 2500,
+      perks: commonPerks,
     },
+  });
+
+  const planPro3Month = await prisma.membershipPlan.upsert({
+    where: { slug: 'pro-3-month' },
+    update: {
+      name: 'Pro 3 Month',
+      description: 'Pro membership with a 3-month commitment. 10% off retail, joining fee waived.',
+      price: 9000,
+      billingIntervalDays: 30,
+      billingAnchorDay: 1,
+      stripePriceId: 'price_placeholder_pro_3mo',
+      isActive: true,
+      locationId: location.id,
+      classTicketsPerPeriod: 10,
+      shelfType: 'HALF',
+      joiningFeeCents: 0,
+      commitmentMonths: 3,
+      retailDiscountPercent: 10,
+      includesOnlineCourse: true,
+      perks: [...commonPerks, 'Online course', 'Joining fee waived'],
+    },
+    create: {
+      slug: 'pro-3-month',
+      name: 'Pro 3 Month',
+      description: 'Pro membership with a 3-month commitment. 10% off retail, joining fee waived.',
+      price: 9000,
+      billingIntervalDays: 30,
+      billingAnchorDay: 1,
+      stripePriceId: 'price_placeholder_pro_3mo',
+      isActive: true,
+      locationId: location.id,
+      classTicketsPerPeriod: 10,
+      shelfType: 'HALF',
+      joiningFeeCents: 0,
+      commitmentMonths: 3,
+      retailDiscountPercent: 10,
+      includesOnlineCourse: true,
+      perks: [...commonPerks, 'Online course', 'Joining fee waived'],
+    },
+  });
+
+  const planPro12Month = await prisma.membershipPlan.upsert({
+    where: { slug: 'pro-12-month' },
+    update: {
+      name: 'Pro 12 Month',
+      description:
+        'Pro membership with a 12-month commitment. 20% off retail, guest pass, 1 month free.',
+      price: 9000,
+      billingIntervalDays: 30,
+      billingAnchorDay: 1,
+      stripePriceId: 'price_placeholder_pro_12mo',
+      isActive: true,
+      locationId: location.id,
+      classTicketsPerPeriod: 10,
+      shelfType: 'HALF',
+      joiningFeeCents: 0,
+      commitmentMonths: 12,
+      retailDiscountPercent: 20,
+      includesOnlineCourse: true,
+      includesGuestPass: true,
+      perks: [...commonPerks, 'Online course', 'Guest pass', '1 month free', 'Joining fee waived'],
+    },
+    create: {
+      slug: 'pro-12-month',
+      name: 'Pro 12 Month',
+      description:
+        'Pro membership with a 12-month commitment. 20% off retail, guest pass, 1 month free.',
+      price: 9000,
+      billingIntervalDays: 30,
+      billingAnchorDay: 1,
+      stripePriceId: 'price_placeholder_pro_12mo',
+      isActive: true,
+      locationId: location.id,
+      classTicketsPerPeriod: 10,
+      shelfType: 'HALF',
+      joiningFeeCents: 0,
+      commitmentMonths: 12,
+      retailDiscountPercent: 20,
+      includesOnlineCourse: true,
+      includesGuestPass: true,
+      perks: [...commonPerks, 'Online course', 'Guest pass', '1 month free', 'Joining fee waived'],
+    },
+  });
+
+  // The three invented plans this seed used to create are replaced by the
+  // real lineup above under new slugs — deactivate the old rows (if this
+  // seed has run before) so they don't keep showing up on /membership.
+  await prisma.membershipPlan.updateMany({
+    where: { slug: { in: ['open-studio-monthly', 'studio-plus-monthly', 'annual-membership'] } },
+    data: { isActive: false },
   });
 
   // ── Memberships ───────────────────────────────────────────────────────────────
   // MembershipEvents are only created inside the `create` block — this prevents
   // duplicate events on subsequent re-runs while still keeping membership data current.
 
-  // sarah → Open Studio Monthly, ACTIVE
+  // sarah → Basic, ACTIVE
   await prisma.membership.upsert({
     where: { stripeSubscriptionId: 'sub_seed_sarah' },
     create: {
       userId: sarah.id,
-      planId: planOpenStudio.id,
+      planId: planBasic.id,
       locationId: location.id,
       status: MembershipStatus.ACTIVE,
       stripeSubscriptionId: 'sub_seed_sarah',
       currentPeriodStart: daysAgo(15),
       currentPeriodEnd: daysFromNow(15),
       creditsRemaining: 0,
+      joiningFeePaid: true,
       membershipEvents: {
         create: [{ eventType: MembershipEventType.CREATED, createdAt: daysAgo(15) }],
       },
     },
     update: {
       userId: sarah.id,
-      planId: planOpenStudio.id,
+      planId: planBasic.id,
       locationId: location.id,
       status: MembershipStatus.ACTIVE,
       currentPeriodStart: daysAgo(15),
       currentPeriodEnd: daysFromNow(15),
       creditsRemaining: 0,
+      joiningFeePaid: true,
     },
   });
 
-  // mike → Studio Plus, ACTIVE
+  // mike → Pro, ACTIVE
   await prisma.membership.upsert({
     where: { stripeSubscriptionId: 'sub_seed_mike' },
     create: {
       userId: mike.id,
-      planId: planStudioPlus.id,
+      planId: planPro.id,
       locationId: location.id,
       status: MembershipStatus.ACTIVE,
       stripeSubscriptionId: 'sub_seed_mike',
       currentPeriodStart: daysAgo(5),
       currentPeriodEnd: daysFromNow(25),
       creditsRemaining: 0,
+      joiningFeePaid: true,
       membershipEvents: {
         create: [
           { eventType: MembershipEventType.CREATED, createdAt: daysAgo(5) },
           {
             eventType: MembershipEventType.UPGRADED,
             createdAt: daysAgo(3),
-            note: 'Upgraded from Open Studio Monthly',
+            note: 'Upgraded from Basic',
           },
         ],
       },
     },
     update: {
       userId: mike.id,
-      planId: planStudioPlus.id,
+      planId: planPro.id,
       locationId: location.id,
       status: MembershipStatus.ACTIVE,
       currentPeriodStart: daysAgo(5),
       currentPeriodEnd: daysFromNow(25),
       creditsRemaining: 0,
+      joiningFeePaid: true,
     },
   });
 
-  // priya → Annual Membership, ACTIVE
+  // priya → Pro 12 Month (commitment), ACTIVE
   await prisma.membership.upsert({
     where: { stripeSubscriptionId: 'sub_seed_priya' },
     create: {
       userId: priya.id,
-      planId: planAnnual.id,
+      planId: planPro12Month.id,
       locationId: location.id,
       status: MembershipStatus.ACTIVE,
       stripeSubscriptionId: 'sub_seed_priya',
       currentPeriodStart: daysAgo(60),
       currentPeriodEnd: daysFromNow(305),
+      commitmentEndsAt: addMonths(daysAgo(60), 12),
       creditsRemaining: 0,
+      joiningFeePaid: false,
       membershipEvents: {
         create: [
           { eventType: MembershipEventType.CREATED, createdAt: daysAgo(60) },
@@ -365,21 +500,23 @@ these terms.`;
     },
     update: {
       userId: priya.id,
-      planId: planAnnual.id,
+      planId: planPro12Month.id,
       locationId: location.id,
       status: MembershipStatus.ACTIVE,
       currentPeriodStart: daysAgo(60),
       currentPeriodEnd: daysFromNow(305),
+      commitmentEndsAt: addMonths(daysAgo(60), 12),
       creditsRemaining: 0,
+      joiningFeePaid: false,
     },
   });
 
-  // jordan → Open Studio Monthly, PAUSED
+  // jordan → Expert, PAUSED
   await prisma.membership.upsert({
     where: { stripeSubscriptionId: 'sub_seed_jordan' },
     create: {
       userId: jordan.id,
-      planId: planOpenStudio.id,
+      planId: planExpert.id,
       locationId: location.id,
       status: MembershipStatus.PAUSED,
       stripeSubscriptionId: 'sub_seed_jordan',
@@ -388,6 +525,7 @@ these terms.`;
       pausedAt: daysAgo(12),
       resumesAt: daysFromNow(18),
       creditsRemaining: 0,
+      joiningFeePaid: true,
       membershipEvents: {
         create: [
           { eventType: MembershipEventType.CREATED, createdAt: daysAgo(40) },
@@ -397,7 +535,7 @@ these terms.`;
     },
     update: {
       userId: jordan.id,
-      planId: planOpenStudio.id,
+      planId: planExpert.id,
       locationId: location.id,
       status: MembershipStatus.PAUSED,
       currentPeriodStart: daysAgo(40),
@@ -405,8 +543,21 @@ these terms.`;
       pausedAt: daysAgo(12),
       resumesAt: daysFromNow(18),
       creditsRemaining: 0,
+      joiningFeePaid: true,
     },
   });
+
+  // ── Shelf Spaces ──────────────────────────────────────────────────────────────
+  // 40 shelves, numbered 1-40, alternating FULL/HALF, all unassigned.
+
+  for (let number = 1; number <= 40; number++) {
+    const shelfType = number % 2 === 1 ? 'FULL' : 'HALF';
+    await prisma.shelfSpace.upsert({
+      where: { locationId_number: { locationId: location.id, number } },
+      update: { shelfType },
+      create: { locationId: location.id, number, shelfType },
+    });
+  }
 
   // ── SMS Automations ───────────────────────────────────────────────────────────
 
@@ -684,10 +835,10 @@ these terms.`;
   await prisma.payment.create({ data: { userId: bClaire.id, locationId: bLoc.id, stripePaymentIntentId: `pi_seed_${piIdx++}`, amountInCents: 4500,  status: PaymentStatus.SUCCEEDED, type: PaymentType.DROP_IN,    bookingId: bkClaireWTTue.id } });
 
   // Membership payments
-  await prisma.payment.create({ data: { userId: bSarah.id, locationId: bLoc.id, stripePaymentIntentId: `pi_seed_${piIdx++}`, amountInCents: 8900,  status: PaymentStatus.SUCCEEDED, type: PaymentType.MEMBERSHIP, membershipId: sarahMs.id, createdAt: subDays(now, 15) } });
-  await prisma.payment.create({ data: { userId: bMike.id,  locationId: bLoc.id, stripePaymentIntentId: `pi_seed_${piIdx++}`, amountInCents: 14900, status: PaymentStatus.SUCCEEDED, type: PaymentType.MEMBERSHIP, membershipId: mikeMbs.id, createdAt: subDays(now, 5)  } });
-  await prisma.payment.create({ data: { userId: bPriya.id, locationId: bLoc.id, stripePaymentIntentId: `pi_seed_${piIdx++}`, amountInCents: 89900, status: PaymentStatus.SUCCEEDED, type: PaymentType.MEMBERSHIP, membershipId: priyaMs.id, createdAt: subDays(now, 60) } });
-  await prisma.payment.create({ data: { userId: bPriya.id, locationId: bLoc.id, stripePaymentIntentId: `pi_seed_${piIdx++}`, amountInCents: 89900, status: PaymentStatus.SUCCEEDED, type: PaymentType.MEMBERSHIP, membershipId: priyaMs.id, createdAt: subDays(now, 30) } });
+  await prisma.payment.create({ data: { userId: bSarah.id, locationId: bLoc.id, stripePaymentIntentId: `pi_seed_${piIdx++}`, amountInCents: 7000, status: PaymentStatus.SUCCEEDED, type: PaymentType.MEMBERSHIP, membershipId: sarahMs.id, createdAt: subDays(now, 15) } });
+  await prisma.payment.create({ data: { userId: bMike.id,  locationId: bLoc.id, stripePaymentIntentId: `pi_seed_${piIdx++}`, amountInCents: 9000, status: PaymentStatus.SUCCEEDED, type: PaymentType.MEMBERSHIP, membershipId: mikeMbs.id, createdAt: subDays(now, 5)  } });
+  await prisma.payment.create({ data: { userId: bPriya.id, locationId: bLoc.id, stripePaymentIntentId: `pi_seed_${piIdx++}`, amountInCents: 9000, status: PaymentStatus.SUCCEEDED, type: PaymentType.MEMBERSHIP, membershipId: priyaMs.id, createdAt: subDays(now, 60) } });
+  await prisma.payment.create({ data: { userId: bPriya.id, locationId: bLoc.id, stripePaymentIntentId: `pi_seed_${piIdx++}`, amountInCents: 9000, status: PaymentStatus.SUCCEEDED, type: PaymentType.MEMBERSHIP, membershipId: priyaMs.id, createdAt: subDays(now, 30) } });
 
   console.log('=== SEED B COMPLETE ===');
   console.log('Session types, studio sessions, bookings, payments seeded.');

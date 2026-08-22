@@ -23,7 +23,9 @@ import Typography from '@mui/material/Typography';
 import { useInboxCount } from './InboxCountContext';
 
 // Icons
+import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
 import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
+import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
 import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined';
 import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
 import CardGiftcardOutlinedIcon from '@mui/icons-material/CardGiftcardOutlined';
@@ -43,8 +45,11 @@ import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
 import MailOutlinedIcon from '@mui/icons-material/MailOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import PaidOutlinedIcon from '@mui/icons-material/PaidOutlined';
 import PeopleOutlinedIcon from '@mui/icons-material/PeopleOutlined';
 import PersonOutlinedIcon from '@mui/icons-material/PersonOutlined';
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import PointOfSaleOutlinedIcon from '@mui/icons-material/PointOfSaleOutlined';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import StyleOutlinedIcon from '@mui/icons-material/StyleOutlined';
 import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
@@ -180,6 +185,7 @@ const MAIN_NAV: NavSection[] = [
     label: 'Business',
     items: [
       { kind: 'link', href: '/admin/reports', label: 'Reports', icon: <BarChartOutlinedIcon fontSize="small" /> },
+      { kind: 'link', href: '/admin/tips', label: 'Tips', icon: <PaidOutlinedIcon fontSize="small" /> },
     ],
   },
 ];
@@ -191,6 +197,8 @@ const STUDIO_SETUP_GROUPS: FlyoutGroup[] = [
     items: [
       { href: '/admin/studio-setup/instructors', label: 'Instructors', icon: <PersonOutlinedIcon fontSize="small" /> },
       { href: '/admin/tasks',                     label: 'Staff Tasks', icon: <ChecklistOutlinedIcon fontSize="small" /> },
+      { href: '/admin/studio-setup/roles',        label: 'Roles & Permissions', icon: <AdminPanelSettingsOutlinedIcon fontSize="small" /> },
+      { href: '/admin/studio-setup/shelves',      label: 'Shelf Spaces', icon: <Inventory2OutlinedIcon fontSize="small" /> },
     ],
   },
   {
@@ -210,6 +218,7 @@ const STUDIO_SETUP_GROUPS: FlyoutGroup[] = [
     label: 'MESSAGING',
     items: [
       { href: '/admin/studio-setup/templates', label: 'Templates', icon: <MailOutlinedIcon fontSize="small" /> },
+      { href: '/admin/studio-setup/suppressions', label: 'Suppressions', icon: <BlockOutlinedIcon fontSize="small" /> },
     ],
   },
   {
@@ -524,6 +533,15 @@ function SidebarContent({ pathname, onClose }: SidebarContentProps) {
       </Box>
 
       <Divider sx={{ my: 1, mx: 2 }} />
+
+      {/* Point of Sale — persistent top-level link, above Studio Set-up */}
+      <List dense sx={{ flexShrink: 0, py: 0 }}>
+        <NavLink
+          item={{ href: '/admin/pos', label: 'Point of Sale', icon: <PointOfSaleOutlinedIcon fontSize="small" /> }}
+          pathname={pathname}
+          onClick={onClose}
+        />
+      </List>
 
       {/* Studio Set-up — flyout, always at bottom, never expands inline */}
       <List dense sx={{ flexShrink: 0 }}>

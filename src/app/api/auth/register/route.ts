@@ -23,7 +23,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { name, email, password } = body as Record<string, unknown>;
+  const { name, email, password, smsMarketingOptIn, emailMarketingOptIn } =
+    body as Record<string, unknown>;
 
   if (!name || !email || !password) {
     return NextResponse.json({ error: "All fields are required" }, { status: 400 });
@@ -46,12 +47,19 @@ export async function POST(req: NextRequest) {
   }
 
   const hashedPassword = await bcrypt.hash(password, 12);
+  const now = new Date();
+  const smsOptIn = smsMarketingOptIn === true;
+  const emailOptIn = emailMarketingOptIn === true;
 
   const user = await prisma.user.create({
     data: {
       name: String(name),
       email,
       hashedPassword,
+      smsMarketingOptIn: smsOptIn,
+      ...(smsOptIn && { smsMarketingOptInAt: now, smsMarketingOptInSource: "registration" }),
+      emailMarketingOptIn: emailOptIn,
+      ...(emailOptIn && { emailMarketingOptInAt: now, emailMarketingOptInSource: "registration" }),
     },
     select: { id: true, email: true, name: true },
   });

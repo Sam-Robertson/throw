@@ -38,8 +38,26 @@ interface Membership {
   pausedAt: string | null;
   cancelledAt: string | null;
   createdAt: string;
-  plan: { name: string; price: number };
+  plan: { name: string; price: number; classTicketsPerPeriod: number | null };
   membershipEvents: MembershipEvent[];
+}
+
+interface TicketBalance {
+  balance: number | null;
+  unlimited: boolean;
+  allowance: number;
+  used: number;
+  periodStart: string;
+  periodEnd: string;
+}
+
+interface CreditLedgerEntry {
+  id: string;
+  type: string;
+  delta: number;
+  bookingId: string | null;
+  note: string | null;
+  createdAt: string;
 }
 
 interface Booking {
@@ -84,7 +102,18 @@ interface Customer {
   bookings: Booking[];
   waiverSignatures: WaiverSignature[];
   linkedTasks: Task[];
+  ticketBalance: TicketBalance | null;
+  creditLedger: CreditLedgerEntry[];
 }
+
+const LEDGER_TYPE_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  ALLOWANCE: "default",
+  ROLLOVER: "secondary",
+  BOOKING: "outline",
+  REFUND: "secondary",
+  ADJUSTMENT: "outline",
+  EXPIRY: "destructive",
+};
 
 const BOOKING_STATUS_VARIANT: Record<BookingStatus, "default" | "secondary" | "destructive" | "outline"> = {
   CONFIRMED: "default",
@@ -135,6 +164,13 @@ export default function AdminCustomerProfilePage() {
 
   // New task dialog
   const [newTaskOpen, setNewTaskOpen] = useState(false);
+
+  // Adjust tickets dialog
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const [adjustDelta, setAdjustDelta] = useState("");
+  const [adjustNote, setAdjustNote] = useState("");
+  const [adjustSaving, setAdjustSaving] = useState(false);
+  const [adjustError, setAdjustError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -188,6 +224,29 @@ export default function AdminCustomerProfilePage() {
       setEditError(data.error ?? "Something went wrong");
     }
     setEditSaving(false);
+  }
+
+  async function handleAdjustTickets() {
+    if (!activeMembership) return;
+    const delta = parseInt(adjustDelta, 10);
+    if (!delta || !adjustNote.trim()) return;
+    setAdjustSaving(true);
+    setAdjustError(null);
+    const res = await fetch(`/api/admin/memberships/${activeMembership.id}/adjust-tickets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ delta, note: adjustNote.trim() }),
+    });
+    if (res.ok) {
+      setAdjustOpen(false);
+      setAdjustDelta("");
+      setAdjustNote("");
+      await load();
+    } else {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      setAdjustError(data.error ?? "Something went wrong");
+    }
+    setAdjustSaving(false);
   }
 
   async function handleMarkNoShow(bookingId: string) {
@@ -426,6 +485,80 @@ export default function AdminCustomerProfilePage() {
             </div>
           )}
 
+          {/* Class ticket balance */}
+          {customer.ticketBalance && (
+            <div className="rounded-lg border p-4">
+              <div className="mb-3 flex items-start justify-between">
+                <h3 className="font-semibold">Class Tickets</h3>
+                {isAdmin && !customer.ticketBalance.unlimited && (
+                  <Button size="sm" variant="outline" onClick={() => setAdjustOpen(true)}>
+                    Adjust tickets
+                  </Button>
+                )}
+              </div>
+              {customer.ticketBalance.unlimited ? (
+                <p className="text-sm">Unlimited classes</p>
+              ) : (
+                <>
+                  <p className="text-sm font-medium">
+                    {Math.max(0, customer.ticketBalance.balance ?? 0)} of{" "}
+                    {customer.ticketBalance.allowance} remaining
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Used {customer.ticketBalance.used} this period
+                  </p>
+
+                  {customer.creditLedger.length > 0 && (
+                    <div className="mt-4 rounded-md border">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/30">
+                            <th className="px-3 py-2 text-left font-medium">Date</th>
+                            <th className="px-3 py-2 text-left font-medium">Type</th>
+                            <th className="px-3 py-2 text-right font-medium">Delta</th>
+                            <th className="px-3 py-2 text-left font-medium">Note</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {customer.creditLedger.map((entry) => (
+                            <tr key={entry.id} className="border-b last:border-0">
+                              <td className="px-3 py-2 text-muted-foreground">
+                                {formatMountainTime(new Date(entry.createdAt), "date")}
+                              </td>
+                              <td className="px-3 py-2">
+                                <Badge
+                                  variant={LEDGER_TYPE_VARIANT[entry.type] ?? "outline"}
+                                  className="text-xs"
+                                >
+                                  {entry.type}
+                                </Badge>
+                              </td>
+                              <td
+                                className={`px-3 py-2 text-right font-medium ${
+                                  entry.delta > 0
+                                    ? "text-green-700"
+                                    : entry.delta < 0
+                                      ? "text-destructive"
+                                      : ""
+                                }`}
+                              >
+                                {entry.delta > 0 ? "+" : ""}
+                                {entry.delta}
+                              </td>
+                              <td className="px-3 py-2 text-muted-foreground">
+                                {entry.note ?? "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
           {/* Full history */}
           {customer.memberships.length > 0 && (
             <div>
@@ -594,6 +727,47 @@ export default function AdminCustomerProfilePage() {
             </Button>
             <Button onClick={handleEditSave} disabled={editSaving}>
               {editSaving ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Adjust tickets dialog */}
+      <Dialog open={adjustOpen} onOpenChange={(o) => { setAdjustOpen(o); if (!o) setAdjustError(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Adjust Tickets</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Delta (positive to grant, negative to deduct)</Label>
+              <Input
+                type="number"
+                value={adjustDelta}
+                onChange={(e) => setAdjustDelta(e.target.value)}
+                placeholder="e.g. 2 or -1"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Note *</Label>
+              <Input
+                value={adjustNote}
+                onChange={(e) => setAdjustNote(e.target.value)}
+                placeholder="Reason for this adjustment"
+                required
+              />
+            </div>
+            {adjustError && <p className="text-sm text-destructive">{adjustError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAdjustOpen(false)} disabled={adjustSaving}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAdjustTickets}
+              disabled={adjustSaving || !adjustDelta || !adjustNote.trim()}
+            >
+              {adjustSaving ? "Saving…" : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { formatMountainTime } from "@/lib/timezone";
+import { getTicketBalance } from "@/lib/credits";
 import { BookingForm } from "./_components/BookingForm";
 
 async function getSession(id: string) {
@@ -129,6 +130,8 @@ export default async function BookPage({
     select: { id: true },
   });
 
+  const ticketBalance = activeMembership ? await getTicketBalance(activeMembership.id) : null;
+
   const spotsRemaining =
     studioSession.capacity - studioSession._count.bookings;
 
@@ -146,6 +149,14 @@ export default async function BookPage({
       <BookingForm
         sessionId={id}
         hasMembership={activeMembership !== null}
+        membershipUnlimited={ticketBalance?.unlimited ?? false}
+        ticketsRemaining={
+          ticketBalance && !ticketBalance.unlimited ? Math.max(0, ticketBalance.balance ?? 0) : null
+        }
+        ticketAllowance={ticketBalance && !ticketBalance.unlimited ? ticketBalance.allowance : null}
+        ticketsResetDate={
+          ticketBalance ? formatMountainTime(ticketBalance.periodEnd, "date") : null
+        }
         dropInPriceCents={studioSession.sessionType.dropInPriceCents}
         sessionName={studioSession.sessionType.name}
         sessionDate={formatMountainTime(studioSession.startsAt, "date")}

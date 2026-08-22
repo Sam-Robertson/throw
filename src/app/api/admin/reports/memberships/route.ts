@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { checkPermission } from "@/lib/permissions";
 
 function defaultRange() {
   const now = new Date();
@@ -18,12 +19,8 @@ export async function GET(req: NextRequest) {
 
   // STAFF must have canViewMembershipReporting
   if (session.user.role === "STAFF") {
-    const assignment = await prisma.staffRoleAssignment.findFirst({
-      where: { userId: session.user.id },
-      include: { staffRole: true },
-    });
-    const perms = (assignment?.staffRole?.permissions ?? {}) as Record<string, boolean>;
-    if (!perms.canViewMembershipReporting) {
+    const allowed = await checkPermission(session.user.id, "canViewMembershipReporting");
+    if (!allowed) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
   }
