@@ -36,7 +36,23 @@ function isValidSignature(req: NextRequest): boolean {
   return crypto.timingSafeEqual(expectedBuf, providedBuf);
 }
 
+// Some webhook dashboards (Sendblue's included, as far as we've observed)
+// ping the URL with a plain GET to confirm it's reachable before letting you
+// save the config. This endpoint only ever receives real events via POST, so
+// GET has nothing to verify against — just confirm we're here.
+export async function GET() {
+  return NextResponse.json({ ok: true });
+}
+
 export async function POST(req: NextRequest) {
+  // Temporary: helps confirm whether Sendblue's dashboard is even reaching
+  // this endpoint when "Save" fails client-side, and with what headers.
+  // Remove once the webhook save flow is confirmed working.
+  console.log("[sendblue webhook] POST received", {
+    hasSignatureHeader: req.headers.has("sb-signing-secret"),
+    contentType: req.headers.get("content-type"),
+  });
+
   if (!isValidSignature(req)) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
