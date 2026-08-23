@@ -130,7 +130,7 @@ export default async function SchedulePage({ searchParams }: Props) {
 
   return (
     <Container maxWidth="lg" sx={{ py: { xs: 5, md: 7 }, px: { xs: 3, md: 4 } }}>
-      <Typography variant="h1" sx={{ mb: 4, fontWeight: 700 }}>
+      <Typography variant="h1" sx={{ mb: 4 }}>
         Schedule
       </Typography>
 

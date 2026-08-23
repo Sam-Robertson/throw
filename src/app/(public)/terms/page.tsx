@@ -43,7 +43,7 @@ export default function TermsPage() {
         This is a template and should be reviewed by an attorney before launch.
       </Alert>
 
-      <Typography variant="h1" sx={{ fontWeight: 700, mb: 1 }}>
+      <Typography variant="h1" sx={{ mb: 1 }}>
         Terms of Service
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 5 }}>

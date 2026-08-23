@@ -17,6 +17,7 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Typography from '@mui/material/Typography';
 import MenuIcon from '@mui/icons-material/Menu';
+import CloseIcon from '@mui/icons-material/Close';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import type { Role } from '@prisma/client';
 
@@ -45,6 +46,7 @@ const ACCOUNT_LINKS = [
 export function PublicNav({ user }: Props) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [bannerOpen, setBannerOpen] = useState(true);
   const menuOpen = Boolean(anchorEl);
 
   const isStaffOrAdmin = user?.role === 'STAFF' || user?.role === 'ADMIN';
@@ -63,16 +65,44 @@ export function PublicNav({ user }: Props) {
 
   return (
     <>
+      {bannerOpen && (
+        <Box
+          sx={{
+            bgcolor: 'primary.main',
+            color: 'primary.contrastText',
+            py: 1,
+            px: 2,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 1,
+            position: 'relative',
+          }}
+        >
+          <Typography variant="body2" sx={{ fontWeight: 700, color: 'inherit', textAlign: 'center' }}>
+            New to Throw? Book your first class today.
+          </Typography>
+          <IconButton
+            aria-label="Dismiss banner"
+            size="small"
+            onClick={() => setBannerOpen(false)}
+            sx={{ color: 'inherit', position: 'absolute', right: 8, p: 0.5 }}
+          >
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      )}
       <AppBar position="sticky" sx={{ zIndex: 40 }}>
         <Toolbar sx={{ maxWidth: 1152, width: '100%', mx: 'auto', px: { xs: 2, md: 3 } }}>
           {/* Wordmark */}
           <Typography
             component={NextLink}
             href="/"
-            variant="h6"
             sx={{
-              fontWeight: 700,
-              letterSpacing: '-0.02em',
+              fontFamily: 'var(--font-gt-alpina), Georgia, serif',
+              fontSize: '1.375rem',
+              fontWeight: 400,
+              letterSpacing: '-0.01em',
               color: 'text.primary',
               textDecoration: 'none',
               mr: 4,

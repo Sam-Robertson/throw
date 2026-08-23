@@ -43,7 +43,7 @@ export default function PrivacyPage() {
         This is a template and should be reviewed by an attorney before launch.
       </Alert>
 
-      <Typography variant="h1" sx={{ fontWeight: 700, mb: 1 }}>
+      <Typography variant="h1" sx={{ mb: 1 }}>
         Privacy Policy
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 5 }}>

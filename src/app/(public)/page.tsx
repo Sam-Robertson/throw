@@ -14,6 +14,15 @@ import Link from '@mui/material/Link';
 import Stack from '@mui/material/Stack';
 import { md3 } from '@/lib/theme';
 
+// "Header Large (serif)" from the design system doc — used for marketing
+// section headers on this page only (see theme.ts for why h2 stays sans-bold).
+const serifHeadingSx = {
+  fontFamily: 'var(--font-gt-alpina), Georgia, serif',
+  fontWeight: 400,
+  fontSize: '2rem',
+  lineHeight: 1.2,
+} as const;
+
 async function getUpcomingSessions() {
   return prisma.studioSession.findMany({
     where: { startsAt: { gte: new Date() }, isCancelled: false },
@@ -58,13 +67,13 @@ export default async function HomePage() {
         <Container maxWidth="md" sx={{ textAlign: 'center' }}>
           <Typography
             variant="h1"
-            sx={{ color: md3.inverseOnSurface, fontWeight: 700 }}
+            sx={{ color: md3.inverseOnSurface }}
           >
-            Make something with your hands.
+            Learn to throw.
           </Typography>
           <Typography
             variant="body1"
-            sx={{ mt: 3, color: `${md3.inverseOnSurface}B3`, fontSize: { xs: '1rem', md: '1.125rem' } }}
+            sx={{ mt: 3, color: `${md3.inverseOnSurface}CC`, fontSize: { xs: '1rem', md: '1.25rem' } }}
           >
             Pottery studio in Provo, Utah. Open studio sessions, classes, and memberships.
           </Typography>
@@ -78,9 +87,9 @@ export default async function HomePage() {
               variant="contained"
               size="large"
               sx={{
-                bgcolor: md3.inversePrimary,
-                color: md3.primary,
-                '&:hover': { bgcolor: md3.primaryContainer },
+                bgcolor: '#FFFFFF',
+                color: md3.inverseSurface,
+                '&:hover': { bgcolor: md3.inversePrimary },
               }}
             >
               Browse Schedule
@@ -105,7 +114,7 @@ export default async function HomePage() {
       {/* ── This Week ────────────────────────────────────────────────────────── */}
       <Box component="section" sx={{ py: { xs: 8, md: 10 }, px: 3 }}>
         <Container maxWidth="lg">
-          <Typography variant="h2" sx={{ mb: 4, fontWeight: 700 }}>
+          <Typography variant="h2" sx={{ mb: 4, ...serifHeadingSx }}>
             This Week
           </Typography>
 
@@ -178,7 +187,7 @@ export default async function HomePage() {
         }}
       >
         <Container maxWidth="lg">
-          <Typography variant="h2" sx={{ mb: 1, fontWeight: 700 }}>
+          <Typography variant="h2" sx={{ mb: 1, ...serifHeadingSx }}>
             Become a Member
           </Typography>
           <Typography color="text.secondary" sx={{ mb: 4 }}>
@@ -225,7 +234,7 @@ export default async function HomePage() {
       {/* ── Visit Us ─────────────────────────────────────────────────────────── */}
       <Box component="section" sx={{ py: { xs: 8, md: 10 }, px: 3 }}>
         <Container maxWidth="lg">
-          <Typography variant="h2" sx={{ mb: 4, fontWeight: 700 }}>
+          <Typography variant="h2" sx={{ mb: 4, ...serifHeadingSx }}>
             Visit Us
           </Typography>
           <Grid container spacing={6}>

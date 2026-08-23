@@ -1,15 +1,59 @@
-/* Tailwind v4 — utility classes only (layout, grid, etc.)
-   MUI CssBaseline handles the CSS reset; MUI ThemeProvider handles colours. */
+/* Tailwind v4 — utility classes only (layout, grid, etc.) for most of the
+   app; MUI CssBaseline/ThemeProvider handles colours there instead.
+   The shadcn/ui component set (src/components/ui) — used by the POS
+   terminal and reused piecemeal in a few staff/admin/customer pages — reads
+   its colours from the CSS variables below instead. They were previously
+   undefined, so every bg-card/text-muted-foreground/etc. class across the
+   app (280+ call sites) was rendering with no colour at all. Values here
+   mirror the MUI theme's md3 tokens (src/lib/theme.ts) so both systems read
+   as one brand rather than two. */
 @import "tailwindcss";
 
-/* Surface tint helpers used alongside MUI's surfaceVariant colour */
 :root {
-  --md3-primary: #7B4F31;
-  --md3-surface-variant: #F4E4D7;
-  --md3-outline-variant: #D8C4B7;
+  --background: #ffffff;
+  --foreground: rgba(0, 0, 0, 0.7);
+  --card: #ffffff;
+  --card-foreground: rgba(0, 0, 0, 0.7);
+  --popover: #ffffff;
+  --popover-foreground: rgba(0, 0, 0, 0.7);
+  --primary: #8b9d82;
+  --primary-foreground: #ffffff;
+  --secondary: #f3e4d3;
+  --secondary-foreground: #4a2f14;
+  --muted: #f5eee3;
+  --muted-foreground: rgba(0, 0, 0, 0.6);
+  --accent: #f0e7d8;
+  --accent-foreground: rgba(0, 0, 0, 0.7);
+  --destructive: #b3261e;
+  --destructive-foreground: #ffffff;
+  --border: #e3e0d8;
+  --input: #e3e0d8;
+  --ring: #8b9d82;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
 }
 
 /* Font variable forwarded from Next.js */
 body {
-  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  font-family: var(--font-satoshi), system-ui, -apple-system, sans-serif;
 }

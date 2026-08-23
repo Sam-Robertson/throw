@@ -100,7 +100,7 @@ export default async function MembershipPage() {
   return (
     <Container maxWidth="lg" sx={{ py: { xs: 8, md: 10 }, px: { xs: 3, md: 4 } }}>
       <Box sx={{ mb: 6, textAlign: 'center' }}>
-        <Typography variant="h1" sx={{ mb: 1.5, fontWeight: 700 }}>
+        <Typography variant="h1" sx={{ mb: 1.5 }}>
           Membership Plans
         </Typography>
         <Typography color="text.secondary" variant="body1">
