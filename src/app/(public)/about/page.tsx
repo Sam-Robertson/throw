@@ -1,11 +1,13 @@
 import NextLink from 'next/link';
 import Box from '@mui/material/Box';
 import Container from '@mui/material/Container';
+import Grid from '@mui/material/Grid';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlineRounded';
 import { md3 } from '@/lib/theme';
+import { prisma } from '@/lib/prisma';
 
 export const metadata = { title: 'About — Throw' };
 
@@ -28,7 +30,13 @@ const OFFERINGS = [
   },
 ];
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  const locations = await prisma.location.findMany({
+    where: { isActive: true },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true, address: true },
+  });
+
   return (
     <>
       {/* Hero */}
@@ -44,8 +52,8 @@ export default function AboutPage() {
             variant="body1"
             sx={{ mt: 2.5, color: `${md3.inverseOnSurface}B3`, fontSize: { xs: '1rem', md: '1.125rem' } }}
           >
-            Throw is a pottery studio in Provo, Utah offering open studio sessions, wheel throwing
-            classes, hand building workshops, and memberships.
+            Throw is a pottery studio in Provo and Lehi, Utah offering open studio sessions, wheel
+            throwing classes, hand building workshops, and memberships.
           </Typography>
         </Container>
       </Box>
@@ -85,11 +93,24 @@ export default function AboutPage() {
           <Typography variant="h2" sx={{ mb: 4, fontWeight: 700 }}>
             Find Us
           </Typography>
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-              Address
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+              Locations
             </Typography>
-            <Typography color="text.secondary">Provo, Utah</Typography>
+            {locations.length === 0 ? (
+              <Typography color="text.secondary">Location details coming soon.</Typography>
+            ) : (
+              <Grid container spacing={3}>
+                {locations.map((loc) => (
+                  <Grid key={loc.id} size={{ xs: 12, sm: 6 }}>
+                    <Typography sx={{ fontWeight: 600 }}>{loc.name}</Typography>
+                    {loc.address && (
+                      <Typography color="text.secondary">{loc.address}</Typography>
+                    )}
+                  </Grid>
+                ))}
+              </Grid>
+            )}
           </Box>
           <Box>
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>

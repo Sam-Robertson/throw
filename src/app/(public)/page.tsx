@@ -42,6 +42,14 @@ async function getActivePlans() {
   });
 }
 
+async function getLocations() {
+  return prisma.location.findMany({
+    where: { isActive: true },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true, address: true },
+  });
+}
+
 function formatPrice(cents: number, days: number) {
   const dollars = (cents / 100).toFixed(2);
   if (days <= 35) return `$${dollars}/mo`;
@@ -50,7 +58,11 @@ function formatPrice(cents: number, days: number) {
 }
 
 export default async function HomePage() {
-  const [sessions, plans] = await Promise.all([getUpcomingSessions(), getActivePlans()]);
+  const [sessions, plans, locations] = await Promise.all([
+    getUpcomingSessions(),
+    getActivePlans(),
+    getLocations(),
+  ]);
 
   return (
     <>
@@ -75,7 +87,7 @@ export default async function HomePage() {
             variant="body1"
             sx={{ mt: 3, color: `${md3.inverseOnSurface}CC`, fontSize: { xs: '1rem', md: '1.25rem' } }}
           >
-            Pottery studio in Provo, Utah. Open studio sessions, classes, and memberships.
+            Pottery studios in Provo and Lehi, Utah. Open studio sessions, classes, and memberships.
           </Typography>
           <Stack
             direction={{ xs: 'column', sm: 'row' }}
@@ -231,56 +243,90 @@ export default async function HomePage() {
         </Container>
       </Box>
 
-      {/* ── Visit Us ─────────────────────────────────────────────────────────── */}
+      {/* ── Our Locations ────────────────────────────────────────────────────── */}
       <Box component="section" sx={{ py: { xs: 8, md: 10 }, px: 3 }}>
         <Container maxWidth="lg">
-          <Typography variant="h2" sx={{ mb: 4, ...serifHeadingSx }}>
-            Visit Us
+          <Typography variant="h2" sx={{ mb: 1, ...serifHeadingSx }}>
+            Our Locations
           </Typography>
-          <Grid container spacing={6}>
-            {/* Text */}
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="h6" sx={{ mb: 0.5 }}>Address</Typography>
-                <Typography color="text.secondary">Provo, Utah</Typography>
-              </Box>
-              <Box>
-                <Typography variant="h6" sx={{ mb: 1 }}>Hours</Typography>
-                <Stack spacing={0.5}>
-                  {['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((day) => (
-                    <Box key={day} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-                      <Typography variant="body2">{day}</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        See schedule for session times
-                      </Typography>
-                    </Box>
-                  ))}
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-                    <Typography variant="body2">Sunday</Typography>
-                    <Typography variant="body2" color="text.secondary">Closed</Typography>
-                  </Box>
-                </Stack>
-              </Box>
-            </Grid>
+          <Typography color="text.secondary" sx={{ mb: 4 }}>
+            Hours vary by location — see the schedule for exact session times.
+          </Typography>
 
-            {/* Photo placeholder */}
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Box
-                sx={{
-                  minHeight: 192,
-                  borderRadius: 3,
-                  bgcolor: md3.surfaceVariant,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'text.secondary',
-                  fontSize: '0.875rem',
-                }}
-              >
-                Photo coming soon
-              </Box>
+          {locations.length === 0 ? (
+            <Typography color="text.secondary">Location details coming soon.</Typography>
+          ) : (
+            <Grid container spacing={4}>
+              {locations.map((loc) => (
+                <Grid key={loc.id} size={{ xs: 12, md: 6 }}>
+                  <Box
+                    sx={{
+                      minHeight: 220,
+                      borderRadius: 3,
+                      bgcolor: md3.surfaceVariant,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'text.secondary',
+                      fontSize: '0.875rem',
+                      mb: 2,
+                    }}
+                  >
+                    Photo coming soon
+                  </Box>
+                  <Typography variant="h6" sx={{ mb: 0.25 }}>{loc.name}</Typography>
+                  {loc.address && (
+                    <Typography color="text.secondary">{loc.address}</Typography>
+                  )}
+                </Grid>
+              ))}
             </Grid>
-          </Grid>
+          )}
+        </Container>
+      </Box>
+
+      {/* ── Meet the Team ────────────────────────────────────────────────────── */}
+      <Box component="section" sx={{ bgcolor: md3.surfaceVariant, py: { xs: 8, md: 10 }, px: 3 }}>
+        <Container maxWidth="lg">
+          <Typography variant="h2" sx={{ mb: 4, ...serifHeadingSx }}>
+            Meet the Team
+          </Typography>
+          <Box
+            sx={{
+              minHeight: 160,
+              borderRadius: 3,
+              bgcolor: '#FFFFFF',
+              border: `1px solid ${md3.outlineVariant}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'text.secondary',
+              fontSize: '0.875rem',
+            }}
+          >
+            Instructor bios coming soon
+          </Box>
+        </Container>
+      </Box>
+
+      {/* ── Private Events ───────────────────────────────────────────────────── */}
+      <Box component="section" sx={{ py: { xs: 8, md: 10 }, px: 3 }}>
+        <Container maxWidth="md" sx={{ textAlign: 'center' }}>
+          <Typography variant="h2" sx={{ mb: 1.5, ...serifHeadingSx }}>
+            Planning an Event?
+          </Typography>
+          <Typography color="text.secondary" sx={{ mb: 3 }}>
+            Private group sessions and studio events are available on request — reach out and
+            we&apos;ll help you plan it.
+          </Typography>
+          <Button
+            component={NextLink}
+            href="mailto:hello@throwstudio.com"
+            variant="outlined"
+            size="large"
+          >
+            Email Us
+          </Button>
         </Container>
       </Box>
     </>
