@@ -1,4 +1,5 @@
 import NextLink from 'next/link';
+import Image from 'next/image';
 import Box from '@mui/material/Box';
 import Container from '@mui/material/Container';
 import Grid from '@mui/material/Grid';
@@ -58,16 +59,19 @@ export function PublicFooter() {
     >
       <Container maxWidth="lg" sx={{ py: { xs: 6, md: 8 }, px: { xs: 3, md: 4 } }}>
         <Box sx={{ mb: 5 }}>
-          <Typography
-            sx={{
-              fontFamily: 'var(--font-gt-alpina), Georgia, serif',
-              fontSize: '1.5rem',
-              fontWeight: 400,
-              color: md3.inverseOnSurface,
-            }}
-          >
-            Throw
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Image src="/mascot.png" alt="" width={217} height={217} style={{ height: 28, width: 'auto' }} />
+            <Typography
+              sx={{
+                fontFamily: 'var(--font-gt-alpina), Georgia, serif',
+                fontSize: '1.5rem',
+                fontWeight: 400,
+                color: md3.inverseOnSurface,
+              }}
+            >
+              Throw
+            </Typography>
+          </Box>
           <Typography variant="body2" sx={{ mt: 0.5, color: `${md3.inverseOnSurface}99` }}>
             Pottery studio in Provo, Utah
           </Typography>

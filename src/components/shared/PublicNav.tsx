@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import NextLink from 'next/link';
+import Image from 'next/image';
 import { signOut } from 'next-auth/react';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
@@ -95,22 +96,9 @@ export function PublicNav({ user }: Props) {
       <AppBar position="sticky" sx={{ zIndex: 40 }}>
         <Toolbar sx={{ maxWidth: 1152, width: '100%', mx: 'auto', px: { xs: 2, md: 3 } }}>
           {/* Wordmark */}
-          <Typography
-            component={NextLink}
-            href="/"
-            sx={{
-              fontFamily: 'var(--font-gt-alpina), Georgia, serif',
-              fontSize: '1.375rem',
-              fontWeight: 400,
-              letterSpacing: '-0.01em',
-              color: 'text.primary',
-              textDecoration: 'none',
-              mr: 4,
-              flexShrink: 0,
-            }}
-          >
-            Throw
-          </Typography>
+          <Box component={NextLink} href="/" sx={{ display: 'flex', alignItems: 'center', mr: 4, flexShrink: 0 }}>
+            <Image src="/logo.png" alt="Throw" width={670} height={185} priority style={{ height: 34, width: 'auto' }} />
+          </Box>
 
           {/* Center links — desktop */}
           <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 0.5, flex: 1 }}>
