@@ -43,8 +43,8 @@ interface StudioSession {
 // ─── Time-grid layout constants ─────────────────────────────────────────────
 const HOUR_HEIGHT = 48; // px per hour
 const MIN_EVENT_HEIGHT = 22; // px — keeps even 15-min slots tappable/legible
-const DEFAULT_START_HOUR = 6;
-const DEFAULT_END_HOUR = 22;
+const DEFAULT_START_HOUR = 5;
+const DEFAULT_END_HOUR = 23;
 const GRID_GUTTER_WIDTH = 44; // px, hour-label column
 
 function getGridBounds(sessions: StudioSession[]): { startHour: number; endHour: number } {
@@ -325,7 +325,7 @@ export default function SchedulePage() {
               border: '1px solid',
               borderColor: 'divider',
               borderRadius: 2,
-              maxHeight: 'calc(100vh - 150px)',
+              maxHeight: 'calc(100vh - 180px)',
               overflowY: 'auto',
             }}
           >
