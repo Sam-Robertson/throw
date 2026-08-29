@@ -325,7 +325,7 @@ export default function SchedulePage() {
               border: '1px solid',
               borderColor: 'divider',
               borderRadius: 2,
-              maxHeight: 'calc(100vh - 260px)',
+              maxHeight: 'calc(100vh - 150px)',
               overflowY: 'auto',
             }}
           >
