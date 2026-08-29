@@ -18,7 +18,7 @@ async function requireStaff(): Promise<GuardResult> {
 }
 
 const sessionIncludes = {
-  sessionType: { select: { name: true, durationMinutes: true, capacity: true } },
+  sessionType: { select: { id: true, name: true, durationMinutes: true, capacity: true } },
   instructor: { select: { id: true, name: true } },
   _count: { select: { bookings: true } },
 } as const;

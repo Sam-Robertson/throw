@@ -12,6 +12,9 @@
     "seed": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed.ts",
     "momence:export": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}' node --env-file=.env.local --require ts-node/register scripts/momence-export.ts",
     "momence:export:catalog": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}' node --env-file=.env.local --require ts-node/register scripts/momence-catalog-export.ts",
+    "momence:map": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}' node --require ts-node/register scripts/momence-map.ts",
+    "momence:apply": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}' node --env-file=.env --require ts-node/register scripts/momence-apply.ts",
+    "sheets:apply": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}' node --env-file=.env --require ts-node/register scripts/sheets-apply.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

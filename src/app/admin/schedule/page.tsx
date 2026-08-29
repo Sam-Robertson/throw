@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { addDays, addWeeks, format, startOfWeek } from 'date-fns';
 import { formatInTimeZone, fromZonedTime, toZonedTime } from 'date-fns-tz';
 import Box from '@mui/material/Box';
@@ -19,13 +19,15 @@ import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
 import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
-import Paper from '@mui/material/Paper';
+import Tooltip from '@mui/material/Tooltip';
 import Grid from '@mui/material/Grid';
 import Stack from '@mui/material/Stack';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import AddIcon from '@mui/icons-material/Add';
 import { STUDIO_TIMEZONE } from '@/lib/timezone';
+import { layoutOverlappingEvents } from '@/lib/calendarLayout';
+import { getSessionTypeColor } from '@/lib/scheduleColors';
 
 interface StudioSession {
   id: string;
@@ -33,9 +35,41 @@ interface StudioSession {
   endsAt: string;
   capacity: number;
   isCancelled: boolean;
-  sessionType: { name: string; durationMinutes: number; capacity: number };
+  sessionType: { id: string; name: string; durationMinutes: number; capacity: number };
   instructor: { id: string; name: string | null } | null;
   _count: { bookings: number };
+}
+
+// ─── Time-grid layout constants ─────────────────────────────────────────────
+const HOUR_HEIGHT = 48; // px per hour
+const MIN_EVENT_HEIGHT = 22; // px — keeps even 15-min slots tappable/legible
+const DEFAULT_START_HOUR = 6;
+const DEFAULT_END_HOUR = 22;
+const GRID_GUTTER_WIDTH = 44; // px, hour-label column
+
+function getGridBounds(sessions: StudioSession[]): { startHour: number; endHour: number } {
+  let startHour = DEFAULT_START_HOUR;
+  let endHour = DEFAULT_END_HOUR;
+  for (const s of sessions) {
+    const start = toZonedTime(new Date(s.startsAt), STUDIO_TIMEZONE);
+    const end = toZonedTime(new Date(s.endsAt), STUDIO_TIMEZONE);
+    const startHourOfDay = start.getHours() + start.getMinutes() / 60;
+    const endHourOfDay = Math.min(24, end.getHours() + end.getMinutes() / 60 || 24);
+    startHour = Math.min(startHour, Math.floor(startHourOfDay));
+    endHour = Math.max(endHour, Math.ceil(endHourOfDay));
+  }
+  return { startHour, endHour };
+}
+
+function minutesFromGridStart(date: Date, startHour: number): number {
+  const zoned = toZonedTime(date, STUDIO_TIMEZONE);
+  return (zoned.getHours() - startHour) * 60 + zoned.getMinutes();
+}
+
+function formatHourLabel(hour: number): string {
+  const h = ((hour + 11) % 12) + 1;
+  const suffix = hour < 12 || hour === 24 ? 'AM' : 'PM';
+  return `${h} ${suffix}`;
 }
 
 interface SessionTypeOption {
@@ -93,6 +127,22 @@ export default function SchedulePage() {
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
 
   const weekDays = getWeekDays(weekOffset);
+  const { startHour, endHour } = useMemo(() => getGridBounds(sessions), [sessions]);
+  const gridHeight = (endHour - startHour) * HOUR_HEIGHT;
+  const hourMarks = Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i);
+
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  const todayKey = dayKey(toZonedTime(new Date(nowTick), STUDIO_TIMEZONE));
+  const nowOffset = useMemo(() => {
+    const nowMT = toZonedTime(new Date(nowTick), STUDIO_TIMEZONE);
+    const hourOfDay = nowMT.getHours() + nowMT.getMinutes() / 60;
+    if (hourOfDay < startHour || hourOfDay > endHour) return null;
+    return (hourOfDay - startHour) * HOUR_HEIGHT;
+  }, [nowTick, startHour, endHour]);
 
   const fetchSessions = useCallback(() => {
     setLoading(true);
@@ -116,11 +166,11 @@ export default function SchedulePage() {
 
   const weekLabel = `${format(weekDays[0], 'MMM d')} – ${format(weekDays[6], 'MMM d, yyyy')}`;
 
-  function openAdd(defaultDate?: string) {
+  function openAdd(defaultDate?: string, defaultTime?: string) {
     setAddForm({
       sessionTypeId: sessionTypes[0]?.id ?? '',
       localDate: defaultDate ?? dayKey(weekDays[0]),
-      localTime: '09:00',
+      localTime: defaultTime ?? '09:00',
       instructorId: NONE,
       capacityOverride: '',
     });
@@ -227,90 +277,241 @@ export default function SchedulePage() {
         </Button>
       </Box>
 
-      {/* Week grid */}
-      <Grid container spacing={1} sx={{ flex: 1 }}>
-        {weekDays.map((day) => {
-          const key = dayKey(day);
-          const daySessions = sessions
-            .filter((s) => sessionDayKey(s) === key)
-            .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
-
-          return (
-            <Grid key={key} size={{ xs: 12 / 7 }}>
-              {/* Column header */}
-              <Box sx={{ mb: 0.75, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-                  {format(day, 'EEE M/d')}
-                </Typography>
-                <IconButton
-                  size="small"
-                  onClick={() => openAdd(key)}
-                  title="Add session"
-                  sx={{ p: 0.25, color: 'text.secondary' }}
+      {/* Week time-grid */}
+      <Box sx={{ flex: 1, overflowX: 'auto' }}>
+        <Box sx={{ minWidth: 760 }}>
+          {/* Day header row */}
+          <Box sx={{ display: 'flex' }}>
+            <Box sx={{ width: GRID_GUTTER_WIDTH, flexShrink: 0 }} />
+            {weekDays.map((day) => {
+              const key = dayKey(day);
+              const isToday = key === todayKey;
+              return (
+                <Box
+                  key={key}
+                  sx={{
+                    flex: 1,
+                    minWidth: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    px: 0.5,
+                    pb: 0.75,
+                  }}
                 >
-                  <AddIcon sx={{ fontSize: 14 }} />
-                </IconButton>
-              </Box>
+                  <Typography
+                    variant="caption"
+                    sx={{ fontWeight: 600, color: isToday ? 'primary.main' : 'text.secondary' }}
+                  >
+                    {format(day, 'EEE M/d')}
+                  </Typography>
+                  <IconButton
+                    size="small"
+                    onClick={() => openAdd(key)}
+                    title="Add session"
+                    sx={{ p: 0.25, color: 'text.secondary' }}
+                  >
+                    <AddIcon sx={{ fontSize: 14 }} />
+                  </IconButton>
+                </Box>
+              );
+            })}
+          </Box>
 
-              <Stack spacing={0.5}>
-                {loading ? (
-                  <Paper
-                    sx={{ height: 64, bgcolor: 'action.hover', borderRadius: 2, animation: 'pulse 1.5s infinite' }}
-                  />
-                ) : (
-                  daySessions.map((session) => (
-                    <Paper
-                      key={session.id}
-                      component="button"
-                      onClick={() => openEdit(session)}
-                      variant="outlined"
+          {/* Time-grid body */}
+          <Box sx={{ display: 'flex', border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}>
+            {/* Hour gutter */}
+            <Box sx={{ width: GRID_GUTTER_WIDTH, flexShrink: 0, position: 'relative', height: gridHeight, bgcolor: 'background.paper' }}>
+              {hourMarks.map((hour) => (
+                <Typography
+                  key={hour}
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    position: 'absolute',
+                    top: (hour - startHour) * HOUR_HEIGHT - 7,
+                    right: 6,
+                    fontSize: '0.625rem',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {formatHourLabel(hour)}
+                </Typography>
+              ))}
+            </Box>
+
+            {/* Day columns */}
+            {weekDays.map((day) => {
+              const key = dayKey(day);
+              const isToday = key === todayKey;
+              const daySessions = sessions.filter((s) => sessionDayKey(s) === key);
+              const laidOut = layoutOverlappingEvents(daySessions);
+
+              return (
+                <Box
+                  key={key}
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const rawMinutes = ((e.clientY - rect.top) / HOUR_HEIGHT) * 60;
+                    const snapped = Math.max(0, Math.round(rawMinutes / 15) * 15);
+                    const totalMinutes = startHour * 60 + snapped;
+                    const h = Math.floor(totalMinutes / 60) % 24;
+                    const m = totalMinutes % 60;
+                    openAdd(key, `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+                  }}
+                  sx={{
+                    flex: 1,
+                    minWidth: 0,
+                    position: 'relative',
+                    height: gridHeight,
+                    borderLeft: '1px solid',
+                    borderColor: 'divider',
+                    bgcolor: isToday ? 'action.hover' : 'background.paper',
+                    cursor: 'copy',
+                  }}
+                >
+                  {/* Hour gridlines */}
+                  {hourMarks.map((hour) => (
+                    <Box
+                      key={hour}
                       sx={{
-                        width: '100%',
-                        p: 1,
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        border: '1px solid',
+                        position: 'absolute',
+                        top: (hour - startHour) * HOUR_HEIGHT,
+                        left: 0,
+                        right: 0,
+                        borderTop: '1px solid',
                         borderColor: 'divider',
-                        borderRadius: 2,
-                        bgcolor: 'background.paper',
-                        opacity: session.isCancelled ? 0.5 : 1,
-                        '&:hover': { bgcolor: 'action.hover' },
-                        transition: 'background-color 0.15s',
+                      }}
+                    />
+                  ))}
+
+                  {/* Current-time indicator */}
+                  {isToday && nowOffset !== null && (
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        top: nowOffset,
+                        left: 0,
+                        right: 0,
+                        borderTop: '2px solid',
+                        borderColor: 'error.main',
+                        zIndex: 3,
+                        pointerEvents: 'none',
                       }}
                     >
-                      <Typography
-                        variant="caption"
-                        sx={{ display: 'block', fontWeight: 600, lineHeight: 1.3 }}
-                      >
-                        {session.sessionType.name}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                        {formatInTimeZone(new Date(session.startsAt), STUDIO_TIMEZONE, 'h:mm a')}
-                      </Typography>
-                      {session.instructor?.name && (
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                          {session.instructor.name}
-                        </Typography>
-                      )}
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                        {session._count.bookings}/{session.capacity}
-                      </Typography>
-                      {session.isCancelled && (
-                        <Chip
-                          label="Cancelled"
-                          size="small"
-                          color="error"
-                          sx={{ mt: 0.25, height: 18, fontSize: '0.625rem' }}
-                        />
-                      )}
-                    </Paper>
-                  ))
-                )}
-              </Stack>
-            </Grid>
-          );
-        })}
-      </Grid>
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          left: -4,
+                          top: -4,
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          bgcolor: 'error.main',
+                        }}
+                      />
+                    </Box>
+                  )}
+
+                  {loading ? (
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        top: 8,
+                        left: 4,
+                        right: 4,
+                        height: 48,
+                        bgcolor: 'action.hover',
+                        borderRadius: 1,
+                        animation: 'pulse 1.5s infinite',
+                      }}
+                    />
+                  ) : (
+                    laidOut.map(({ event: session, lane, lanesInCluster }) => {
+                      const color = getSessionTypeColor(session.sessionType.id);
+                      const top = (minutesFromGridStart(new Date(session.startsAt), startHour) / 60) * HOUR_HEIGHT;
+                      const rawHeight =
+                        (minutesFromGridStart(new Date(session.endsAt), startHour) / 60) * HOUR_HEIGHT - top;
+                      const height = Math.max(MIN_EVENT_HEIGHT, rawHeight);
+                      const widthPct = 100 / lanesInCluster;
+                      const leftPct = lane * widthPct;
+                      const isTiny = height < 40;
+
+                      return (
+                        <Tooltip
+                          key={session.id}
+                          title={
+                            `${session.sessionType.name} · ` +
+                            formatInTimeZone(new Date(session.startsAt), STUDIO_TIMEZONE, 'h:mm a') +
+                            (session.instructor?.name ? ` · ${session.instructor.name}` : '') +
+                            ` · ${session._count.bookings}/${session.capacity}` +
+                            (session.isCancelled ? ' · Cancelled' : '')
+                          }
+                        >
+                          <Box
+                            component="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEdit(session);
+                            }}
+                            sx={{
+                              position: 'absolute',
+                              top,
+                              height,
+                              left: `calc(${leftPct}% + 2px)`,
+                              width: `calc(${widthPct}% - 4px)`,
+                              textAlign: 'left',
+                              cursor: 'pointer',
+                              border: 'none',
+                              borderLeft: '3px solid',
+                              borderLeftColor: color.border,
+                              borderRadius: '4px',
+                              bgcolor: color.bg,
+                              color: color.text,
+                              px: isTiny ? 0.5 : 0.75,
+                              py: isTiny ? 0 : 0.25,
+                              overflow: 'hidden',
+                              opacity: session.isCancelled ? 0.55 : 1,
+                              zIndex: 2,
+                              '&:hover': { filter: 'brightness(0.96)' },
+                              transition: 'filter 0.1s',
+                            }}
+                          >
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                display: 'block',
+                                fontWeight: 600,
+                                lineHeight: 1.2,
+                                fontSize: '0.6875rem',
+                                whiteSpace: isTiny ? 'nowrap' : 'normal',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                textDecoration: session.isCancelled ? 'line-through' : 'none',
+                              }}
+                            >
+                              {session.sessionType.name}
+                            </Typography>
+                            {!isTiny && (
+                              <Typography
+                                variant="caption"
+                                sx={{ display: 'block', lineHeight: 1.2, fontSize: '0.625rem', opacity: 0.85 }}
+                              >
+                                {formatInTimeZone(new Date(session.startsAt), STUDIO_TIMEZONE, 'h:mm a')}
+                                {session.instructor?.name ? ` · ${session.instructor.name}` : ''}
+                              </Typography>
+                            )}
+                          </Box>
+                        </Tooltip>
+                      );
+                    })
+                  )}
+                </Box>
+              );
+            })}
+          </Box>
+        </Box>
+      </Box>
 
       {/* Add session dialog */}
       <Dialog open={addOpen} onClose={() => setAddOpen(false)} maxWidth="xs" fullWidth>

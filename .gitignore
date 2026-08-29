@@ -40,3 +40,6 @@ prisma/*.db-journal
 
 # momence export output (contains customer PII, never commit)
 /momence-export/
+
+# pulled Google Sheets data (contains customer PII, never commit)
+/sheets-export/

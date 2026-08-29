@@ -53,8 +53,18 @@ async function getAccessToken(): Promise<string> {
   return data.access_token;
 }
 
+const MAX_RETRIES = 5;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Mutable holder so a 401 partway through the export can swap in a fresh
+// token without every call site needing to know about the refresh.
+type Auth = { token: string };
+
 async function apiGet<T>(
-  token: string,
+  auth: Auth,
   urlPath: string,
   params: Record<string, string | number | boolean | undefined> = {}
 ): Promise<T> {
@@ -63,15 +73,32 @@ async function apiGet<T>(
     if (value !== undefined) url.searchParams.set(key, String(value));
   }
 
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${auth.token}` },
+    });
 
-  if (!res.ok) {
-    throw new Error(`GET ${urlPath} failed: ${res.status} ${await res.text()}`);
+    if (res.ok) return res.json() as Promise<T>;
+
+    const bodyText = (await res.text()).slice(0, 500);
+
+    if (res.status === 401 && attempt < MAX_RETRIES) {
+      console.warn(`GET ${urlPath} got 401 (token expired), refreshing token...`);
+      auth.token = await getAccessToken();
+      continue;
+    }
+
+    if (res.status >= 500 && attempt < MAX_RETRIES) {
+      const delayMs = 1000 * 2 ** attempt;
+      console.warn(
+        `GET ${urlPath} got ${res.status}, retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`
+      );
+      await sleep(delayMs);
+      continue;
+    }
+
+    throw new Error(`GET ${urlPath} failed: ${res.status} ${bodyText}`);
   }
-
-  return res.json() as Promise<T>;
 }
 
 type Paginated<T> = {
@@ -80,7 +107,7 @@ type Paginated<T> = {
 };
 
 async function fetchAllPages<T>(
-  token: string,
+  auth: Auth,
   urlPath: string,
   extraParams: Record<string, string | number | boolean | undefined> = {}
 ): Promise<T[]> {
@@ -88,7 +115,7 @@ async function fetchAllPages<T>(
   let page = 0;
 
   while (true) {
-    const data = await apiGet<Paginated<T>>(token, urlPath, {
+    const data = await apiGet<Paginated<T>>(auth, urlPath, {
       ...extraParams,
       page,
       pageSize: PAGE_SIZE,
@@ -110,52 +137,95 @@ function writeJson(name: string, data: unknown) {
   console.log(`Wrote ${filePath}`);
 }
 
+function readJsonIfExists<T>(name: string): T | undefined {
+  const filePath = path.join(OUT_DIR, `${name}.json`);
+  if (!fs.existsSync(filePath)) return undefined;
+  console.log(`Using existing ${filePath}`);
+  return JSON.parse(fs.readFileSync(filePath, "utf8")) as T;
+}
+
+// For the two per-item loops (thousands of sequential requests each), write
+// a checkpoint to disk periodically so a mid-run crash (expired token, a
+// stretch of 502s) only costs the items fetched since the last checkpoint,
+// not the whole loop. Re-running the script picks up where it left off.
+async function fetchPerItemMap<T>(
+  auth: Auth,
+  name: string,
+  items: { id: number }[],
+  urlPath: (id: number) => string,
+  extraParams: Record<string, string | number | boolean | undefined> = {}
+): Promise<Record<number, T[]>> {
+  const results = readJsonIfExists<Record<number, T[]>>(name) ?? {};
+  const alreadyDone = Object.keys(results).length;
+  if (alreadyDone > 0) {
+    console.log(`Resuming ${name}: ${alreadyDone}/${items.length} already fetched`);
+  }
+
+  let sinceCheckpoint = 0;
+  for (const item of items) {
+    if (results[item.id]) continue;
+    results[item.id] = await fetchAllPages<T>(auth, urlPath(item.id), extraParams);
+    sinceCheckpoint += 1;
+    if (sinceCheckpoint >= 200) {
+      writeJson(name, results);
+      sinceCheckpoint = 0;
+    }
+  }
+  writeJson(name, results);
+  return results;
+}
+
 async function main() {
   console.log("Authenticating with Momence...");
-  const token = await getAccessToken();
+  const auth: Auth = { token: await getAccessToken() };
 
-  console.log("Fetching members...");
-  const members = await fetchAllPages<{ id: number }>(token, "/api/v2/host/members");
-  writeJson("members", members);
+  let members = readJsonIfExists<{ id: number }[]>("members");
+  if (!members) {
+    console.log("Fetching members...");
+    members = await fetchAllPages<{ id: number }>(auth, "/api/v2/host/members");
+    writeJson("members", members);
+  }
 
-  console.log("Fetching sessions...");
-  const sessions = await fetchAllPages<{ id: number }>(token, "/api/v2/host/sessions", {
-    includeCancelled: true,
-  });
-  writeJson("sessions", sessions);
+  let sessions = readJsonIfExists<{ id: number }[]>("sessions");
+  if (!sessions) {
+    console.log("Fetching sessions...");
+    sessions = await fetchAllPages<{ id: number }>(auth, "/api/v2/host/sessions", {
+      includeCancelled: true,
+    });
+    writeJson("sessions", sessions);
+  }
 
   console.log(`Fetching bookings for ${sessions.length} sessions...`);
-  const sessionBookings: Record<number, unknown[]> = {};
-  for (const session of sessions) {
-    sessionBookings[session.id] = await fetchAllPages(
-      token,
-      `/api/v2/host/sessions/${session.id}/bookings`
-    );
-  }
-  writeJson("session-bookings", sessionBookings);
-
-  console.log("Fetching appointment reservations...");
-  const appointments = await fetchAllPages(
-    token,
-    "/api/v2/host/appointments/reservations",
-    { includeCancelled: true, includeCancelledAttendees: true }
+  await fetchPerItemMap(
+    auth,
+    "session-bookings",
+    sessions,
+    (id) => `/api/v2/host/sessions/${id}/bookings`
   );
-  writeJson("appointments", appointments);
+
+  let appointments = readJsonIfExists<unknown[]>("appointments");
+  if (!appointments) {
+    console.log("Fetching appointment reservations...");
+    appointments = await fetchAllPages(
+      auth,
+      "/api/v2/host/appointments/reservations",
+      { includeCancelled: true, includeCancelledAttendees: true }
+    );
+    writeJson("appointments", appointments);
+  }
 
   console.log(`Fetching active bought memberships for ${members.length} members...`);
-  const boughtMemberships: Record<number, unknown[]> = {};
-  for (const member of members) {
-    boughtMemberships[member.id] = await fetchAllPages(
-      token,
-      `/api/v2/host/members/${member.id}/bought-memberships/active`,
-      { includeFrozen: true }
-    );
-  }
-  writeJson("bought-memberships", boughtMemberships);
+  await fetchPerItemMap(
+    auth,
+    "bought-memberships",
+    members,
+    (id) => `/api/v2/host/members/${id}/bought-memberships/active`,
+    { includeFrozen: true }
+  );
 
   console.log("Fetching sales...");
   try {
-    const sales = await fetchAllPages(token, "/api/v2/host/sales");
+    const sales = await fetchAllPages(auth, "/api/v2/host/sales");
     writeJson("sales", sales);
   } catch (err) {
     console.warn(
