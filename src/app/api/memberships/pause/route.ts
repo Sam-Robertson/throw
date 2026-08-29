@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
-import { inngest } from "@/lib/inngest";
+import { sendInngestEvent } from "@/lib/inngest";
 
 export async function POST() {
   const session = await auth();
@@ -38,7 +38,7 @@ export async function POST() {
     data: { membershipId: membership.id, eventType: "PAUSED" },
   });
 
-  await inngest.send({
+  await sendInngestEvent({
     name: "membership/paused",
     data: { membershipId: membership.id, userId },
   });

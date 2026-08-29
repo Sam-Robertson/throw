@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { inngest } from "@/lib/inngest";
+import { sendInngestEvent } from "@/lib/inngest";
 
 export interface OrderTotalsInput {
   unitPriceCents: number;
@@ -173,7 +173,7 @@ export async function maybeCompletePosOrder(orderId: string) {
       });
   }
 
-  await inngest.send({ name: "pos/order.completed", data: { orderId: order.id } });
+  await sendInngestEvent({ name: "pos/order.completed", data: { orderId: order.id } });
 
   return prisma.posOrder.findUniqueOrThrow({
     where: { id: orderId },

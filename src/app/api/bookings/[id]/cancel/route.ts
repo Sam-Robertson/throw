@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { inngest } from "@/lib/inngest";
+import { sendInngestEvent } from "@/lib/inngest";
 import { refundTicket } from "@/lib/credits";
 
 export async function POST(
@@ -45,7 +45,7 @@ export async function POST(
     data: { status: "CANCELLED", cancelledAt: new Date() },
   });
 
-  await inngest.send({
+  await sendInngestEvent({
     name: "booking/cancelled",
     data: {
       bookingId: id,

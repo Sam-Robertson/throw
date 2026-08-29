@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { inngest } from "@/lib/inngest";
+import { sendInngestEvent } from "@/lib/inngest";
 import { consumeTicket } from "@/lib/credits";
 
 export async function GET(request: NextRequest) {
@@ -187,7 +187,7 @@ export async function POST(req: NextRequest) {
   });
 
   if (bookingStatus === "CONFIRMED") {
-    await inngest.send({
+    await sendInngestEvent({
       name: "booking/confirmed",
       data: { bookingId: booking.id, userId, studioSessionId },
     });

@@ -3,7 +3,7 @@ import { stripe } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
-import { inngest } from "@/lib/inngest";
+import { sendInngestEvent } from "@/lib/inngest";
 import { sendSms } from "@/lib/sms";
 import { maybeCompletePosOrder } from "@/lib/pos";
 import { grantPeriodAllowance } from "@/lib/credits";
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
           membership.currentPeriodStart,
           membership.currentPeriodEnd,
         );
-        await inngest.send({
+        await sendInngestEvent({
           name: "membership/created",
           data: { membershipId: membership.id, userId },
         });
@@ -336,7 +336,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (bookingStatus === "CONFIRMED") {
-        await inngest.send({
+        await sendInngestEvent({
           name: "booking/confirmed",
           data: { bookingId: booking.id, userId, studioSessionId },
         });
