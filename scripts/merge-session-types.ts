@@ -52,6 +52,15 @@ function canonicalize(name: string): string {
     return "Provo - Clay Together - Pottery Wheel Experience";
   }
 
+  // Condense the ~31 one-off specialty workshops (each a different topic
+  // taught by a different instructor, one occurrence apiece) into a single
+  // general "Workshop" class, per the studio's request. "Hand Building
+  // Workshop" is excluded — that's a standing, actively-priced core catalog
+  // class from before the Momence import, not a one-off named workshop.
+  if (/workshop/i.test(name) && name !== "Hand Building Workshop") {
+    return "General Workshop";
+  }
+
   return name;
 }
 
