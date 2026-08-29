@@ -278,7 +278,7 @@ export default function SchedulePage() {
       </Box>
 
       {/* Week time-grid */}
-      <Box sx={{ flex: 1, overflowX: 'auto' }}>
+      <Box sx={{ overflowX: 'auto', overflowY: 'hidden' }}>
         <Box sx={{ minWidth: 760 }}>
           {/* Day header row */}
           <Box sx={{ display: 'flex' }}>
@@ -318,8 +318,17 @@ export default function SchedulePage() {
             })}
           </Box>
 
-          {/* Time-grid body */}
-          <Box sx={{ display: 'flex', border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}>
+          {/* Time-grid body — its own scroll region so the day headers above stay put */}
+          <Box
+            sx={{
+              display: 'flex',
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 2,
+              maxHeight: 'calc(100vh - 260px)',
+              overflowY: 'auto',
+            }}
+          >
             {/* Hour gutter */}
             <Box sx={{ width: GRID_GUTTER_WIDTH, flexShrink: 0, position: 'relative', height: gridHeight, bgcolor: 'background.paper' }}>
               {hourMarks.map((hour) => (
