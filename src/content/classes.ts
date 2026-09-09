@@ -192,7 +192,7 @@ export const CLASS_PAGES: ClassPage[] = [
       cta: 'See group pricing',
       href: '/classes/group-events',
       illustration: {
-        src: '/site/illo-pot-trio.svg',
+        src: '/site/illo-pot-trio.png',
         alt: 'Three pottery characters standing together',
       },
     },
@@ -262,7 +262,7 @@ export const CLASS_PAGES: ClassPage[] = [
       heading: 'Doing something special?',
       body: 'Let us know and we’ll see if we can make it happen',
       illustration: {
-        src: '/site/illo-pot-daisy.svg',
+        src: '/site/illo-pot-daisy.png',
         alt: 'A sage pottery character with a daisy',
       },
     },

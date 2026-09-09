@@ -80,7 +80,7 @@ export const EVENTS = {
   cta: 'Plan your event',
   href: '/classes/group-events',
   illustration: {
-    src: '/site/illo-pot-trio.svg',
+    src: '/site/illo-pot-trio.png',
     alt: 'Three pottery characters standing together',
   } as Photo,
 };
@@ -108,9 +108,11 @@ export const LOCATIONS: Location[] = [
     ctaMobile: 'Choose a class at provo',
     ctaDesktop: 'Book at provo',
     href: '/schedule?location=provo',
-    photos: [1, 2, 3, 4, 5].map((n) => ({
+    // Only photo 1 was recoverable from the comps; the design shows a
+    // five-slide carousel. Add studio-provo-2…5.jpg and extend this list.
+    photos: [1].map((n) => ({
       src: `/site/studio-provo-${n}.jpg`,
-      alt: `Inside the Provo studio (${n} of 5)`,
+      alt: `Inside the Provo studio`,
     })),
   },
   {
@@ -125,9 +127,10 @@ export const LOCATIONS: Location[] = [
     ctaMobile: 'Join the waitlist',
     ctaDesktop: 'Join the wait list',
     href: 'mailto:info@throwartstudio.com?subject=Lehi%20studio%20waitlist',
-    photos: [1, 2, 3, 4, 5].map((n) => ({
+    // As above — add studio-lehi-2…5.jpg to restore the five-slide carousel.
+    photos: [1].map((n) => ({
       src: `/site/studio-lehi-${n}.jpg`,
-      alt: `Inside the Lehi studio (${n} of 5)`,
+      alt: `Inside the Lehi studio`,
     })),
   },
 ];

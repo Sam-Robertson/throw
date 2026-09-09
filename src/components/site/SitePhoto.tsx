@@ -60,9 +60,14 @@ export function SitePhoto({
         <span
           // Tints whatever is behind rather than painting a colour of its own,
           // so a card's white or the page's creme still reads correctly.
+          // In development the missing filename is printed so it's obvious what
+          // to drop into /public/site; in production it stays a quiet block —
+          // customers should never be shown an asset filename.
           className="text-details absolute inset-0 flex items-center justify-center bg-black/[0.04] px-3 text-center text-[11px] leading-tight break-all"
         >
-          {photo.src.replace('/site/', '')}
+          {process.env.NODE_ENV === 'production'
+            ? ''
+            : photo.src.replace('/site/', '')}
         </span>
       )}
     </div>
