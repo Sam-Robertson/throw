@@ -176,6 +176,11 @@ model Location {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Stripe Terminal Location (tml_...) this studio maps to. Card readers are
+  // registered against a Stripe Terminal Location, so this is what lets the POS
+  // list "the readers in this studio". Null until linked in Studio setup.
+  stripeTerminalLocationId String?
+
   sessionTypes           SessionType[]
   studioSessions         StudioSession[]
   memberships            Membership[]

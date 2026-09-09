@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { sendInngestEvent } from "@/lib/inngest";
 import { sendSms } from "@/lib/sms";
 import { maybeCompletePosOrder } from "@/lib/pos";
+import { TERMINAL_METHOD, settleTerminalPayment } from "@/lib/terminal";
 import { grantPeriodAllowance } from "@/lib/credits";
 import { addMonths } from "date-fns";
 import type Stripe from "stripe";
@@ -365,12 +366,22 @@ export async function POST(req: NextRequest) {
         where: { stripePaymentIntentId: intent.id },
       });
       if (payment && payment.status !== "SUCCEEDED") {
-        const { count } = await prisma.posPayment.updateMany({
-          where: { id: payment.id, status: "PENDING" },
-          data: { status: "SUCCEEDED" },
-        });
-        if (count > 0) {
-          await maybeCompletePosOrder(payment.orderId);
+        if (payment.method === TERMINAL_METHOD) {
+          // Reader payments can carry an on-reader tip, so the captured amount
+          // is larger than what we recorded when the PaymentIntent was created.
+          // settleTerminalPayment reconciles the payment amount and the order's
+          // tip before completing; settling it here the plain way would silently
+          // drop the tip. Same PENDING guard, so this and the status endpoint
+          // stay mutually idempotent.
+          await settleTerminalPayment(payment.id, intent);
+        } else {
+          const { count } = await prisma.posPayment.updateMany({
+            where: { id: payment.id, status: "PENDING" },
+            data: { status: "SUCCEEDED" },
+          });
+          if (count > 0) {
+            await maybeCompletePosOrder(payment.orderId);
+          }
         }
       }
       // If no matching PosPayment or it's already SUCCEEDED, this is a no-op —

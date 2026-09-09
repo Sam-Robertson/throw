@@ -17,9 +17,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { getStripePromise } from './stripeClient';
+import { TerminalPane } from './TerminalPane';
 import { formatMoney, remainingBalanceCents, type PosOrder } from './types';
 
-type View = 'methods' | 'cash' | 'card' | 'giftcard' | 'comp' | 'success';
+type View = 'methods' | 'cash' | 'terminal' | 'card' | 'giftcard' | 'comp' | 'success';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 const CASH_QUICK_CENTS = [2000, 5000, 10000]; // $20, $50, $100
@@ -95,9 +96,19 @@ export function PaymentSheet({
 
         {view === 'methods' && (
           <div className="grid grid-cols-2 gap-2">
+            <Button
+              className="col-span-2 min-h-16 text-base"
+              onClick={() => setView('terminal')}
+            >
+              Tap or insert card
+            </Button>
             <Button className="min-h-14" onClick={() => setView('cash')}>Cash</Button>
-            <Button className="min-h-14" onClick={() => setView('card')}>Card</Button>
             <Button className="min-h-14" onClick={() => setView('giftcard')}>Gift Card</Button>
+            {/* Manual entry stays available for phone orders and as a fallback
+                when the reader is offline. */}
+            <Button className="min-h-14" variant="outline" onClick={() => setView('card')}>
+              Enter card
+            </Button>
             {isAdmin && (
               <Button className="min-h-14" variant="outline" onClick={() => setView('comp')}>
                 Comp
@@ -115,6 +126,19 @@ export function PaymentSheet({
             setError={setError}
             onBack={() => setView('methods')}
             onResult={handleOrderResult}
+          />
+        )}
+
+        {view === 'terminal' && (
+          <TerminalPane
+            orderId={order.id}
+            locationId={order.locationId}
+            remaining={remaining}
+            busy={busy}
+            setBusy={setBusy}
+            setError={setError}
+            onBack={() => setView('methods')}
+            onResult={(updated) => handleOrderResult(updated)}
           />
         )}
 
