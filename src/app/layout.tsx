@@ -14,8 +14,12 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <body className={`${satoshi.variable} ${gtAlpina.variable}`}>
+    // Font variables go on <html>, not <body>: globals.css derives --font-serif
+    // and --font-sans from them at :root, and a custom property is substituted
+    // using the value on the element that declares it — so if --font-gt-alpina
+    // were only defined on <body>, --font-serif would resolve to nothing.
+    <html lang="en" className={`${satoshi.variable} ${gtAlpina.variable}`}>
+      <body>
         <AppRouterCacheProvider>
           <MuiProvider>
             <UTMCapture />

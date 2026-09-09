@@ -57,3 +57,126 @@
 body {
   font-family: var(--font-satoshi), system-ui, -apple-system, sans-serif;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Marketing design system — "Design system (2).png"
+
+   The public marketing site (site nav/footer, home, class pages) is built on
+   these tokens plus plain elements, NOT on MUI. The MUI theme in src/lib/theme.ts
+   still drives admin/staff/customer surfaces and is deliberately left alone.
+
+   Hex values are SAMPLED from the swatches in the PNG rather than typed from
+   their captions — several captions disagree with the swatch they sit under
+   ("Primary Fill" is captioned #B8C6B1, the same as Primary Stroke, but the
+   swatch is a near-white green; "Fill" is captioned 30% black but renders at
+   10%). The pixels are the source of truth.
+   ──────────────────────────────────────────────────────────────────────────── */
+@theme {
+  /* Colors */
+  --color-cream: #f5f0ec; /* Creme Background */
+  --color-headline: #000000; /* Headlines */
+  --color-body: #4d4d4d; /* Body — 70% black */
+  --color-details: #b2b2b2; /* Details — 30% black */
+  --color-fill: #e5e5e5; /* Fill — disabled surfaces */
+  --color-sage: #758c69; /* Primary */
+  --color-sage-stroke: #b8c6b1; /* Primary Stroke */
+  --color-sage-fill: #f1f5ee; /* Primary Fill */
+  --color-terracotta: #c28043; /* Secondary */
+  --color-rust: #d56032; /* Tertiary */
+
+  /* Type families */
+  --font-serif: var(--font-gt-alpina), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-satoshi), system-ui, -apple-system, sans-serif;
+}
+
+/* ── The eight text styles, verbatim from the design system ────────────────
+   Named utilities rather than a size scale, because the doc specifies each
+   style as a fixed size/line-height pair (not a ratio) and pairs each with a
+   specific family and weight. Mobile-first: the `t-hero` and `t-h-xl` sizes
+   below are the desktop values from the doc; the mobile designs draw them
+   smaller, so those two step up at md. */
+@layer components {
+  /* Sizes below are measured off the comps, which run larger than the sheet's
+     captions: the sheet lists Hero at 64px, but "Learn to throw" measures 60px
+     on the 402px mobile frame and ~96px on the 1728px desktop frame. Likewise
+     the section headings measure 40px mobile / 48px desktop against a sheet
+     that only documents 40px. The comps win — they are the final designs. */
+  .t-hero {
+    font-family: var(--font-serif);
+    font-weight: 400;
+    font-size: 60px;
+    line-height: 66px;
+    letter-spacing: -0.01em;
+  }
+  @media (width >= 48rem) {
+    .t-hero {
+      font-size: 96px;
+      line-height: 90px;
+    }
+  }
+
+  .t-h-xl {
+    font-family: var(--font-serif);
+    font-weight: 400;
+    font-size: 40px;
+    line-height: 44px;
+  }
+  @media (width >= 48rem) {
+    .t-h-xl {
+      font-size: 48px;
+      line-height: 52px;
+    }
+  }
+
+  .t-h-lg {
+    font-family: var(--font-serif);
+    font-weight: 400;
+    font-size: 32px;
+    line-height: 42px;
+  }
+
+  .t-h-lg-sans {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: 32px;
+    line-height: 42px;
+  }
+
+  .t-body-lg {
+    font-family: var(--font-sans);
+    font-weight: 400;
+    font-size: 20px;
+    line-height: 32px;
+  }
+  .t-body-lg-bold {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: 20px;
+    line-height: 32px;
+  }
+
+  .t-body-sm {
+    font-family: var(--font-sans);
+    font-weight: 400;
+    font-size: 16px;
+    line-height: 27px;
+  }
+  .t-body-sm-bold {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: 16px;
+    line-height: 27px;
+  }
+
+  /* Section eyebrow — uppercase letterspaced Satoshi bold ("1ST HOUR",
+     "4 WEEK COURSE", "SHARED WHEEL"). Not in the doc's text-style list, but
+     used consistently across all four class-page designs. */
+  .t-eyebrow {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: 15px;
+    line-height: 24px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+}

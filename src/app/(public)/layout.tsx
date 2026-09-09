@@ -1,6 +1,6 @@
-import { auth } from "@/auth";
-import { PublicNav } from "@/components/shared/PublicNav";
-import { PublicFooter } from "@/components/shared/PublicFooter";
+import { auth } from '@/auth';
+import { SiteNav } from '@/components/site/SiteNav';
+import { SiteFooter } from '@/components/site/SiteFooter';
 
 export default async function PublicLayout({
   children,
@@ -14,9 +14,9 @@ export default async function PublicLayout({
 
   return (
     <>
-      <PublicNav user={user} />
+      <SiteNav user={user} />
       <main>{children}</main>
-      <PublicFooter />
+      <SiteFooter />
     </>
   );
 }
