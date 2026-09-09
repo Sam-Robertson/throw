@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { RichTextEditor } from "@/components/shared/RichTextEditor";
 
 const SLUG_RE = /^[a-z0-9-]+$/;
 
@@ -140,18 +140,14 @@ export function LandingPageForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="lp-body">Body HTML (optional)</Label>
-        <Textarea
+        <Label htmlFor="lp-body">Body (optional)</Label>
+        <RichTextEditor
           id="lp-body"
           value={bodyHtml}
-          onChange={(e) => setBodyHtml(e.target.value)}
-          rows={8}
-          placeholder="<p>Your content here…</p>"
-          className="font-mono text-sm"
+          onChange={setBodyHtml}
+          placeholder="Your content here…"
+          minHeight={220}
         />
-        <p className="text-xs text-muted-foreground">
-          Basic HTML is supported: &lt;p&gt;, &lt;h2&gt;, &lt;ul&gt;, &lt;li&gt;, &lt;strong&gt;, &lt;a&gt;, etc.
-        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-4">

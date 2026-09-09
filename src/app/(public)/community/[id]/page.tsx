@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { PostCard } from "../_components/PostCard";
 import { CommentsSection } from "../_components/CommentsSection";
 import { ArrowLeft } from "lucide-react";
+import { richTextToPlain } from "@/lib/richText";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -18,7 +19,7 @@ export async function generateMetadata({ params }: Props) {
   });
   if (!post) return { title: "Post not found — Throw" };
   return {
-    title: `${post.title ?? post.body.slice(0, 50)} — Community — Throw`,
+    title: `${post.title ?? richTextToPlain(post.body).slice(0, 50)} — Community — Throw`,
   };
 }
 

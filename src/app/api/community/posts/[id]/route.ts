@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { sanitizeRichText } from "@/lib/richText";
 
 export async function GET(
   _req: NextRequest,
@@ -64,7 +65,7 @@ export async function PATCH(
     where: { id },
     data: {
       ...(body.title !== undefined && { title: body.title }),
-      ...(body.body !== undefined && { body: body.body }),
+      ...(body.body !== undefined && { body: sanitizeRichText(String(body.body)) }),
       ...(body.imageUrl !== undefined && { imageUrl: body.imageUrl }),
       ...(body.isPublished !== undefined && { isPublished: body.isPublished }),
     },

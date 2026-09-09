@@ -13,6 +13,8 @@ import Button from '@mui/material/Button';
 import Link from '@mui/material/Link';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutlineRounded';
 import { LikeButton } from './LikeButton';
+import { RichText } from '@/components/shared/RichText';
+import { richTextToPlain } from '@/lib/richText';
 import type { Role } from '@prisma/client';
 
 interface Post {
@@ -43,14 +45,17 @@ function getInitials(name: string | null): string {
   return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
 }
 
+/** Roughly the length that overflows the clamped preview height. */
 const TRUNCATE_LENGTH = 300;
 
 export function PostCard({ post, isAuthenticated, truncate = false }: Props) {
   const [expanded, setExpanded] = useState(false);
 
-  const shouldTruncate = truncate && post.body.length > TRUNCATE_LENGTH;
-  const displayBody =
-    shouldTruncate && !expanded ? post.body.slice(0, TRUNCATE_LENGTH) + '…' : post.body;
+  // Length is measured on the text, and shortening is done by clamping the
+  // rendered element — slicing the raw body would cut through a tag now that
+  // posts are HTML.
+  const shouldTruncate =
+    truncate && richTextToPlain(post.body).length > TRUNCATE_LENGTH;
 
   const roleLabel = ROLE_LABELS[post.author.role];
 
@@ -97,13 +102,9 @@ export function PostCard({ post, isAuthenticated, truncate = false }: Props) {
         )}
 
         {/* Body */}
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{ whiteSpace: 'pre-line' }}
-        >
-          {displayBody}
-        </Typography>
+        <Box sx={{ color: 'text.secondary', fontSize: '0.875rem', lineHeight: 1.5 }}>
+          <RichText value={post.body} clamp={shouldTruncate && !expanded} />
+        </Box>
         {shouldTruncate && !expanded && (
           <Button
             size="small"

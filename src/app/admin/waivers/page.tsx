@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { RichTextEditor } from "@/components/shared/RichTextEditor";
+import { isRichTextEmpty, richTextToPlain } from "@/lib/richText";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,7 +12,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Tooltip,
   TooltipContent,
@@ -169,8 +170,8 @@ export default function AdminWaiversPage() {
                 </TableCell>
                 <TableCell className="max-w-xs text-sm text-muted-foreground">
                   <span className="line-clamp-2">
-                    {v.content.slice(0, 100)}
-                    {v.content.length > 100 ? "…" : ""}
+                    {richTextToPlain(v.content).slice(0, 100)}
+                    {richTextToPlain(v.content).length > 100 ? "…" : ""}
                   </span>
                 </TableCell>
                 <TableCell className="text-right">{v._count.signatures}</TableCell>
@@ -241,14 +242,12 @@ export default function AdminWaiversPage() {
                 <label className="text-sm font-medium" htmlFor="content">
                   Waiver content
                 </label>
-                <Textarea
+                <RichTextEditor
                   id="content"
                   value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  rows={16}
+                  onChange={setContent}
                   placeholder="Enter the full waiver text…"
-                  required
-                  className="font-mono text-xs"
+                  minHeight={360}
                 />
               </div>
               {error && <p className="text-sm text-destructive">{error}</p>}
@@ -266,7 +265,7 @@ export default function AdminWaiversPage() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={submitting || !content.trim()}>
+                <Button type="submit" disabled={submitting || isRichTextEmpty(content)}>
                   {submitting ? "Publishing…" : "Publish"}
                 </Button>
               </DialogFooter>

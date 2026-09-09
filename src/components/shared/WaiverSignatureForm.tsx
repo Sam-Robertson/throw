@@ -6,6 +6,7 @@ import SignatureCanvas from "react-signature-canvas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RichText } from "@/components/shared/RichText";
 
 interface Props {
   waiverVersionId: string;
@@ -87,9 +88,7 @@ export function WaiverSignatureForm({
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* 1. Waiver text */}
       <div className="max-h-96 overflow-y-auto rounded-lg border bg-muted/30 p-6">
-        <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-          {content}
-        </pre>
+        <RichText value={content} className="text-sm leading-relaxed" />
       </div>
 
       <div className="flex items-start gap-3">

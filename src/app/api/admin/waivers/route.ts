@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { sanitizeRichText, isRichTextEmpty } from "@/lib/richText";
 
 export async function GET() {
   const session = await auth();
@@ -28,7 +29,10 @@ export async function POST(request: NextRequest) {
 
   const { content, locationId } = await request.json();
 
-  if (!content?.trim())
+  // Cleaned here, not just in the editor — this route accepts arbitrary JSON.
+  const waiverContent =
+    typeof content === "string" ? sanitizeRichText(content) : "";
+  if (!waiverContent || isRichTextEmpty(waiverContent))
     return NextResponse.json({ error: "Content is required" }, { status: 400 });
   if (!locationId)
     return NextResponse.json({ error: "locationId is required" }, { status: 400 });
@@ -49,7 +53,7 @@ export async function POST(request: NextRequest) {
     return tx.waiverVersion.create({
       data: {
         locationId,
-        content,
+        content: waiverContent,
         version: nextVersion,
         publishedAt: new Date(),
         isActive: true,

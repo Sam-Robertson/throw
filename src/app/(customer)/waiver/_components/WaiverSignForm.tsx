@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { formatMountainTime } from "@/lib/timezone";
+import { RichText } from "@/components/shared/RichText";
 
 interface Props {
   waiverVersionId: string;
@@ -51,9 +52,7 @@ export function WaiverSignForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="max-h-96 overflow-y-auto rounded-lg border bg-muted/30 p-6">
-        <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-          {content}
-        </pre>
+        <RichText value={content} className="text-sm leading-relaxed" />
       </div>
 
       <div className="flex items-start gap-3">

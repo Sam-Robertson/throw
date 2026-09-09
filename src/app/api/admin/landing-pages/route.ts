@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { sanitizeRichText } from "@/lib/richText";
 
 const SLUG_RE = /^[a-z0-9-]+$/;
 
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
       title: body.title,
       headline: body.headline,
       subheadline: body.subheadline || null,
-      bodyHtml: body.bodyHtml || null,
+      bodyHtml: body.bodyHtml ? sanitizeRichText(body.bodyHtml) : null,
       ctaLabel: body.ctaLabel,
       ctaUrl: body.ctaUrl,
       heroImageUrl: body.heroImageUrl || null,

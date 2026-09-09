@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import type { Metadata } from "next";
+import { RichText } from "@/components/shared/RichText";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -44,9 +45,9 @@ export default async function LandingPageRoute({ params }: Props) {
         )}
 
         {page.bodyHtml && (
-          <div
-            className="mb-12 space-y-4 text-base leading-relaxed [&_a]:underline [&_h2]:text-2xl [&_h2]:font-semibold [&_h3]:text-xl [&_h3]:font-semibold [&_li]:ml-4 [&_li]:list-disc [&_p]:text-muted-foreground"
-            dangerouslySetInnerHTML={{ __html: page.bodyHtml }}
+          <RichText
+            value={page.bodyHtml}
+            className="mb-12 text-base leading-relaxed [&_p]:text-muted-foreground"
           />
         )}
 

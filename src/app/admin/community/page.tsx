@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { richTextToPlain } from "@/lib/richText";
 
 interface Post {
   id: string;
@@ -88,7 +89,7 @@ export default function AdminCommunityPage() {
             </thead>
             <tbody>
               {posts.map((post) => {
-                const preview = post.title ?? post.body.slice(0, 50);
+                const preview = post.title ?? richTextToPlain(post.body).slice(0, 50);
                 return (
                   <tr key={post.id} className="border-b last:border-0">
                     <td className="max-w-xs px-4 py-2">

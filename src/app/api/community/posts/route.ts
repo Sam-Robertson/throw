@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { sanitizeRichText, isRichTextEmpty } from "@/lib/richText";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -56,7 +57,10 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => null);
-  if (!body?.body) {
+  // The editor constrains what staff can produce, but this route accepts
+  // arbitrary JSON, so the HTML is cleaned here rather than trusted.
+  const postBody = typeof body?.body === "string" ? sanitizeRichText(body.body) : "";
+  if (!postBody || isRichTextEmpty(postBody)) {
     return NextResponse.json({ error: "body is required" }, { status: 400 });
   }
 
@@ -64,7 +68,7 @@ export async function POST(req: NextRequest) {
     data: {
       authorId: session.user.id,
       title: body.title ?? null,
-      body: body.body,
+      body: postBody,
       imageUrl: body.imageUrl ?? null,
       isPublished: body.isPublished ?? true,
     },

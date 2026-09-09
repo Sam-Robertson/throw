@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { sanitizeRichText } from "@/lib/richText";
 
 const SLUG_RE = /^[a-z0-9-]+$/;
 
@@ -67,7 +68,9 @@ export async function PATCH(
       ...(body.title !== undefined && { title: body.title }),
       ...(body.headline !== undefined && { headline: body.headline }),
       ...(body.subheadline !== undefined && { subheadline: body.subheadline || null }),
-      ...(body.bodyHtml !== undefined && { bodyHtml: body.bodyHtml || null }),
+      ...(body.bodyHtml !== undefined && {
+        bodyHtml: body.bodyHtml ? sanitizeRichText(body.bodyHtml) : null,
+      }),
       ...(body.ctaLabel !== undefined && { ctaLabel: body.ctaLabel }),
       ...(body.ctaUrl !== undefined && { ctaUrl: body.ctaUrl }),
       ...(body.heroImageUrl !== undefined && { heroImageUrl: body.heroImageUrl || null }),

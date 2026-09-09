@@ -4,9 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { RichTextEditor } from "@/components/shared/RichTextEditor";
+import { isRichTextEmpty } from "@/lib/richText";
 
 interface PostFormData {
   title: string;
@@ -32,7 +33,7 @@ export function PostForm({ postId, initialData, mode }: Props) {
   const [error, setError] = useState("");
 
   async function handleSubmit(publishedOverride?: boolean) {
-    if (!body.trim()) {
+    if (isRichTextEmpty(body)) {
       setError("Body is required.");
       return;
     }
@@ -102,14 +103,13 @@ export function PostForm({ postId, initialData, mode }: Props) {
         <Label htmlFor="body">
           Body <span className="text-destructive">*</span>
         </Label>
-        <Textarea
+        <RichTextEditor
           id="body"
           value={body}
-          onChange={(e) => setBody(e.target.value)}
+          onChange={setBody}
           placeholder="Write something..."
-          rows={8}
           disabled={loading}
-          className="min-h-[160px]"
+          minHeight={200}
         />
       </div>
 
