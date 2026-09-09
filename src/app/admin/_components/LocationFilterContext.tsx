@@ -10,6 +10,16 @@ import { shortLocationName } from "@/lib/locationName";
  */
 export const ALL_LOCATIONS = "__all__";
 
+/**
+ * Scope the admin starts in when the user has no stored preference.
+ *
+ * Provo is the only studio actually operating — Lehi's schedule exists but
+ * doesn't open until October — so landing on the franchise view would show
+ * staff a mix of live and not-yet-open sessions. Falls back to the franchise
+ * view if no studio matches. Change or drop this once Lehi is running.
+ */
+const DEFAULT_SCOPE_SHORT_NAME = "Provo";
+
 export interface LocationOption {
   id: string;
   name: string;
@@ -46,9 +56,13 @@ export function LocationFilterProvider({ children }: { children: React.ReactNode
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let hadStored = false;
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored) setSelectedLocationIdState(stored);
+      if (stored) {
+        hadStored = true;
+        setSelectedLocationIdState(stored);
+      }
     } catch {
       // ignore — private browsing, storage disabled, etc.
     }
@@ -65,19 +79,26 @@ export function LocationFilterProvider({ children }: { children: React.ReactNode
           }));
         setLocations(active);
 
-        // A stored id can outlive the location it points at — deactivated,
-        // deleted, or a different environment's database. Left alone, the
-        // switcher would fall back to showing "All Locations" while every page
-        // kept filtering by the dead id and rendering nothing.
+        const fallback =
+          active.find((l) => l.shortName === DEFAULT_SCOPE_SHORT_NAME)?.id ?? ALL_LOCATIONS;
+
         setSelectedLocationIdState((current) => {
+          // Nothing stored yet — start in the default scope rather than the
+          // franchise view. `hadStored` is captured above, before the fetch.
+          if (!hadStored) return fallback;
           if (current === ALL_LOCATIONS) return current;
           if (active.some((l) => l.id === current)) return current;
+
+          // A stored id can outlive the location it points at — deactivated,
+          // deleted, or a different environment's database. Left alone, the
+          // switcher would fall back to showing "All Locations" while every
+          // page kept filtering by the dead id and rendering nothing.
           try {
             window.localStorage.removeItem(STORAGE_KEY);
           } catch {
             // ignore
           }
-          return ALL_LOCATIONS;
+          return fallback;
         });
       })
       .finally(() => setLoading(false));

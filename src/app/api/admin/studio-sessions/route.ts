@@ -23,6 +23,7 @@ async function requireStaff(): Promise<GuardResult> {
 const sessionIncludes = {
   sessionType: { select: { id: true, name: true, durationMinutes: true, capacity: true } },
   instructor: { select: { id: true, name: true } },
+  location: { select: { id: true, name: true } },
   _count: { select: { bookings: true } },
 } as const;
 
@@ -33,6 +34,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const fromParam = searchParams.get("from");
   const toParam = searchParams.get("to");
+  const locationId = searchParams.get("locationId");
 
   let fromDate: Date;
   let toDate: Date;
@@ -49,7 +51,10 @@ export async function GET(req: NextRequest) {
   }
 
   const sessions = await prisma.studioSession.findMany({
-    where: { startsAt: { gte: fromDate, lt: toDate } },
+    where: {
+      startsAt: { gte: fromDate, lt: toDate },
+      ...(locationId ? { locationId } : {}),
+    },
     include: sessionIncludes,
     orderBy: { startsAt: "asc" },
   });
@@ -98,6 +103,7 @@ export async function POST(req: NextRequest) {
     data: {
       sessionTypeId: String(sessionTypeId),
       instructorId: instructorId ? String(instructorId) : null,
+      locationId: sessionType.locationId,
       startsAt,
       endsAt,
       capacity:

@@ -393,6 +393,12 @@ model SessionType {
   dropInPriceCents Int
   isBusyWindow     Boolean  @default(false)
   isActive         Boolean  @default(true)
+  // Whether this shows up in the reusable "Event Templates" picker (recurring
+  // classes/courses meant to be scheduled again) vs. a one-off historical
+  // artifact (a private event, a single workshop) that shouldn't clutter it.
+  // New rows default false; creating a class type by hand through the admin
+  // UI explicitly sets true, since defining one IS the act of making a template.
+  isTemplate       Boolean  @default(false)
   locationId       String?
   createdAt        DateTime @default(now()) // UTC
   updatedAt        DateTime @updatedAt      // UTC

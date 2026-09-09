@@ -45,7 +45,7 @@ export async function GET(
   const { id } = await params;
   const sessionType = await prisma.sessionType.findUnique({
     where: { id },
-    include: upcomingCount,
+    include: { ...upcomingCount, location: { select: { id: true, name: true } } },
   });
 
   if (!sessionType)
@@ -70,7 +70,7 @@ export async function PATCH(
   if (!existing)
     return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const { name, description, durationMinutes, capacity, dropInPriceCents, isBusyWindow, isActive } =
+  const { name, description, durationMinutes, capacity, dropInPriceCents, isBusyWindow, isActive, isTemplate, locationId } =
     body as Record<string, unknown>;
 
   const newSlug =
@@ -104,8 +104,10 @@ export async function PATCH(
       }),
       ...(isBusyWindow !== undefined && { isBusyWindow: Boolean(isBusyWindow) }),
       ...(isActive !== undefined && { isActive: Boolean(isActive) }),
+      ...(isTemplate !== undefined && { isTemplate: Boolean(isTemplate) }),
+      ...(locationId !== undefined && { locationId: String(locationId) }),
     },
-    include: upcomingCount,
+    include: { ...upcomingCount, location: { select: { id: true, name: true } } },
   });
 
   return NextResponse.json(updated);

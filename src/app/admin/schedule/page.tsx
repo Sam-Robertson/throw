@@ -17,6 +17,8 @@ import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
 import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
+import Checkbox from '@mui/material/Checkbox';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
 import Tooltip from '@mui/material/Tooltip';
@@ -28,6 +30,7 @@ import AddIcon from '@mui/icons-material/Add';
 import { STUDIO_TIMEZONE } from '@/lib/timezone';
 import { layoutOverlappingEvents } from '@/lib/calendarLayout';
 import { getSessionTypeColor } from '@/lib/scheduleColors';
+import { ALL_LOCATIONS, useLocationFilter } from '../_components/LocationFilterContext';
 
 interface StudioSession {
   id: string;
@@ -37,6 +40,7 @@ interface StudioSession {
   isCancelled: boolean;
   sessionType: { id: string; name: string; durationMinutes: number; capacity: number };
   instructor: { id: string; name: string | null } | null;
+  location: { id: string; name: string } | null;
   _count: { bookings: number };
 }
 
@@ -78,6 +82,7 @@ interface SessionTypeOption {
   durationMinutes: number;
   capacity: number;
   isActive: boolean;
+  isTemplate: boolean;
 }
 
 interface UserOption {
@@ -103,6 +108,7 @@ function sessionDayKey(session: StudioSession): string {
 }
 
 export default function SchedulePage() {
+  const { selectedLocationId } = useLocationFilter();
   const [weekOffset, setWeekOffset] = useState(0);
   const [sessions, setSessions] = useState<StudioSession[]>([]);
   const [sessionTypes, setSessionTypes] = useState<SessionTypeOption[]>([]);
@@ -110,6 +116,7 @@ export default function SchedulePage() {
   const [loading, setLoading] = useState(true);
 
   const [addOpen, setAddOpen] = useState(false);
+  const [showAllClassTypes, setShowAllClassTypes] = useState(false);
   const [addForm, setAddForm] = useState({
     sessionTypeId: '',
     localDate: '',
@@ -119,6 +126,10 @@ export default function SchedulePage() {
   });
   const [addSaving, setAddSaving] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+
+  const pickableSessionTypes = showAllClassTypes
+    ? sessionTypes
+    : sessionTypes.filter((st) => st.isTemplate);
 
   const [editSession, setEditSession] = useState<StudioSession | null>(null);
   const [editForm, setEditForm] = useState({ instructorId: NONE, capacity: '' });
@@ -148,27 +159,33 @@ export default function SchedulePage() {
     setLoading(true);
     const fromUTC = fromZonedTime(`${dayKey(weekDays[0])}T00:00:00`, STUDIO_TIMEZONE);
     const toUTC = fromZonedTime(`${dayKey(addDays(weekDays[0], 7))}T00:00:00`, STUDIO_TIMEZONE);
-    fetch(`/api/admin/studio-sessions?from=${fromUTC.toISOString()}&to=${toUTC.toISOString()}`)
+    const locationParam = selectedLocationId === ALL_LOCATIONS ? '' : `&locationId=${selectedLocationId}`;
+    fetch(`/api/admin/studio-sessions?from=${fromUTC.toISOString()}&to=${toUTC.toISOString()}${locationParam}`)
       .then((r) => r.json())
       .then(setSessions)
       .finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekOffset]);
+  }, [weekOffset, selectedLocationId]);
 
   useEffect(() => { fetchSessions(); }, [fetchSessions]);
 
   useEffect(() => {
-    fetch('/api/admin/session-types')
+    const url =
+      selectedLocationId === ALL_LOCATIONS
+        ? '/api/admin/session-types'
+        : `/api/admin/session-types?locationId=${selectedLocationId}`;
+    fetch(url)
       .then((r) => r.json())
       .then((data: SessionTypeOption[]) => setSessionTypes(data.filter((st) => st.isActive)));
     fetch('/api/admin/users').then((r) => r.json()).then(setInstructors);
-  }, []);
+  }, [selectedLocationId]);
 
   const weekLabel = `${format(weekDays[0], 'MMM d')} – ${format(weekDays[6], 'MMM d, yyyy')}`;
 
   function openAdd(defaultDate?: string, defaultTime?: string) {
+    setShowAllClassTypes(false);
     setAddForm({
-      sessionTypeId: sessionTypes[0]?.id ?? '',
+      sessionTypeId: pickableSessionTypes[0]?.id ?? sessionTypes[0]?.id ?? '',
       localDate: defaultDate ?? dayKey(weekDays[0]),
       localTime: defaultTime ?? '09:00',
       instructorId: NONE,
@@ -454,6 +471,7 @@ export default function SchedulePage() {
                             formatInTimeZone(new Date(session.startsAt), STUDIO_TIMEZONE, 'h:mm a') +
                             (session.instructor?.name ? ` · ${session.instructor.name}` : '') +
                             ` · ${session._count.bookings}/${session.capacity}` +
+                            (selectedLocationId === ALL_LOCATIONS && session.location?.name ? ` · ${session.location.name}` : '') +
                             (session.isCancelled ? ' · Cancelled' : '')
                           }
                         >
@@ -508,6 +526,7 @@ export default function SchedulePage() {
                               >
                                 {formatInTimeZone(new Date(session.startsAt), STUDIO_TIMEZONE, 'h:mm a')}
                                 {session.instructor?.name ? ` · ${session.instructor.name}` : ''}
+                                {selectedLocationId === ALL_LOCATIONS && session.location?.name ? ` · ${session.location.name}` : ''}
                               </Typography>
                             )}
                           </Box>
@@ -535,11 +554,22 @@ export default function SchedulePage() {
                 label="Class type"
                 onChange={(e) => setAddForm((f) => ({ ...f, sessionTypeId: e.target.value }))}
               >
-                {sessionTypes.map((st) => (
+                {pickableSessionTypes.map((st) => (
                   <MenuItem key={st.id} value={st.id}>{st.name}</MenuItem>
                 ))}
               </Select>
             </FormControl>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  size="small"
+                  checked={showAllClassTypes}
+                  onChange={(e) => setShowAllClassTypes(e.target.checked)}
+                />
+              }
+              label="Show all class types (including one-offs)"
+              sx={{ mt: -1.5 }}
+            />
             <Grid container spacing={2}>
               <Grid size={{ xs: 6 }}>
                 <TextField

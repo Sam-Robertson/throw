@@ -11,6 +11,10 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContentText from '@mui/material/DialogContentText';
 import TextField from '@mui/material/TextField';
 import FormControlLabel from '@mui/material/FormControlLabel';
+import FormControl from '@mui/material/FormControl';
+import InputLabel from '@mui/material/InputLabel';
+import Select from '@mui/material/Select';
+import MenuItem from '@mui/material/MenuItem';
 import Switch from '@mui/material/Switch';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
@@ -18,12 +22,15 @@ import TableCell from '@mui/material/TableCell';
 import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
+import Tabs from '@mui/material/Tabs';
+import Tab from '@mui/material/Tab';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
 import Paper from '@mui/material/Paper';
 import Grid from '@mui/material/Grid';
 import Stack from '@mui/material/Stack';
+import { ALL_LOCATIONS, useLocationFilter } from '../_components/LocationFilterContext';
 
 interface SessionType {
   id: string;
@@ -35,6 +42,8 @@ interface SessionType {
   dropInPriceCents: number;
   isBusyWindow: boolean;
   isActive: boolean;
+  isTemplate: boolean;
+  location: { id: string; name: string } | null;
   _count: { studioSessions: number };
 }
 
@@ -46,17 +55,23 @@ interface FormState {
   dropInPriceDollars: string;
   isBusyWindow: boolean;
   isActive: boolean;
+  isTemplate: boolean;
+  locationId: string;
 }
 
-const defaultForm: FormState = {
-  name: '',
-  description: '',
-  durationMinutes: '90',
-  capacity: '12',
-  dropInPriceDollars: '20.00',
-  isBusyWindow: false,
-  isActive: true,
-};
+function defaultForm(defaultLocationId: string): FormState {
+  return {
+    name: '',
+    description: '',
+    durationMinutes: '90',
+    capacity: '12',
+    dropInPriceDollars: '20.00',
+    isBusyWindow: false,
+    isActive: true,
+    isTemplate: true,
+    locationId: defaultLocationId,
+  };
+}
 
 function toForm(st: SessionType): FormState {
   return {
@@ -67,29 +82,46 @@ function toForm(st: SessionType): FormState {
     dropInPriceDollars: (st.dropInPriceCents / 100).toFixed(2),
     isBusyWindow: st.isBusyWindow,
     isActive: st.isActive,
+    isTemplate: st.isTemplate,
+    locationId: st.location?.id ?? '',
   };
 }
 
+type FilterTab = 'all' | 'templates' | 'oneoffs';
+
 export default function ClassTypesPage() {
+  const { locations, selectedLocationId } = useLocationFilter();
   const [sessionTypes, setSessionTypes] = useState<SessionType[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<FilterTab>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<SessionType | null>(null);
   const [editTarget, setEditTarget] = useState<SessionType | null>(null);
-  const [form, setForm] = useState<FormState>(defaultForm);
+  const [form, setForm] = useState<FormState>(defaultForm(''));
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/admin/session-types')
+    setLoading(true);
+    const url =
+      selectedLocationId === ALL_LOCATIONS
+        ? '/api/admin/session-types'
+        : `/api/admin/session-types?locationId=${selectedLocationId}`;
+    fetch(url)
       .then((r) => r.json())
       .then(setSessionTypes)
       .finally(() => setLoading(false));
-  }, []);
+  }, [selectedLocationId]);
+
+  const visible = sessionTypes.filter((st) => {
+    if (tab === 'templates') return st.isTemplate;
+    if (tab === 'oneoffs') return !st.isTemplate;
+    return true;
+  });
 
   function openCreate() {
     setEditTarget(null);
-    setForm(defaultForm);
+    setForm(defaultForm(selectedLocationId === ALL_LOCATIONS ? (locations[0]?.id ?? '') : selectedLocationId));
     setFormError(null);
     setDialogOpen(true);
   }
@@ -117,6 +149,8 @@ export default function ClassTypesPage() {
       dropInPriceCents: Math.round(parseFloat(form.dropInPriceDollars) * 100),
       isBusyWindow: form.isBusyWindow,
       isActive: form.isActive,
+      isTemplate: form.isTemplate,
+      locationId: form.locationId,
     };
 
     if (!payload.name) {
@@ -124,17 +158,15 @@ export default function ClassTypesPage() {
       setSaving(false);
       return;
     }
+    if (!payload.locationId) {
+      setFormError('Location is required');
+      setSaving(false);
+      return;
+    }
 
     const isEdit = editTarget !== null;
     const url = isEdit ? `/api/admin/session-types/${editTarget.id}` : '/api/admin/session-types';
     const method = isEdit ? 'PATCH' : 'POST';
-    const prevList = sessionTypes;
-
-    if (isEdit) {
-      setSessionTypes((prev) =>
-        prev.map((st) => (st.id === editTarget.id ? { ...st, ...payload, _count: st._count } : st)),
-      );
-    }
 
     const res = await fetch(url, {
       method,
@@ -143,7 +175,6 @@ export default function ClassTypesPage() {
     });
 
     if (!res.ok) {
-      if (isEdit) setSessionTypes(prevList);
       const data = await res.json().catch(() => ({})) as { error?: string };
       setFormError(data.error ?? 'Save failed');
       setSaving(false);
@@ -168,16 +199,30 @@ export default function ClassTypesPage() {
     if (!res.ok) setSessionTypes(prevList);
   }
 
+  const templateCount = sessionTypes.filter((st) => st.isTemplate).length;
+  const oneOffCount = sessionTypes.length - templateCount;
+
   return (
     <Box sx={{ p: { xs: 3, md: 4 } }}>
-      <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography variant="h2" sx={{ fontWeight: 700 }}>
-          Class Types
-        </Typography>
+      <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box>
+          <Typography variant="h2" sx={{ fontWeight: 700 }}>
+            Class Types
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Templates are reusable defaults for scheduling; one-offs are historical or single-use only.
+          </Typography>
+        </Box>
         <Button variant="contained" onClick={openCreate}>
           New class type
         </Button>
       </Box>
+
+      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 3, mt: 2 }}>
+        <Tab label={`All (${sessionTypes.length})`} value="all" />
+        <Tab label={`Templates (${templateCount})`} value="templates" />
+        <Tab label={`One-offs (${oneOffCount})`} value="oneoffs" />
+      </Tabs>
 
       {loading ? (
         <Typography color="text.secondary">Loading…</Typography>
@@ -187,40 +232,46 @@ export default function ClassTypesPage() {
             <TableHead>
               <TableRow>
                 <TableCell>Name</TableCell>
+                <TableCell>Location</TableCell>
                 <TableCell>Duration</TableCell>
                 <TableCell>Capacity</TableCell>
                 <TableCell>Drop-in price</TableCell>
-                <TableCell>Busy window</TableCell>
+                <TableCell>Template</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Upcoming</TableCell>
                 <TableCell align="right" />
               </TableRow>
             </TableHead>
             <TableBody>
-              {sessionTypes.length === 0 ? (
+              {visible.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center">
+                  <TableCell colSpan={9} align="center">
                     <Typography color="text.secondary" sx={{ py: 2 }}>
-                      No class types yet
+                      No class types here
                     </Typography>
                   </TableCell>
                 </TableRow>
               ) : (
-                sessionTypes.map((st) => (
+                visible.map((st) => (
                   <TableRow
                     key={st.id}
                     sx={{ cursor: 'pointer' }}
                     onClick={() => openEdit(st)}
                   >
                     <TableCell sx={{ fontWeight: 600 }}>{st.name}</TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary">
+                        {st.location?.name ?? '—'}
+                      </Typography>
+                    </TableCell>
                     <TableCell>{st.durationMinutes} min</TableCell>
                     <TableCell>{st.capacity}</TableCell>
                     <TableCell>${(st.dropInPriceCents / 100).toFixed(2)}</TableCell>
                     <TableCell>
-                      {st.isBusyWindow ? (
-                        <Chip label="Yes" size="small" variant="outlined" />
+                      {st.isTemplate ? (
+                        <Chip label="Template" size="small" color="primary" variant="outlined" />
                       ) : (
-                        <Typography variant="body2" color="text.secondary">No</Typography>
+                        <Typography variant="body2" color="text.secondary">One-off</Typography>
                       )}
                     </TableCell>
                     <TableCell>
@@ -290,6 +341,19 @@ export default function ClassTypesPage() {
               multiline
               rows={2}
             />
+            <FormControl fullWidth>
+              <InputLabel id="ct-location-label">Location</InputLabel>
+              <Select
+                labelId="ct-location-label"
+                label="Location"
+                value={form.locationId}
+                onChange={(e) => setField('locationId', e.target.value)}
+              >
+                {locations.map((loc) => (
+                  <MenuItem key={loc.id} value={loc.id}>{loc.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
             <Grid container spacing={2}>
               <Grid size={{ xs: 6 }}>
                 <TextField
@@ -319,6 +383,15 @@ export default function ClassTypesPage() {
               slotProps={{ htmlInput: { min: 0, step: 0.01 } }}
               value={form.dropInPriceDollars}
               onChange={(e) => setField('dropInPriceDollars', e.target.value)}
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={form.isTemplate}
+                  onChange={(e) => setField('isTemplate', e.target.checked)}
+                />
+              }
+              label="Reusable template (shows in the schedule's template picker)"
             />
             <FormControlLabel
               control={
