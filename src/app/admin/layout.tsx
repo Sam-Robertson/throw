@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Box from "@mui/material/Box";
 import { AdminNav, DRAWER_WIDTH } from "./_components/AdminNav";
 import { InboxCountProvider } from "./_components/InboxCountContext";
+import { LocationFilterProvider } from "./_components/LocationFilterContext";
 
 export default async function AdminLayout({
   children,
@@ -14,20 +15,22 @@ export default async function AdminLayout({
 
   return (
     <InboxCountProvider>
-      <Box sx={{ display: "flex", minHeight: "100vh" }}>
-        <AdminNav />
-        <Box
-          component="main"
-          sx={{
-            flexGrow: 1,
-            minWidth: 0,
-            // On desktop, offset by the sidebar width
-            ml: { md: `${DRAWER_WIDTH}px` },
-          }}
-        >
-          {children}
+      <LocationFilterProvider>
+        <Box sx={{ display: "flex", minHeight: "100vh" }}>
+          <AdminNav />
+          <Box
+            component="main"
+            sx={{
+              flexGrow: 1,
+              minWidth: 0,
+              // On desktop, offset by the sidebar width
+              ml: { md: `${DRAWER_WIDTH}px` },
+            }}
+          >
+            {children}
+          </Box>
         </Box>
-      </Box>
+      </LocationFilterProvider>
     </InboxCountProvider>
   );
 }

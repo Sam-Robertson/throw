@@ -17,10 +17,16 @@ import ListSubheader from '@mui/material/ListSubheader';
 import ClickAwayListener from '@mui/material/ClickAwayListener';
 import Paper from '@mui/material/Paper';
 import Popper from '@mui/material/Popper';
+import MenuItem from '@mui/material/MenuItem';
+import Menu from '@mui/material/Menu';
+import ButtonBase from '@mui/material/ButtonBase';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import CheckIcon from '@mui/icons-material/Check';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 
 import { useInboxCount } from './InboxCountContext';
+import { ALL_LOCATIONS, useLocationFilter } from './LocationFilterContext';
 
 // Icons
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
@@ -41,6 +47,7 @@ import GroupOutlinedIcon from '@mui/icons-material/GroupOutlined';
 import LabelOutlinedIcon from '@mui/icons-material/LabelOutlined';
 import ListAltOutlinedIcon from '@mui/icons-material/ListAltOutlined';
 import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
+import PointOfSaleOutlinedIcon from '@mui/icons-material/PointOfSaleOutlined';
 import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
 import MailOutlinedIcon from '@mui/icons-material/MailOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -49,7 +56,6 @@ import PaidOutlinedIcon from '@mui/icons-material/PaidOutlined';
 import PeopleOutlinedIcon from '@mui/icons-material/PeopleOutlined';
 import PersonOutlinedIcon from '@mui/icons-material/PersonOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
-import PointOfSaleOutlinedIcon from '@mui/icons-material/PointOfSaleOutlined';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import StyleOutlinedIcon from '@mui/icons-material/StyleOutlined';
 import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
@@ -461,6 +467,148 @@ function FlyoutNavItem({ label, icon, isActive, groups, flyoutTitle, pathname, o
 // SidebarContent
 // ---------------------------------------------------------------------------
 
+/**
+ * Franchise / location switcher at the top of the admin sidebar.
+ *
+ * Reads as an identity card rather than a form control — coloured initial,
+ * short name, and what kind of scope it is — because it sets the scope for
+ * every page in the admin, not just the one on screen.
+ *
+ * "All Locations" is the franchise-level view (ALL_LOCATIONS); the others scope
+ * to a single studio.
+ */
+function LocationSwitcher() {
+  const { locations, selectedLocationId, setSelectedLocationId, loading } = useLocationFilter();
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+
+  if (loading || locations.length === 0) return null;
+
+  const selected = locations.find((l) => l.id === selectedLocationId);
+  const isFranchise = !selected;
+  const label = isFranchise ? 'All Locations' : selected.shortName;
+  const scope = isFranchise ? 'Franchise' : 'Location';
+
+  function choose(id: string) {
+    setSelectedLocationId(id);
+    setAnchorEl(null);
+  }
+
+  return (
+    <>
+      <ButtonBase
+        onClick={(e) => setAnchorEl(e.currentTarget)}
+        aria-haspopup="listbox"
+        aria-expanded={Boolean(anchorEl)}
+        aria-label={`Scope: ${label}. Change location`}
+        sx={{
+          width: '100%',
+          borderRadius: 2,
+          px: 1,
+          py: 1,
+          gap: 1.25,
+          justifyContent: 'flex-start',
+          textAlign: 'left',
+          '&:hover': { bgcolor: 'action.hover' },
+        }}
+      >
+        <LocationAvatar label={label} franchise={isFranchise} />
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Typography
+            noWrap
+            sx={{ fontSize: '0.9375rem', fontWeight: 700, lineHeight: 1.25, color: 'text.primary' }}
+          >
+            {label}
+          </Typography>
+          <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', lineHeight: 1.3 }}>
+            {scope}
+          </Typography>
+        </Box>
+        <KeyboardArrowDownIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
+      </ButtonBase>
+
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={() => setAnchorEl(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        slotProps={{ paper: { sx: { mt: 0.5, minWidth: 216, borderRadius: 2 } } }}
+      >
+        <LocationMenuItem
+          label="All Locations"
+          scope="Franchise"
+          franchise
+          selected={isFranchise}
+          onClick={() => choose(ALL_LOCATIONS)}
+        />
+        <Divider sx={{ my: 0.5 }} />
+        {locations.map((loc) => (
+          <LocationMenuItem
+            key={loc.id}
+            label={loc.shortName}
+            scope="Location"
+            selected={loc.id === selectedLocationId}
+            onClick={() => choose(loc.id)}
+          />
+        ))}
+      </Menu>
+    </>
+  );
+}
+
+/** Rounded-square initial. Franchise gets the wordmark's T and a filled tone. */
+function LocationAvatar({ label, franchise }: { label: string; franchise?: boolean }) {
+  return (
+    <Box
+      aria-hidden
+      sx={{
+        width: 34,
+        height: 34,
+        flexShrink: 0,
+        borderRadius: 1.75,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '0.9375rem',
+        fontWeight: 700,
+        bgcolor: franchise ? 'primary.main' : 'primary.light',
+        color: franchise ? 'primary.contrastText' : 'text.primary',
+      }}
+    >
+      {franchise ? 'T' : label.charAt(0).toUpperCase()}
+    </Box>
+  );
+}
+
+function LocationMenuItem({
+  label,
+  scope,
+  franchise,
+  selected,
+  onClick,
+}: {
+  label: string;
+  scope: string;
+  franchise?: boolean;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <MenuItem selected={selected} onClick={onClick} sx={{ gap: 1.25, py: 1 }}>
+      <LocationAvatar label={label} franchise={franchise} />
+      <Box sx={{ minWidth: 0, flex: 1 }}>
+        <Typography sx={{ fontSize: '0.875rem', fontWeight: 600, lineHeight: 1.25 }}>
+          {label}
+        </Typography>
+        <Typography sx={{ fontSize: '0.72rem', color: 'text.secondary', lineHeight: 1.3 }}>
+          {scope}
+        </Typography>
+      </Box>
+      {selected && <CheckIcon fontSize="small" sx={{ color: 'primary.main' }} />}
+    </MenuItem>
+  );
+}
+
 interface SidebarContentProps {
   pathname: string;
   onClose?: () => void;
@@ -487,6 +635,10 @@ function SidebarContent({ pathname, onClose }: SidebarContentProps) {
           Throw{' '}
           <Box component="span" sx={{ fontWeight: 400, color: 'text.secondary', fontSize: '0.875rem' }}>Admin</Box>
         </Typography>
+      </Box>
+
+      <Box sx={{ px: 2.5, pb: 1.5, flexShrink: 0 }}>
+        <LocationSwitcher />
       </Box>
 
       <Divider sx={{ mb: 1 }} />
@@ -603,10 +755,7 @@ export function AdminNav() {
       <Box
         component="header"
         sx={{
-          display: { xs: 'flex', md: 'none' },
-          alignItems: 'center',
-          px: 2,
-          height: 56,
+          display: { xs: 'block', md: 'none' },
           borderBottom: '1px solid',
           borderColor: 'divider',
           bgcolor: 'background.default',
@@ -615,18 +764,23 @@ export function AdminNav() {
           zIndex: 1200,
         }}
       >
-        <Typography
-          component={NextLink}
-          href="/admin"
-          variant="h6"
-          sx={{ fontWeight: 700, letterSpacing: '-0.02em', color: 'text.primary', textDecoration: 'none', flex: 1 }}
-        >
-          Throw{' '}
-          <Box component="span" sx={{ fontWeight: 400, color: 'text.secondary', fontSize: '0.875rem' }}>Admin</Box>
-        </Typography>
-        <IconButton aria-label="Open navigation" onClick={() => setMobileOpen(true)}>
-          <MenuIcon />
-        </IconButton>
+        <Box sx={{ display: 'flex', alignItems: 'center', px: 2, height: 56 }}>
+          <Typography
+            component={NextLink}
+            href="/admin"
+            variant="h6"
+            sx={{ fontWeight: 700, letterSpacing: '-0.02em', color: 'text.primary', textDecoration: 'none', flex: 1 }}
+          >
+            Throw{' '}
+            <Box component="span" sx={{ fontWeight: 400, color: 'text.secondary', fontSize: '0.875rem' }}>Admin</Box>
+          </Typography>
+          <IconButton aria-label="Open navigation" onClick={() => setMobileOpen(true)}>
+            <MenuIcon />
+          </IconButton>
+        </Box>
+        <Box sx={{ px: 2, pb: 1.5 }}>
+          <LocationSwitcher />
+        </Box>
       </Box>
 
       {/* Desktop permanent sidebar */}
