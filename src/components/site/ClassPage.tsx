@@ -371,8 +371,13 @@ export function ClassPage({ page }: { page: ClassPageData }) {
       </section>
 
       {/* ── Sticky book bar ───────────────────────────────────────────────────
-          Drawn pinned over the footer at the foot of every class design. The
-          spacer keeps it from covering the last of the footer on short screens. */}
+          Pinned over the page at the foot of every class design. Being fixed it
+          is out of flow, so it would otherwise sit over the last 88px of the
+          footer once scrolled to the bottom. The marker below is picked up by a
+          `body:has([data-sticky-cta]) footer` rule in globals.css, which pads
+          the footer by the bar's height — the footer lives in the layout, so it
+          can't be reached from here any other way. */}
+      <div data-sticky-cta hidden />
       <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-6 pb-5">
         <div className="pointer-events-auto mx-auto max-w-[760px]">
           <Button href={page.bookHref} block className="shadow-lg">

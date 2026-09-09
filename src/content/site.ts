@@ -18,11 +18,15 @@ export const ANNOUNCEMENT = '40% off 4 week courses';
 
 export const RATING = { score: '5.0', count: '350+ Google ratings' };
 
+// Interim destinations: /classes/kids-camps, /careers and a Lehi waitlist page
+// have no design and no route yet, so those links point at the nearest real
+// page rather than 404ing from the site-wide nav and footer. Flagged for the
+// client — see the handover notes.
 export const NAV_LINKS = [
   { href: '/classes/drop-in', label: 'One time classes' },
   { href: '/classes/kickstarter', label: '4 week courses' },
   { href: '/membership', label: 'Memberships' },
-  { href: '/classes/kids-camps', label: 'Kids camps' },
+  { href: '/schedule', label: 'Kids camps' },
   { href: '/classes/group-events', label: 'Group events' },
   { href: '/schedule', label: 'Calendar' },
 ] as const;
@@ -120,7 +124,7 @@ export const LOCATIONS: Location[] = [
     hoursDesktop: ['Opening soon!', 'First class starts in October'],
     ctaMobile: 'Join the waitlist',
     ctaDesktop: 'Join the wait list',
-    href: '/lehi-waitlist',
+    href: 'mailto:info@throwartstudio.com?subject=Lehi%20studio%20waitlist',
     photos: [1, 2, 3, 4, 5].map((n) => ({
       src: `/site/studio-lehi-${n}.jpg`,
       alt: `Inside the Lehi studio (${n} of 5)`,
@@ -212,7 +216,7 @@ export const FOOTER_COLUMNS = [
       { href: '/classes/drop-in', label: 'One time classes' },
       { href: '/classes/kickstarter', label: '4 week courses' },
       { href: '/membership', label: 'Memberships' },
-      { href: '/classes/kids-camps', label: 'Kid camps' },
+      { href: '/schedule', label: 'Kid camps' },
       { href: '/classes/group-events', label: 'Group events' },
     ],
   },
@@ -221,7 +225,7 @@ export const FOOTER_COLUMNS = [
     links: [
       { href: '/about#locations', label: 'Locations' },
       { href: '/about#faqs', label: 'FAQs' },
-      { href: '/careers', label: 'Careers' },
+      { href: 'mailto:info@throwartstudio.com?subject=Careers', label: 'Careers' },
     ],
   },
   {

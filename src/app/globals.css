@@ -180,3 +180,11 @@ body {
     text-transform: uppercase;
   }
 }
+
+/* Class/event pages carry a fixed "Book your class" bar pinned to the viewport
+   foot. It is out of flow, so reserve its height at the end of the footer —
+   the bar is rendered inside <main> but the footer is a sibling in the layout,
+   so the marker element is the only handle available. */
+body:has([data-sticky-cta]) footer {
+  padding-bottom: 88px;
+}

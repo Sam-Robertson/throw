@@ -197,13 +197,17 @@ export default function HomePage() {
       </section>
 
       {/* ── Community photo strip ─────────────────────────────────────────── */}
+      {/* Mobile draws a single row of two; desktop draws all four across. The
+          last two are dropped below md rather than wrapping to a second row. */}
       <section aria-label="Life at the studio" className="grid grid-cols-2 md:grid-cols-4">
-        {PHOTO_STRIP.map((p) => (
+        {PHOTO_STRIP.map((p, i) => (
           <SitePhoto
             key={p.src}
             photo={p}
             sizes="(min-width: 768px) 25vw, 50vw"
-            className="aspect-square w-full md:aspect-[4/3]"
+            className={`aspect-square w-full md:aspect-[4/3] ${
+              i >= 2 ? 'hidden md:block' : ''
+            }`}
           />
         ))}
       </section>

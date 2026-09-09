@@ -196,7 +196,7 @@ export const CLASS_PAGES: ClassPage[] = [
         alt: 'Three pottery characters standing together',
       },
     },
-    faqs: BASE_FAQS.filter((f) => f.q !== 'Can I bring food to my event?').concat({
+    faqs: BASE_FAQS.concat({
       q: 'Is there an age minimum?',
       a: 'Wheel classes are for ages 12 and up. Under 16s should be accompanied by an adult. For younger potters, take a look at our kids camps.',
     }),
@@ -302,7 +302,7 @@ export const CLASS_PAGES: ClassPage[] = [
       ...BASE_FAQS.slice(1),
     ],
     bookCta: 'Plan your event',
-    bookHref: '/contact?topic=group-event',
+    bookHref: 'mailto:info@throwartstudio.com?subject=Group%20event%20enquiry',
   },
 
   {
