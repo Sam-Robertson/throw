@@ -17,13 +17,10 @@ import ListSubheader from '@mui/material/ListSubheader';
 import ClickAwayListener from '@mui/material/ClickAwayListener';
 import Paper from '@mui/material/Paper';
 import Popper from '@mui/material/Popper';
-import Select from '@mui/material/Select';
-import MenuItem from '@mui/material/MenuItem';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 
 import { useInboxCount } from './InboxCountContext';
-import { ALL_LOCATIONS, useLocationFilter } from './LocationFilterContext';
 
 // Icons
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
@@ -44,7 +41,6 @@ import GroupOutlinedIcon from '@mui/icons-material/GroupOutlined';
 import LabelOutlinedIcon from '@mui/icons-material/LabelOutlined';
 import ListAltOutlinedIcon from '@mui/icons-material/ListAltOutlined';
 import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
-import PointOfSaleOutlinedIcon from '@mui/icons-material/PointOfSaleOutlined';
 import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
 import MailOutlinedIcon from '@mui/icons-material/MailOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -53,6 +49,7 @@ import PaidOutlinedIcon from '@mui/icons-material/PaidOutlined';
 import PeopleOutlinedIcon from '@mui/icons-material/PeopleOutlined';
 import PersonOutlinedIcon from '@mui/icons-material/PersonOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import PointOfSaleOutlinedIcon from '@mui/icons-material/PointOfSaleOutlined';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import StyleOutlinedIcon from '@mui/icons-material/StyleOutlined';
 import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
@@ -464,31 +461,6 @@ function FlyoutNavItem({ label, icon, isActive, groups, flyoutTitle, pathname, o
 // SidebarContent
 // ---------------------------------------------------------------------------
 
-function LocationSwitcher() {
-  const { locations, selectedLocationId, setSelectedLocationId, loading } = useLocationFilter();
-
-  if (loading || locations.length === 0) return null;
-
-  return (
-    <Select
-      value={selectedLocationId}
-      onChange={(e) => setSelectedLocationId(e.target.value)}
-      size="small"
-      fullWidth
-      sx={{
-        fontSize: '0.875rem',
-        fontWeight: 600,
-        '.MuiSelect-select': { py: 0.75 },
-      }}
-    >
-      <MenuItem value={ALL_LOCATIONS}>All Locations</MenuItem>
-      {locations.map((loc) => (
-        <MenuItem key={loc.id} value={loc.id}>{loc.name}</MenuItem>
-      ))}
-    </Select>
-  );
-}
-
 interface SidebarContentProps {
   pathname: string;
   onClose?: () => void;
@@ -515,10 +487,6 @@ function SidebarContent({ pathname, onClose }: SidebarContentProps) {
           Throw{' '}
           <Box component="span" sx={{ fontWeight: 400, color: 'text.secondary', fontSize: '0.875rem' }}>Admin</Box>
         </Typography>
-      </Box>
-
-      <Box sx={{ px: 2.5, pb: 1.5, flexShrink: 0 }}>
-        <LocationSwitcher />
       </Box>
 
       <Divider sx={{ mb: 1 }} />
@@ -635,7 +603,10 @@ export function AdminNav() {
       <Box
         component="header"
         sx={{
-          display: { xs: 'block', md: 'none' },
+          display: { xs: 'flex', md: 'none' },
+          alignItems: 'center',
+          px: 2,
+          height: 56,
           borderBottom: '1px solid',
           borderColor: 'divider',
           bgcolor: 'background.default',
@@ -644,23 +615,18 @@ export function AdminNav() {
           zIndex: 1200,
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', px: 2, height: 56 }}>
-          <Typography
-            component={NextLink}
-            href="/admin"
-            variant="h6"
-            sx={{ fontWeight: 700, letterSpacing: '-0.02em', color: 'text.primary', textDecoration: 'none', flex: 1 }}
-          >
-            Throw{' '}
-            <Box component="span" sx={{ fontWeight: 400, color: 'text.secondary', fontSize: '0.875rem' }}>Admin</Box>
-          </Typography>
-          <IconButton aria-label="Open navigation" onClick={() => setMobileOpen(true)}>
-            <MenuIcon />
-          </IconButton>
-        </Box>
-        <Box sx={{ px: 2, pb: 1.5 }}>
-          <LocationSwitcher />
-        </Box>
+        <Typography
+          component={NextLink}
+          href="/admin"
+          variant="h6"
+          sx={{ fontWeight: 700, letterSpacing: '-0.02em', color: 'text.primary', textDecoration: 'none', flex: 1 }}
+        >
+          Throw{' '}
+          <Box component="span" sx={{ fontWeight: 400, color: 'text.secondary', fontSize: '0.875rem' }}>Admin</Box>
+        </Typography>
+        <IconButton aria-label="Open navigation" onClick={() => setMobileOpen(true)}>
+          <MenuIcon />
+        </IconButton>
       </Box>
 
       {/* Desktop permanent sidebar */}

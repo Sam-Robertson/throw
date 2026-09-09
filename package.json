@@ -15,10 +15,6 @@
     "momence:map": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}' node --require ts-node/register scripts/momence-map.ts",
     "momence:apply": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}' node --env-file=.env --require ts-node/register scripts/momence-apply.ts",
     "sheets:apply": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}' node --env-file=.env --require ts-node/register scripts/sheets-apply.ts",
-    "sales:map": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}' node --require ts-node/register scripts/sales-map.ts",
-    "sales:apply": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}' node --env-file=.env --require ts-node/register scripts/sales-apply.ts",
-    "sales:other:map": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}' node --require ts-node/register scripts/sales-other-map.ts",
-    "sales:other:apply": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}' node --env-file=.env --require ts-node/register scripts/sales-other-apply.ts",
     "postinstall": "prisma generate",
     "terminal:e2e": "TS_NODE_PROJECT=tsconfig.scripts.json node --env-file=.env --require ts-node/register --require tsconfig-paths/register scripts/terminal-e2e.ts"
   },
