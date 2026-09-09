@@ -117,11 +117,11 @@ export const LOCATIONS: Location[] = [
   },
   {
     name: 'Lehi Studio',
-    // NOTE: the desktop design prints "308 E 300 S, Provo, Ut" on the Lehi card,
-    // which is the Provo address. Mobile says Lehi, so mobile is followed here.
-    // Flagged for the designer — the real Lehi street address is still needed.
-    address: '308 E 300 S, Lehi, Ut',
-    mapHref: 'https://maps.google.com/?q=308+E+300+S+Lehi+UT',
+    // Both comps print a Provo street address on the Lehi card (desktop says
+    // "Provo, Ut" outright). The real address is the one on the Location record
+    // in the database, so that is used here rather than either drawing.
+    address: '4275 N Thanksgiving Way, Lehi, Ut',
+    mapHref: 'https://maps.google.com/?q=4275+N+Thanksgiving+Way+Lehi+UT',
     hoursMobile: ['Opens in October!'],
     hoursDesktop: ['Opening soon!', 'First class starts in October'],
     ctaMobile: 'Join the waitlist',
