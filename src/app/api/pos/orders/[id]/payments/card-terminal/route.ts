@@ -131,10 +131,11 @@ export async function POST(
       payment_intent: paymentIntent.id,
       process_config: {
         tipping: {
-          // Tip percentages are calculated off the pre-tip order total rather
-          // than this payment's share, so a split payment still offers a tip on
-          // the whole bill rather than on the remainder.
-          amount_eligible: order.totalCents - order.tipCents,
+          // Tip options are based on the amount THIS reader is charging, not the
+          // whole bill. On a split payment the whole-bill basis would offer a
+          // full-bill tip on every leg, and settleTerminalPayment adds each one
+          // to order.tipCents — so the customer would be tipped twice over.
+          amount_eligible: body.amountCents,
         },
       },
     });

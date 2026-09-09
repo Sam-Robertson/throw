@@ -168,7 +168,10 @@ export async function getTerminalProgress(
 ): Promise<TerminalProgress> {
   const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
-  if (intent.status === "succeeded" || intent.status === "requires_capture") {
+  // Only `succeeded` counts. These intents are created with automatic capture,
+  // so `requires_capture` should never appear — and if it somehow did, treating
+  // it as settled would complete the order against funds never captured.
+  if (intent.status === "succeeded") {
     const order = await settleTerminalPayment(paymentId, intent);
     return { state: "succeeded", order };
   }

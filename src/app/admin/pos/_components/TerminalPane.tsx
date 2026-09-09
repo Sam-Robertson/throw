@@ -73,7 +73,10 @@ export function TerminalPane({
         const data = await res.json();
         if (!active) return;
         if (!res.ok) {
-          setError(data.error ?? 'Could not load card readers.');
+          // 409 means the studio has no Stripe Terminal location yet. The empty
+          // state below already explains that, so don't also raise a banner —
+          // showing both reads as two different problems.
+          if (res.status !== 409) setError(data.error ?? 'Could not load card readers.');
           setReaders([]);
           return;
         }

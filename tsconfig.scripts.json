@@ -1,0 +1,10 @@
+{
+  // ts-node/tsconfig-paths needs a baseUrl to resolve the "@/*" alias. Kept in a
+  // separate config so the main tsconfig — which the Next build reads — is not
+  // changed globally just to serve the scripts in this folder.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "module": "CommonJS"
+  }
+}
