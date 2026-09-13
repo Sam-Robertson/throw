@@ -16,7 +16,10 @@
     "momence:apply": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}' node --env-file=.env --require ts-node/register scripts/momence-apply.ts",
     "sheets:apply": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}' node --env-file=.env --require ts-node/register scripts/sheets-apply.ts",
     "postinstall": "prisma generate",
-    "terminal:e2e": "TS_NODE_PROJECT=tsconfig.scripts.json node --env-file=.env --require ts-node/register --require tsconfig-paths/register scripts/terminal-e2e.ts"
+    "terminal:e2e": "TS_NODE_PROJECT=tsconfig.scripts.json node --env-file=.env --require ts-node/register --require tsconfig-paths/register scripts/terminal-e2e.ts",
+    "import:gift-cards": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}' node --env-file=.env --require ts-node/register scripts/import-gift-cards.ts",
+    "import:waivers": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}' node --env-file=.env --require ts-node/register scripts/import-waiver-signatures.ts",
+    "members:invite": "TS_NODE_PROJECT=tsconfig.scripts.json node --env-file=.env --require ts-node/register --require tsconfig-paths/register scripts/send-password-setup.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.4",

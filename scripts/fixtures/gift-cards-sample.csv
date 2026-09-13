@@ -1,0 +1,7 @@
+Gift Card Code,Remaining Balance,Purchaser Email,Created At,Expiry
+GC-TEST-0001,$25.00,sarah@example.com,2025-11-28,2026-11-28
+gc-test-0002,"$1,050.50",nobody@example.com,11/30/2025,
+GC-TEST-0003,40,,2026-01-15 10:30,2027-01-15
+GC-TEST-0001,$10.00,mike@example.com,2025-12-01,
+GC-TEST-0004,abc,priya@example.com,2026-02-01,
+"GC-TEST-0005","$0.00","claire@example.com","2026-03-01","2026-09-01"

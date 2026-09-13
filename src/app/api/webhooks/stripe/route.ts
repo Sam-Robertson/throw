@@ -9,10 +9,92 @@ import { maybeCompletePosOrder } from "@/lib/pos";
 import { TERMINAL_METHOD, settleTerminalPayment } from "@/lib/terminal";
 import { grantPeriodAllowance } from "@/lib/credits";
 import { addMonths } from "date-fns";
+import { Prisma } from "@prisma/client";
 import type Stripe from "stripe";
 
 // App Router reads raw body via req.text() — no bodyParser config needed
 export const config = { api: { bodyParser: false } };
+
+/**
+ * Records a paid subscription invoice (first charge, joining fee included, and
+ * every renewal) as a MEMBERSHIP Payment so it shows up in revenue reports.
+ * Idempotent on Payment.stripeInvoiceId.
+ *
+ * The first invoice can arrive before customer.subscription.created has
+ * created the Membership, so userId/planId fall back to the subscription
+ * metadata snapshot on the invoice (written by /api/memberships/subscribe).
+ */
+async function recordInvoicePayment(invoice: Stripe.Invoice, subscriptionId: string) {
+  if (!invoice.id || invoice.amount_paid <= 0) return;
+
+  const membership = await prisma.membership.findUnique({
+    where: { stripeSubscriptionId: subscriptionId },
+    select: { id: true, userId: true, planId: true, locationId: true },
+  });
+  const subscriptionMetadata = invoice.parent?.subscription_details?.metadata ?? {};
+  const userId = membership?.userId ?? subscriptionMetadata.userId;
+  const planId = membership?.planId ?? subscriptionMetadata.planId;
+  if (!userId) {
+    console.warn(`[stripe webhook] invoice ${invoice.id}: no membership or userId metadata; payment not recorded`);
+    return;
+  }
+
+  const plan = planId
+    ? await prisma.membershipPlan.findUnique({ where: { id: planId }, select: { locationId: true } })
+    : null;
+  // Payment.locationId is required. Memberships created through checkout carry
+  // no location and most plans have none, so fall back to the oldest active
+  // studio rather than dropping the revenue row.
+  const locationId =
+    membership?.locationId ??
+    plan?.locationId ??
+    (
+      await prisma.location.findFirst({
+        where: { isActive: true },
+        orderBy: { createdAt: "asc" },
+        select: { id: true },
+      })
+    )?.id;
+  if (!locationId) {
+    console.warn(`[stripe webhook] invoice ${invoice.id}: no location available; payment not recorded`);
+    return;
+  }
+
+  const lines = invoice.lines.data.map((line) => ({
+    description: line.description,
+    amountCents: line.amount,
+    isJoiningFee: /joining fee/i.test(line.description ?? ""),
+  }));
+
+  try {
+    await prisma.payment.create({
+      data: {
+        userId,
+        locationId,
+        // The invoice's PaymentIntent is only reachable through the invoice
+        // payments API (not in the webhook payload), so a deterministic
+        // placeholder satisfies the required unique column, as POS does.
+        stripePaymentIntentId: `inv_${invoice.id}`,
+        stripeInvoiceId: invoice.id,
+        amountInCents: invoice.amount_paid,
+        status: "SUCCEEDED",
+        type: "MEMBERSHIP",
+        membershipId: membership?.id ?? null,
+        metadata: {
+          stripeSubscriptionId: subscriptionId,
+          billingReason: invoice.billing_reason,
+          lines,
+          linesTruncated: invoice.lines.has_more,
+        },
+      },
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return; // already recorded — duplicate delivery
+    }
+    throw err;
+  }
+}
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
@@ -209,6 +291,7 @@ export async function POST(req: NextRequest) {
         });
         await grantPeriodAllowance(membership.id, newPeriodStart, newPeriodEnd);
       }
+      await recordInvoicePayment(invoice, subscriptionId);
     }
   } else if (event.type === "checkout.session.completed") {
     const checkoutSession = event.data.object as Stripe.Checkout.Session;
@@ -284,7 +367,21 @@ export async function POST(req: NextRequest) {
       const { userId, studioSessionId } = metadata;
 
       if (!userId || !studioSessionId) {
-        return NextResponse.json({ error: "Missing metadata" }, { status: 400 });
+        // Not a booking checkout. The Lehi preorder widget
+        // (/api/preorder/checkout) sends none of this metadata — its sales live
+        // in Stripe only and are not persisted here. Acknowledge with 200
+        // either way: a 4xx makes Stripe retry the event for days without
+        // ever succeeding.
+        if (metadata.source === "lehi-preorder-widget") {
+          console.log(
+            `[stripe webhook] Lehi preorder checkout ${checkoutSession.id} completed (not persisted)`,
+          );
+        } else {
+          console.warn(
+            `[stripe webhook] checkout ${checkoutSession.id} has no booking metadata; ignored`,
+          );
+        }
+        return NextResponse.json({ received: true });
       }
 
       const studioSession = await prisma.studioSession.findUnique({
