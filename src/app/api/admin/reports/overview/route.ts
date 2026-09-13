@@ -65,24 +65,31 @@ export async function GET(req: NextRequest) {
     }),
     prisma.payment.findMany({
       where: { status: "SUCCEEDED", createdAt: { gte: from, lte: to } },
-      select: { amountInCents: true, createdAt: true },
+      select: { amountInCents: true, createdAt: true, type: true },
       orderBy: { createdAt: "asc" },
     }),
   ]);
 
-  // Build revenue-by-day array (all days in range)
-  const dayMap: Record<string, number> = {};
+  // Build revenue-by-day array (all days in range), split by revenue source
+  // so the chart can stack drop-in vs. membership vs. everything else
+  // (tips, gift cards, comps) rather than showing one opaque total.
+  type DayBucket = { dropInCents: number; membershipCents: number; otherCents: number };
+  const dayMap: Record<string, DayBucket> = {};
   const cursor = new Date(from);
   while (cursor <= to) {
     const key = formatInTimeZone(cursor, TZ, "yyyy-MM-dd");
-    dayMap[key] = 0;
+    dayMap[key] = { dropInCents: 0, membershipCents: 0, otherCents: 0 };
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   for (const p of allPayments) {
     const key = formatInTimeZone(p.createdAt, TZ, "yyyy-MM-dd");
-    if (key in dayMap) dayMap[key] += p.amountInCents;
+    const bucket = dayMap[key];
+    if (!bucket) continue;
+    if (p.type === "DROP_IN") bucket.dropInCents += p.amountInCents;
+    else if (p.type === "MEMBERSHIP") bucket.membershipCents += p.amountInCents;
+    else bucket.otherCents += p.amountInCents;
   }
-  const revenueByDay = Object.entries(dayMap).map(([date, amountInCents]) => ({ date, amountInCents }));
+  const revenueByDay = Object.entries(dayMap).map(([date, bucket]) => ({ date, ...bucket }));
 
   const totalRevenue = totalRevenueResult._sum.amountInCents ?? 0;
   const avgBookingsPerMember =

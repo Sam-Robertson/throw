@@ -16,6 +16,8 @@ interface PaymentRow {
 interface RevenueData {
   payments: PaymentRow[];
   totalRevenue: number;
+  dropInRevenue: number;
+  membershipRevenue: number;
   totalCount: number;
   page: number;
   totalPages: number;
@@ -196,6 +198,14 @@ export function RevenueTab({ range }: Props) {
         <div className="rounded-lg border bg-card p-4">
           <p className="text-xs text-muted-foreground">Total Revenue</p>
           <p className="mt-1 text-2xl font-semibold">{fmt(data.totalRevenue)}</p>
+        </div>
+        <div className="rounded-lg border bg-card p-4">
+          <p className="text-xs text-muted-foreground">Drop-in Revenue</p>
+          <p className="mt-1 text-2xl font-semibold">{fmt(data.dropInRevenue)}</p>
+        </div>
+        <div className="rounded-lg border bg-card p-4">
+          <p className="text-xs text-muted-foreground">Membership Revenue</p>
+          <p className="mt-1 text-2xl font-semibold">{fmt(data.membershipRevenue)}</p>
         </div>
         <div className="rounded-lg border bg-card p-4">
           <p className="text-xs text-muted-foreground">Total Refunded</p>

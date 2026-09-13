@@ -13,7 +13,7 @@ interface OverviewData {
   totalBookings: number;
   cancellations: number;
   avgBookingsPerMember: number;
-  revenueByDay: { date: string; amountInCents: number }[];
+  revenueByDay: { date: string; dropInCents: number; membershipCents: number; otherCents: number }[];
 }
 
 interface Props {

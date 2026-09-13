@@ -26,32 +26,47 @@ export async function GET(req: NextRequest) {
   const limit = Math.max(1, Math.min(200, parseInt(searchParams.get("limit") ?? "50", 10)));
   const skip = (page - 1) * limit;
 
-  const [payments, totalCount, totalRevenueResult, refunds, totalRefundedResult] =
-    await Promise.all([
-      prisma.payment.findMany({
-        where: { status: "SUCCEEDED", createdAt: { gte: from, lte: to } },
-        include: { user: { select: { name: true, email: true } } },
-        orderBy: { createdAt: "desc" },
-        skip,
-        take: limit,
-      }),
-      prisma.payment.count({
-        where: { status: "SUCCEEDED", createdAt: { gte: from, lte: to } },
-      }),
-      prisma.payment.aggregate({
-        where: { status: "SUCCEEDED", createdAt: { gte: from, lte: to } },
-        _sum: { amountInCents: true },
-      }),
-      prisma.payment.findMany({
-        where: { status: "REFUNDED", createdAt: { gte: from, lte: to } },
-        include: { user: { select: { name: true, email: true } } },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.payment.aggregate({
-        where: { status: "REFUNDED", createdAt: { gte: from, lte: to } },
-        _sum: { amountInCents: true },
-      }),
-    ]);
+  const [
+    payments,
+    totalCount,
+    totalRevenueResult,
+    dropInRevenueResult,
+    membershipRevenueResult,
+    refunds,
+    totalRefundedResult,
+  ] = await Promise.all([
+    prisma.payment.findMany({
+      where: { status: "SUCCEEDED", createdAt: { gte: from, lte: to } },
+      include: { user: { select: { name: true, email: true } } },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+    }),
+    prisma.payment.count({
+      where: { status: "SUCCEEDED", createdAt: { gte: from, lte: to } },
+    }),
+    prisma.payment.aggregate({
+      where: { status: "SUCCEEDED", createdAt: { gte: from, lte: to } },
+      _sum: { amountInCents: true },
+    }),
+    prisma.payment.aggregate({
+      where: { status: "SUCCEEDED", type: "DROP_IN", createdAt: { gte: from, lte: to } },
+      _sum: { amountInCents: true },
+    }),
+    prisma.payment.aggregate({
+      where: { status: "SUCCEEDED", type: "MEMBERSHIP", createdAt: { gte: from, lte: to } },
+      _sum: { amountInCents: true },
+    }),
+    prisma.payment.findMany({
+      where: { status: "REFUNDED", createdAt: { gte: from, lte: to } },
+      include: { user: { select: { name: true, email: true } } },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.payment.aggregate({
+      where: { status: "REFUNDED", createdAt: { gte: from, lte: to } },
+      _sum: { amountInCents: true },
+    }),
+  ]);
 
   return NextResponse.json({
     payments: payments.map((p) => ({
@@ -64,6 +79,8 @@ export async function GET(req: NextRequest) {
       membershipId: p.membershipId,
     })),
     totalRevenue: totalRevenueResult._sum.amountInCents ?? 0,
+    dropInRevenue: dropInRevenueResult._sum.amountInCents ?? 0,
+    membershipRevenue: membershipRevenueResult._sum.amountInCents ?? 0,
     totalCount,
     page,
     totalPages: Math.max(1, Math.ceil(totalCount / limit)),
