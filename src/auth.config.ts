@@ -14,9 +14,13 @@ export const authConfig: NextAuthConfig = {
   providers: [],
   callbacks: {
     jwt({ token, user }) {
+      // `user` is only present on sign-in, so locationIds refresh each time the
+      // user signs in. This file runs in the Edge middleware too, so the
+      // StaffRoleAssignment lookup happens in authorize() (src/auth.ts), not here.
       if (user) {
         token.id = user.id;
         token.role = user.role;
+        token.locationIds = user.locationIds ?? [];
       }
       return token;
     },
@@ -24,6 +28,9 @@ export const authConfig: NextAuthConfig = {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as Role;
+        // Tokens issued before this field existed have no locationIds; STAFF
+        // on such a token see nothing until they sign in again.
+        session.user.locationIds = (token.locationIds as string[] | undefined) ?? [];
       }
       return session;
     },

@@ -30,11 +30,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         );
         if (!valid) return null;
 
+        // ADMIN is unrestricted and CUSTOMER never uses admin scoping, so only
+        // STAFF need their assigned locations looked up.
+        const locationIds =
+          user.role === "STAFF"
+            ? (
+                await prisma.staffRoleAssignment.findMany({
+                  where: { userId: user.id },
+                  select: { locationId: true },
+                })
+              ).map((a) => a.locationId)
+            : [];
+
         return {
           id: user.id,
           email: user.email,
           name: user.name,
           role: user.role,
+          locationIds,
         };
       },
     }),
