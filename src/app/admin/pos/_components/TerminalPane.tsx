@@ -162,7 +162,7 @@ export function TerminalPane({
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? 'Could not start the payment.');
+        setError(data.message ?? data.error ?? 'Could not start the payment.');
         setBusy(false);
         return;
       }

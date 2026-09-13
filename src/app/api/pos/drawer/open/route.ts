@@ -6,8 +6,6 @@ import { checkPermission } from "@/lib/permissions";
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const allowed = await checkPermission(session.user.id, "canUsePos");
-  if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = (await req.json().catch(() => null)) as {
     locationId?: string;
@@ -17,6 +15,10 @@ export async function POST(req: NextRequest) {
   if (!body?.locationId) {
     return NextResponse.json({ error: "locationId is required" }, { status: 400 });
   }
+
+  const allowed = await checkPermission(session.user.id, "canUsePos", body.locationId);
+  if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
   if (body.openingFloatCents === undefined || body.openingFloatCents < 0) {
     return NextResponse.json({ error: "openingFloatCents is required and cannot be negative" }, { status: 400 });
   }

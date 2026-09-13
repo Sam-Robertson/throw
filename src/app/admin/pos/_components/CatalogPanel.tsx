@@ -1,41 +1,41 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { startOfDay, endOfDay } from 'date-fns';
-import { toZonedTime, fromZonedTime } from 'date-fns-tz';
+import { useMemo, useState } from 'react';
+import { addDays } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 import { STUDIO_TIMEZONE } from '@/lib/timezone';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import { formatMoney, type PosCatalog, type PosOrder } from './types';
+import { FiringPanel } from './FiringPanel';
+import { dropInSessionIdOf, formatMoney, type PosCatalog, type PosOrder } from './types';
 
-interface TodaySession {
-  id: string;
-  startsAt: string;
-  locationId: string;
-  sessionType: { name: string };
-  instructor: { name: string | null } | null;
-}
-
-type TabId = 'RETAIL' | 'DROP_IN' | 'MEMBERSHIP' | 'GIFT_CARD' | 'CUSTOM';
+// Memberships are sold online only until Oct 25, so there's no Memberships
+// tab. The server still accepts MEMBERSHIP items.
+type TabId = 'RETAIL' | 'DROP_IN' | 'GIFT_CARD' | 'FIRING' | 'CUSTOM';
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'RETAIL', label: 'Retail' },
   { id: 'DROP_IN', label: 'Drop-ins' },
-  { id: 'MEMBERSHIP', label: 'Memberships' },
   { id: 'GIFT_CARD', label: 'Gift Card' },
+  { id: 'FIRING', label: 'Clay & firing' },
   { id: 'CUSTOM', label: 'Custom' },
 ];
 
 const GIFT_CARD_PRESETS = [2500, 5000, 10000];
+const DROP_IN_DAYS = 7;
+
+function dayKey(date: Date | string): string {
+  return formatInTimeZone(date, STUDIO_TIMEZONE, 'yyyy-MM-dd');
+}
 
 interface CatalogPanelProps {
   catalog: PosCatalog | null;
   order: PosOrder | null;
   busy: boolean;
-  locationId: string;
-  onAddOrIncrement: (itemType: 'RETAIL' | 'DROP_IN' | 'MEMBERSHIP', refId: string, metadata?: Record<string, unknown>) => void;
+  onAddOrIncrement: (itemType: 'RETAIL', refId: string) => void;
+  onAddDropIn: (studioSessionId: string) => void;
   onAddDistinct: (payload: {
     itemType: 'GIFT_CARD' | 'CUSTOM';
     name?: string;
@@ -48,15 +48,14 @@ export function CatalogPanel({
   catalog,
   order,
   busy,
-  locationId,
   onAddOrIncrement,
+  onAddDropIn,
   onAddDistinct,
 }: CatalogPanelProps) {
   const [tab, setTab] = useState<TabId>('RETAIL');
   const [retailSearch, setRetailSearch] = useState('');
 
-  const [todaySessions, setTodaySessions] = useState<TodaySession[]>([]);
-  const [selectedSessionId, setSelectedSessionId] = useState<string>('');
+  const [dropInDay, setDropInDay] = useState(() => dayKey(new Date()));
 
   const [giftAmountCents, setGiftAmountCents] = useState<number | null>(null);
   const [giftCustomAmount, setGiftCustomAmount] = useState('');
@@ -66,24 +65,40 @@ export function CatalogPanel({
   const [customName, setCustomName] = useState('');
   const [customAmount, setCustomAmount] = useState('');
 
-  useEffect(() => {
-    if (tab !== 'DROP_IN' || !locationId) return;
-    const nowMT = toZonedTime(new Date(), STUDIO_TIMEZONE);
-    const from = fromZonedTime(startOfDay(nowMT), STUDIO_TIMEZONE);
-    const to = fromZonedTime(endOfDay(nowMT), STUDIO_TIMEZONE);
-    fetch(`/api/admin/studio-sessions?from=${from.toISOString()}&to=${to.toISOString()}`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then((sessions: TodaySession[]) =>
-        setTodaySessions(sessions.filter((s) => s.locationId === locationId)),
-      );
-  }, [tab, locationId]);
-
   const filteredRetail = useMemo(() => {
     const products = catalog?.retailProducts ?? [];
     const q = retailSearch.trim().toLowerCase();
     if (!q) return products;
     return products.filter((p) => p.name.toLowerCase().includes(q));
   }, [catalog, retailSearch]);
+
+  // Today plus the next six Mountain Time days.
+  const dropInDays = useMemo(() => {
+    const now = new Date();
+    return Array.from({ length: DROP_IN_DAYS }, (_, i) => {
+      const date = addDays(now, i);
+      return {
+        key: dayKey(date),
+        label: i === 0 ? 'Today' : formatInTimeZone(date, STUDIO_TIMEZONE, 'EEE d'),
+      };
+    });
+  }, []);
+
+  const sessionsForDay = useMemo(
+    () => (catalog?.upcomingSessions ?? []).filter((s) => dayKey(s.startsAt) === dropInDay),
+    [catalog, dropInDay],
+  );
+
+  const sessionsInCart = useMemo(
+    () =>
+      new Set(
+        (order?.items ?? [])
+          .filter((i) => i.itemType === 'DROP_IN')
+          .map(dropInSessionIdOf)
+          .filter((id): id is string => id !== null),
+      ),
+    [order],
+  );
 
   function submitGiftCard() {
     const cents = giftAmountCents ?? Math.round(parseFloat(giftCustomAmount || '0') * 100);
@@ -171,86 +186,58 @@ export function CatalogPanel({
         </div>
       )}
 
-      {/* Drop-ins */}
+      {/* Drop-ins: a seat in a real session at this studio */}
       {tab === 'DROP_IN' && (
         <div className="flex flex-col gap-3">
-          <div className="divide-y rounded-lg border">
-            {(catalog?.sessionTypes ?? []).map((st) => (
-              <button
-                key={st.id}
-                type="button"
-                disabled={busy || !order}
-                onClick={() =>
-                  onAddOrIncrement(
-                    'DROP_IN',
-                    st.id,
-                    selectedSessionId ? { studioSessionId: selectedSessionId } : undefined,
-                  )
-                }
-                className="flex min-h-14 w-full items-center justify-between px-4 py-2 text-left hover:bg-muted active:bg-muted"
+          <div className="flex flex-wrap gap-2">
+            {dropInDays.map((d) => (
+              <Button
+                key={d.key}
+                variant={dropInDay === d.key ? 'default' : 'outline'}
+                className="min-h-11"
+                onClick={() => setDropInDay(d.key)}
               >
-                <span className="font-medium">{st.name}</span>
-                <span className="font-semibold">{formatMoney(st.dropInPriceCents)}</span>
-              </button>
+                {d.label}
+              </Button>
             ))}
-            {(catalog?.sessionTypes ?? []).length === 0 && (
-              <p className="p-4 text-sm text-muted-foreground">No session types available.</p>
-            )}
           </div>
 
-          <div className="rounded-lg border bg-card p-3">
-            <Label className="text-sm font-medium">Tie this to a session (optional)</Label>
-            <select
-              value={selectedSessionId}
-              onChange={(e) => setSelectedSessionId(e.target.value)}
-              className="mt-2 min-h-11 w-full rounded-md border border-input bg-background px-3 text-base"
-            >
-              <option value="">No specific session</option>
-              {todaySessions.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {new Date(s.startsAt).toLocaleTimeString('en-US', {
-                    timeZone: STUDIO_TIMEZONE,
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })}{' '}
-                  — {s.sessionType.name}
-                  {s.instructor?.name ? ` (${s.instructor.name})` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      )}
-
-      {/* Memberships */}
-      {tab === 'MEMBERSHIP' && (
-        <div className="flex flex-col gap-3">
-          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-            Memberships sold here create a one time charge. Set up recurring billing from the
-            customer&apos;s profile after checkout.
-          </div>
           <div className="divide-y rounded-lg border">
-            {(catalog?.membershipPlans ?? []).map((plan) => (
-              <button
-                key={plan.id}
-                type="button"
-                disabled={busy || !order}
-                onClick={() => onAddOrIncrement('MEMBERSHIP', plan.id)}
-                className="flex min-h-14 w-full items-center justify-between px-4 py-2 text-left hover:bg-muted active:bg-muted"
-              >
-                <div>
-                  <span className="font-medium">{plan.name}</span>
-                  <span className="ml-2 text-sm text-muted-foreground">
-                    every {plan.billingIntervalDays} days
-                  </span>
-                </div>
-                <span className="font-semibold">{formatMoney(plan.priceInCents)}</span>
-              </button>
-            ))}
-            {(catalog?.membershipPlans ?? []).length === 0 && (
-              <p className="p-4 text-sm text-muted-foreground">No membership plans available.</p>
+            {sessionsForDay.map((s) => {
+              const seatsLeft = Math.max(0, s.capacity - s.confirmedCount);
+              const full = seatsLeft === 0;
+              const inCart = sessionsInCart.has(s.id);
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  disabled={busy || !order || full || inCart}
+                  onClick={() => onAddDropIn(s.id)}
+                  className={cn(
+                    'flex min-h-16 w-full items-center justify-between gap-3 px-4 py-2 text-left',
+                    full || inCart ? 'cursor-not-allowed opacity-50' : 'hover:bg-muted active:bg-muted',
+                  )}
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium">
+                      {formatInTimeZone(s.startsAt, STUDIO_TIMEZONE, 'h:mm a')} · {s.name}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {s.instructorName ? `${s.instructorName} · ` : ''}
+                      {inCart ? 'In this order' : full ? 'Full' : `${seatsLeft} of ${s.capacity} seats left`}
+                    </p>
+                  </div>
+                  <span className="shrink-0 font-semibold">{formatMoney(s.dropInPriceCents)}</span>
+                </button>
+              );
+            })}
+            {sessionsForDay.length === 0 && (
+              <p className="p-4 text-sm text-muted-foreground">No sessions at this studio on this day.</p>
             )}
           </div>
+          <p className="text-xs text-muted-foreground">
+            A drop-in books a seat for the customer on this order, so attach the customer before charging.
+          </p>
         </div>
       )}
 
@@ -314,6 +301,9 @@ export function CatalogPanel({
         </div>
       )}
 
+      {/* Clay & firing */}
+      {tab === 'FIRING' && <FiringPanel order={order} busy={busy} onAdd={onAddDistinct} />}
+
       {/* Custom */}
       {tab === 'CUSTOM' && (
         <div className="flex flex-col gap-3">
@@ -322,7 +312,7 @@ export function CatalogPanel({
             <Input
               value={customName}
               onChange={(e) => setCustomName(e.target.value)}
-              placeholder="Firing fee"
+              placeholder="Item name"
               className="mt-1 min-h-11 text-base"
             />
           </div>

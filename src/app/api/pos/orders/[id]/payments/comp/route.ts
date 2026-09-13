@@ -1,7 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { formatMoney, maybeCompletePosOrder, remainingBalanceCents } from "@/lib/pos";
+import {
+  checkOrderPayable,
+  formatMoney,
+  maybeCompletePosOrder,
+  remainingBalanceCents,
+} from "@/lib/pos";
 
 export async function POST(
   req: NextRequest,
@@ -19,6 +24,11 @@ export async function POST(
   if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (order.status !== "OPEN") {
     return NextResponse.json({ error: "Order is not open" }, { status: 409 });
+  }
+
+  const block = await checkOrderPayable(id);
+  if (block) {
+    return NextResponse.json({ error: block.error, message: block.message }, { status: block.status });
   }
 
   const body = (await req.json().catch(() => null)) as {

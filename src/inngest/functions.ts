@@ -3,7 +3,7 @@ import { inngest, type BookingEventData, type MembershipEventData } from "@/lib/
 import { prisma } from "@/lib/prisma";
 import { interpolateTemplate, sendSms } from "@/lib/sms";
 import { resend } from "@/lib/resend";
-import { formatMoney } from "@/lib/pos";
+import { formatMoney, metadataObject } from "@/lib/pos";
 
 const STUDIO_TZ = "America/Denver";
 
@@ -271,7 +271,14 @@ export const sendPosReceipt = inngest.createFunction(
       // fallback only when there is no email on file.
       if (order.customer.email) {
         const lines = order.items
-          .map((i) => `  ${i.quantity}x ${i.name} — ${formatMoney(i.totalCents)}`)
+          .map((i) => {
+            const line = `  ${i.quantity}x ${i.name} — ${formatMoney(i.totalCents)}`;
+            const raw = metadataObject(i.metadata).giftCardCodes;
+            const codes = Array.isArray(raw) ? raw.filter((c): c is string => typeof c === "string") : [];
+            return codes.length > 0
+              ? `${line}\n    Gift card code${codes.length > 1 ? "s" : ""}: ${codes.join(", ")}`
+              : line;
+          })
           .join("\n");
         const body = [
           `Throw Art Studio — Receipt #${order.orderNumber}`,
@@ -283,6 +290,7 @@ export const sendPosReceipt = inngest.createFunction(
           "",
           `Subtotal: ${formatMoney(order.subtotalCents)}`,
           order.discountCents > 0 ? `Discount: -${formatMoney(order.discountCents)}` : null,
+          order.taxCents > 0 ? `Tax: ${formatMoney(order.taxCents)}` : null,
           order.tipCents > 0 ? `Tip: ${formatMoney(order.tipCents)}` : null,
           `Total: ${formatMoney(order.totalCents)}`,
           "",
@@ -302,9 +310,18 @@ export const sendPosReceipt = inngest.createFunction(
         return { sent: "email" };
       }
 
+      const giftCardCodes = order.items.flatMap((i) => {
+        const raw = metadataObject(i.metadata).giftCardCodes;
+        return Array.isArray(raw) ? raw.filter((c): c is string => typeof c === "string") : [];
+      });
       await sendSms({
         to: order.customer.phone!,
-        message: `Throw Art Studio receipt #${order.orderNumber}. Total ${formatMoney(order.totalCents)}. Thanks!`,
+        message:
+          `Throw Art Studio receipt #${order.orderNumber}. Total ${formatMoney(order.totalCents)}.` +
+          (giftCardCodes.length > 0
+            ? ` Gift card code${giftCardCodes.length > 1 ? "s" : ""}: ${giftCardCodes.join(", ")}.`
+            : "") +
+          " Thanks!",
         userId: order.customer.id,
         kind: "transactional",
       });

@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
 import { checkPermission } from "@/lib/permissions";
-import { formatMoney, remainingBalanceCents } from "@/lib/pos";
+import { checkOrderPayable, formatMoney, remainingBalanceCents } from "@/lib/pos";
 import {
   TERMINAL_METHOD,
   TIP_PERCENTAGES,
@@ -38,8 +38,16 @@ export async function POST(
     include: { payments: true },
   });
   if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!(await checkPermission(session.user.id, "canUsePos", order.locationId))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   if (order.status !== "OPEN") {
     return NextResponse.json({ error: "Order is not open" }, { status: 409 });
+  }
+
+  const block = await checkOrderPayable(id);
+  if (block) {
+    return NextResponse.json({ error: block.error, message: block.message }, { status: block.status });
   }
 
   const body = (await req.json().catch(() => null)) as {

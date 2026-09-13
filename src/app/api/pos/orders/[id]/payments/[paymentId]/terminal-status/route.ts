@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { checkPermission } from "@/lib/permissions";
+import { POS_ORDER_INCLUDE } from "@/lib/pos";
 import { TerminalError, getTerminalProgress } from "@/lib/terminal";
 
 /**
@@ -22,16 +23,22 @@ export async function GET(
 
   const { id, paymentId } = await params;
 
+  const orderLocation = await prisma.posOrder.findUnique({
+    where: { id },
+    select: { locationId: true },
+  });
+  if (!orderLocation) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!(await checkPermission(session.user.id, "canUsePos", orderLocation.locationId))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const payment = await prisma.posPayment.findUnique({ where: { id: paymentId } });
   if (!payment || payment.orderId !== id) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   if (payment.status === "SUCCEEDED") {
-    const order = await prisma.posOrder.findUnique({
-      where: { id },
-      include: { items: true, payments: true },
-    });
+    const order = await prisma.posOrder.findUnique({ where: { id }, include: POS_ORDER_INCLUDE });
     return NextResponse.json({ state: "succeeded", order });
   }
 

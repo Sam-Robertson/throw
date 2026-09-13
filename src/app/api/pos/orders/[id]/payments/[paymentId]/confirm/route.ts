@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
 import { checkPermission } from "@/lib/permissions";
-import { maybeCompletePosOrder } from "@/lib/pos";
+import { POS_ORDER_INCLUDE, maybeCompletePosOrder } from "@/lib/pos";
 
 export async function POST(
   _req: Request,
@@ -16,6 +16,15 @@ export async function POST(
 
   const { id, paymentId } = await params;
 
+  const orderLocation = await prisma.posOrder.findUnique({
+    where: { id },
+    select: { locationId: true },
+  });
+  if (!orderLocation) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!(await checkPermission(session.user.id, "canUsePos", orderLocation.locationId))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const payment = await prisma.posPayment.findUnique({ where: { id: paymentId } });
   if (!payment || payment.orderId !== id) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -23,10 +32,7 @@ export async function POST(
 
   if (payment.status === "SUCCEEDED") {
     // Idempotent no-op — the webhook likely already settled this.
-    const order = await prisma.posOrder.findUnique({
-      where: { id },
-      include: { items: true, payments: true },
-    });
+    const order = await prisma.posOrder.findUnique({ where: { id }, include: POS_ORDER_INCLUDE });
     return NextResponse.json({ order });
   }
 
@@ -44,7 +50,7 @@ export async function POST(
 
     const order = count > 0
       ? await maybeCompletePosOrder(id)
-      : await prisma.posOrder.findUnique({ where: { id }, include: { items: true, payments: true } });
+      : await prisma.posOrder.findUnique({ where: { id }, include: POS_ORDER_INCLUDE });
 
     return NextResponse.json({ order });
   }

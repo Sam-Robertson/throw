@@ -3,21 +3,31 @@
  *
  *   npm run terminal:e2e
  *
- * Exercises the real settle logic in src/lib/terminal.ts rather than a
- * reimplementation, so the on-reader tip reconciliation is genuinely verified.
+ * Exercises the real settle logic in src/lib/terminal.ts and the real order
+ * completion in src/lib/pos.ts rather than a reimplementation, so the on-reader
+ * tip reconciliation and drop-in booking creation are genuinely verified.
+ *
+ * The order carries a retail line and a DROP_IN line for a test customer, and
+ * the script checks that completing it:
+ *   - settles the payment and the on-reader tip (idempotently), and
+ *   - books the customer into the session (Booking.posOrderItemId set).
+ * It also checks that a drop-in order with no customer is refused payment.
  *
  * Self-contained and self-cleaning: it creates its own test-mode Terminal
- * location and simulated reader if none exist, and removes the order, payment
- * and mirrored Payment row it created before exiting. It refuses to run against
- * anything but a Stripe test key.
+ * location and simulated reader if none exist, its own customer, session type
+ * and session, and removes every row it created before exiting. It refuses to
+ * run against anything but a Stripe test key. It prints the database it's
+ * connected to — point DATABASE_URL at a scratch database, not production.
  */
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
 import { settleTerminalPayment, TERMINAL_METHOD } from "@/lib/terminal";
-import { recalculateOrderTotals } from "@/lib/pos";
+import { checkOrderPayable, repriceOrder } from "@/lib/pos";
+import { taxCodeForPosItem } from "@/config/taxCodes";
 
 const TIP_CENTS = 1000;
 const ITEM_CENTS = 5000;
+const DROP_IN_CENTS = 3500;
 const ITEM_NAME = "__terminal-e2e test item";
 
 async function ensureSimulatedReader() {
@@ -42,10 +52,20 @@ async function ensureSimulatedReader() {
   });
 }
 
+let failed = 0;
+function check(label: string, actual: unknown, expected: unknown) {
+  const ok = actual === expected;
+  if (!ok) failed++;
+  console.log(`${ok ? "PASS" : "FAIL"}  ${label}: ${String(actual)}${ok ? "" : ` (expected ${String(expected)})`}`);
+}
+
 async function main() {
   if (!process.env.STRIPE_SECRET_KEY?.startsWith("sk_test")) {
     throw new Error("Refusing to run outside Stripe test mode");
   }
+
+  const [{ db }] = await prisma.$queryRaw<{ db: string }[]>`SELECT current_database() AS db`;
+  console.log(`database ${db}`);
 
   const reader = await ensureSimulatedReader();
   console.log(`reader ${reader.id} (${reader.device_type})`);
@@ -53,11 +73,35 @@ async function main() {
   const location = await prisma.location.findFirstOrThrow({ where: { isActive: true } });
   const staff = await prisma.user.findFirstOrThrow({ where: { role: "ADMIN" } });
 
+  const stamp = Date.now();
+  const customer = await prisma.user.create({
+    data: { email: `terminal-e2e+${stamp}@example.invalid`, name: "Terminal E2E Customer" },
+  });
+  const sessionType = await prisma.sessionType.create({
+    data: {
+      name: "__terminal-e2e drop-in",
+      slug: `terminal-e2e-${stamp}`,
+      durationMinutes: 60,
+      capacity: 10,
+      dropInPriceCents: DROP_IN_CENTS,
+      locationId: location.id,
+    },
+  });
+  const startsAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const studioSession = await prisma.studioSession.create({
+    data: {
+      sessionTypeId: sessionType.id,
+      locationId: location.id,
+      startsAt,
+      endsAt: new Date(startsAt.getTime() + 60 * 60 * 1000),
+      capacity: 10,
+    },
+  });
+
   const order = await prisma.posOrder.create({
     data: { locationId: location.id, staffId: staff.id, status: "OPEN" },
   });
 
-  let failed = 0;
   try {
     await prisma.posOrderItem.create({
       data: {
@@ -67,10 +111,35 @@ async function main() {
         quantity: 1,
         unitPriceCents: ITEM_CENTS,
         totalCents: ITEM_CENTS,
+        taxCode: taxCodeForPosItem("RETAIL"),
       },
     });
-    const priced = await recalculateOrderTotals(order.id);
-    console.log(`order #${priced.orderNumber} total ${priced.totalCents} tip ${priced.tipCents}`);
+    const dropInItem = await prisma.posOrderItem.create({
+      data: {
+        orderId: order.id,
+        itemType: "DROP_IN",
+        refId: sessionType.id,
+        name: sessionType.name,
+        quantity: 1,
+        unitPriceCents: DROP_IN_CENTS,
+        totalCents: DROP_IN_CENTS,
+        taxCode: taxCodeForPosItem("DROP_IN"),
+        metadata: { studioSessionId: studioSession.id, startsAt: startsAt.toISOString() },
+      },
+    });
+
+    // A drop-in with no customer must not be payable.
+    const blocked = await checkOrderPayable(order.id);
+    check("drop-in without customer is refused", blocked?.error, "CUSTOMER_REQUIRED");
+
+    await prisma.posOrder.update({ where: { id: order.id }, data: { customerId: customer.id } });
+    check("payable once a customer is attached", await checkOrderPayable(order.id), null);
+
+    const { order: priced, taxWarning } = await repriceOrder(order.id);
+    console.log(
+      `order #${priced.orderNumber} subtotal ${priced.subtotalCents} tax ${priced.taxCents} total ${priced.totalCents}` +
+        (taxWarning ? ` (tax warning: ${taxWarning})` : ""),
+    );
 
     const intent = await stripe.paymentIntents.create({
       amount: priced.totalCents,
@@ -111,38 +180,43 @@ async function main() {
       where: { id: payment.id },
     });
 
-    const expectedTotal = ITEM_CENTS + TIP_CENTS;
-    const checks: [string, unknown, unknown][] = [
-      ["payment status", finalPayment.status, "SUCCEEDED"],
-      ["payment amount", finalPayment.amountCents, expectedTotal],
-      ["order tipCents", finalOrder.tipCents, TIP_CENTS],
-      ["order totalCents", finalOrder.totalCents, expectedTotal],
-      ["order status", finalOrder.status, "COMPLETED"],
-    ];
-    for (const [label, actual, expected] of checks) {
-      const ok = actual === expected;
-      if (!ok) failed++;
-      console.log(
-        `${ok ? "PASS" : "FAIL"}  ${label}: ${actual}${ok ? "" : ` (expected ${expected})`}`,
-      );
-    }
+    const expectedTotal = priced.totalCents + TIP_CENTS;
+    check("payment status", finalPayment.status, "SUCCEEDED");
+    check("payment amount", finalPayment.amountCents, expectedTotal);
+    check("order tipCents", finalOrder.tipCents, TIP_CENTS);
+    check("order totalCents", finalOrder.totalCents, expectedTotal);
+    check("order status", finalOrder.status, "COMPLETED");
 
-    // Settling twice must not double-count the tip.
+    const booking = await prisma.booking.findUnique({ where: { posOrderItemId: dropInItem.id } });
+    check("drop-in booking created", booking !== null, true);
+    check("booking status", booking?.status, "CONFIRMED");
+    check("booking source", booking?.source, "DROP_IN");
+    check("booking customer", booking?.userId, customer.id);
+    check("booking session", booking?.studioSessionId, studioSession.id);
+    check("booking amountPaidCents", booking?.amountPaidCents, DROP_IN_CENTS);
+
+    // Settling twice must not double-count the tip or book twice.
     const again = await settleTerminalPayment(payment.id, settled);
-    const idempotent = again.tipCents === TIP_CENTS && again.totalCents === expectedTotal;
-    if (!idempotent) failed++;
-    console.log(
-      `${idempotent ? "PASS" : "FAIL"}  idempotent re-settle: tip ${again.tipCents}, total ${again.totalCents}`,
+    check("idempotent re-settle tip", again.tipCents, TIP_CENTS);
+    check("idempotent re-settle total", again.totalCents, expectedTotal);
+    check(
+      "still exactly one booking",
+      await prisma.booking.count({ where: { studioSessionId: studioSession.id } }),
+      1,
     );
   } finally {
-    // Never leave test rows behind — this runs against the real database.
+    // Never leave test rows behind.
+    await prisma.booking.deleteMany({ where: { studioSessionId: studioSession.id } }).catch(() => {});
     await prisma.payment
       .deleteMany({ where: { stripePaymentIntentId: `pos_${order.id}` } })
       .catch(() => {});
     await prisma.posPayment.deleteMany({ where: { orderId: order.id } });
     await prisma.posOrderItem.deleteMany({ where: { orderId: order.id } });
     await prisma.posOrder.delete({ where: { id: order.id } }).catch(() => {});
-    console.log("cleaned up test order");
+    await prisma.studioSession.delete({ where: { id: studioSession.id } }).catch(() => {});
+    await prisma.sessionType.delete({ where: { id: sessionType.id } }).catch(() => {});
+    await prisma.user.delete({ where: { id: customer.id } }).catch(() => {});
+    console.log("cleaned up test order, session, session type and customer");
   }
 
   console.log(failed === 0 ? "\nALL CHECKS PASSED" : `\n${failed} CHECK(S) FAILED`);

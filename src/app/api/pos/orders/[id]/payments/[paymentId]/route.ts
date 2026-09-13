@@ -16,6 +16,9 @@ export async function DELETE(
 
   const order = await prisma.posOrder.findUnique({ where: { id } });
   if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!(await checkPermission(session.user.id, "canUsePos", order.locationId))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const payment = await prisma.posPayment.findUnique({ where: { id: paymentId } });
   if (!payment || payment.orderId !== id) {

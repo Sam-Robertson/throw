@@ -2,7 +2,8 @@ import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { checkPermission } from "@/lib/permissions";
-import { recalculateOrderTotals } from "@/lib/pos";
+import { repriceOrder } from "@/lib/pos";
+import { parseFiringMetadata } from "@/config/firingPrices";
 
 export async function PATCH(
   req: NextRequest,
@@ -17,6 +18,9 @@ export async function PATCH(
 
   const order = await prisma.posOrder.findUnique({ where: { id } });
   if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  if (!(await checkPermission(session.user.id, "canUsePos", order.locationId))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   if (order.status !== "OPEN") {
     return NextResponse.json({ error: "Order is not open" }, { status: 409 });
   }
@@ -34,18 +38,35 @@ export async function PATCH(
 
   const quantity =
     body.quantity !== undefined ? Math.max(1, Math.floor(body.quantity)) : item.quantity;
-  const discountCents =
-    body.discountCents !== undefined ? Math.max(0, Math.floor(body.discountCents)) : item.discountCents;
-  const totalCents = item.unitPriceCents * quantity - discountCents;
+
+  // A drop-in is one seat for one customer, and a firing line is already
+  // priced for the weight entered — neither can be multiplied.
+  const quantityLocked = item.itemType === "DROP_IN" || parseFiringMetadata(item.metadata) !== null;
+  if (quantityLocked && quantity !== item.quantity) {
+    return NextResponse.json(
+      {
+        error: "QUANTITY_LOCKED",
+        message: "The quantity can't be changed on this line. Remove it and add it again instead.",
+      },
+      { status: 400 },
+    );
+  }
+
+  const lineCents = item.unitPriceCents * quantity;
+  const discountCents = Math.min(
+    lineCents,
+    body.discountCents !== undefined ? Math.max(0, Math.floor(body.discountCents)) : item.discountCents,
+  );
+  const totalCents = lineCents - discountCents;
 
   await prisma.posOrderItem.update({
     where: { id: itemId },
     data: { quantity, discountCents, totalCents },
   });
 
-  const updatedOrder = await recalculateOrderTotals(id);
+  const { order: updatedOrder, taxWarning } = await repriceOrder(id);
 
-  return NextResponse.json(updatedOrder);
+  return NextResponse.json({ ...updatedOrder, taxWarning });
 }
 
 export async function DELETE(
@@ -61,6 +82,9 @@ export async function DELETE(
 
   const order = await prisma.posOrder.findUnique({ where: { id } });
   if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  if (!(await checkPermission(session.user.id, "canUsePos", order.locationId))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   if (order.status !== "OPEN") {
     return NextResponse.json({ error: "Order is not open" }, { status: 409 });
   }
@@ -72,7 +96,7 @@ export async function DELETE(
 
   await prisma.posOrderItem.delete({ where: { id: itemId } });
 
-  const updatedOrder = await recalculateOrderTotals(id);
+  const { order: updatedOrder, taxWarning } = await repriceOrder(id);
 
-  return NextResponse.json(updatedOrder);
+  return NextResponse.json({ ...updatedOrder, taxWarning });
 }

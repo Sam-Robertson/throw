@@ -12,7 +12,14 @@ import {
 import { CatalogPanel } from './CatalogPanel';
 import { CartPanel } from './CartPanel';
 import { PaymentSheet } from './PaymentSheet';
-import { formatMoney, type Location, type PosCatalog, type PosOrder } from './types';
+import {
+  apiErrorMessage,
+  formatMoney,
+  type ApiErrorBody,
+  type Location,
+  type PosCatalog,
+  type PosOrder,
+} from './types';
 
 interface ResumableOrder {
   id: string;
@@ -38,6 +45,9 @@ export function PosTerminal({
   const [order, setOrder] = useState<PosOrder | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set when Stripe Tax fell back to zero tax. Only item changes recalculate
+  // tax, so it's updated from responses that carry the field and kept otherwise.
+  const [taxWarning, setTaxWarning] = useState<string | null>(null);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [paymentSheetOpen, setPaymentSheetOpen] = useState(false);
 
@@ -60,6 +70,7 @@ export function PosTerminal({
     if (!locationId) return;
     let cancelled = false;
     setBusy(true);
+    setTaxWarning(null);
     Promise.all([
       fetch('/api/pos/orders', {
         method: 'POST',
@@ -80,13 +91,21 @@ export function PosTerminal({
 
   const refreshOrderState = useCallback(async (res: Response) => {
     if (res.ok) {
-      setOrder(await res.json());
+      const data = (await res.json()) as PosOrder;
+      setOrder(data);
+      if ('taxWarning' in data) setTaxWarning(data.taxWarning ?? null);
       setError(null);
     } else {
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setError(data.error ?? 'Something went wrong');
+      const data = (await res.json().catch(() => ({}))) as ApiErrorBody;
+      setError(apiErrorMessage(data, 'Something went wrong'));
     }
   }, []);
+
+  async function reloadCatalog() {
+    if (!locationId) return;
+    const res = await fetch(`/api/pos/catalog?locationId=${locationId}`);
+    if (res.ok) setCatalog((await res.json()) as PosCatalog);
+  }
 
   async function addItem(payload: Record<string, unknown>) {
     if (!order) return;
@@ -100,21 +119,19 @@ export function PosTerminal({
     setBusy(false);
   }
 
-  function addOrIncrement(
-    itemType: 'RETAIL' | 'DROP_IN' | 'MEMBERSHIP',
-    refId: string,
-    metadata?: Record<string, unknown>,
-  ) {
+  function addOrIncrement(itemType: 'RETAIL', refId: string) {
     if (!order) return;
-    const metaKey = JSON.stringify(metadata ?? null);
-    const existing = order.items.find(
-      (i) => i.itemType === itemType && i.refId === refId && JSON.stringify(i.metadata ?? null) === metaKey,
-    );
+    const existing = order.items.find((i) => i.itemType === itemType && i.refId === refId);
     if (existing) {
       void updateItemQuantity(existing.id, existing.quantity + 1);
     } else {
-      void addItem({ itemType, refId, quantity: 1, metadata });
+      void addItem({ itemType, refId, quantity: 1 });
     }
+  }
+
+  // Each drop-in is its own line: one seat in one session for the order's customer.
+  function addDropIn(studioSessionId: string) {
+    void addItem({ itemType: 'DROP_IN', metadata: { studioSessionId } });
   }
 
   function addDistinct(payload: {
@@ -189,7 +206,12 @@ export function PosTerminal({
       headers: JSON_HEADERS,
       body: JSON.stringify({ locationId }),
     });
-    if (res.ok) setOrder(await res.json());
+    if (res.ok) {
+      setOrder(await res.json());
+      setTaxWarning(null);
+    }
+    // Seat counts changed if the last order booked drop-ins.
+    void reloadCatalog();
   }
 
   async function voidOrder(reason: string) {
@@ -204,8 +226,8 @@ export function PosTerminal({
       await startNewOrder();
       setError(null);
     } else {
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setError(data.error ?? 'Failed to void order');
+      const data = (await res.json().catch(() => ({}))) as ApiErrorBody;
+      setError(apiErrorMessage(data, 'Failed to void order'));
     }
     setBusy(false);
   }
@@ -239,6 +261,7 @@ export function PosTerminal({
     const res = await fetch(`/api/pos/orders/${id}`);
     if (res.ok) {
       setOrder(await res.json());
+      setTaxWarning(null);
       setResumeListOpen(false);
     }
   }
@@ -330,6 +353,12 @@ export function PosTerminal({
         </div>
       )}
 
+      {taxWarning && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          {taxWarning}
+        </div>
+      )}
+
       {/* Two column on lg+, stacked below */}
       <div className="flex flex-col gap-6 lg:flex-row">
         <div className="lg:w-2/3">
@@ -337,8 +366,8 @@ export function PosTerminal({
             catalog={catalog}
             order={order}
             busy={busy}
-            locationId={locationId}
             onAddOrIncrement={addOrIncrement}
+            onAddDropIn={addDropIn}
             onAddDistinct={addDistinct}
           />
         </div>

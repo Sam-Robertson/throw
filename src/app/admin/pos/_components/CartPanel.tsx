@@ -14,7 +14,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { formatMoney, type PosOrder } from './types';
+import { formatMoney, isQuantityLocked, orderHasDropIn, type PosOrder } from './types';
 
 interface CustomerMatch {
   id: string;
@@ -160,6 +160,9 @@ export function CartPanel({
 
   const items = order?.items ?? [];
   const cartEmpty = items.length === 0;
+  // Drop-ins book a seat for the order's customer; the server refuses payment
+  // without one (CUSTOMER_REQUIRED), so block it here with the reason.
+  const needsCustomer = orderHasDropIn(order) && !order?.customerId;
 
   return (
     <div className="flex flex-col gap-5">
@@ -248,8 +251,8 @@ export function CartPanel({
                   <p className="text-sm text-muted-foreground">{formatMoney(item.unitPriceCents)} each</p>
                 </div>
 
-                {/* Quantity stepper */}
-                <div className="flex items-center gap-1.5">
+                {/* Quantity stepper (not for drop-ins or clay & firing lines) */}
+                <div className={isQuantityLocked(item) ? 'hidden' : 'flex items-center gap-1.5'}>
                   <Button
                     variant="outline"
                     size="icon"
@@ -337,6 +340,12 @@ export function CartPanel({
               <span>−{formatMoney(order!.discountCents)}</span>
             </div>
           )}
+          {(order?.taxCents ?? 0) > 0 && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Tax</span>
+              <span>{formatMoney(order!.taxCents)}</span>
+            </div>
+          )}
           {(order?.tipCents ?? 0) > 0 && (
             <div className="flex justify-between">
               <span className="text-muted-foreground">Tip</span>
@@ -401,10 +410,15 @@ export function CartPanel({
           </Button>
         </div>
 
+        {needsCustomer && (
+          <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            This order books a class seat. Attach the customer above before charging.
+          </p>
+        )}
         <Button
           className="min-h-14 w-full text-lg font-semibold"
           onClick={onCharge}
-          disabled={busy || cartEmpty}
+          disabled={busy || cartEmpty || needsCustomer}
         >
           Charge {formatMoney(order?.totalCents ?? 0)}
         </Button>

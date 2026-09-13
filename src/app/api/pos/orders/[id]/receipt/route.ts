@@ -17,6 +17,9 @@ export async function POST(
 
   const order = await prisma.posOrder.findUnique({ where: { id } });
   if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!(await checkPermission(session.user.id, "canUsePos", order.locationId))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   if (order.status !== "COMPLETED") {
     return NextResponse.json({ error: "Only completed orders have a receipt" }, { status: 409 });
   }

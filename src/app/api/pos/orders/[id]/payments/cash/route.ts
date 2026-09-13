@@ -2,7 +2,12 @@ import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { checkPermission } from "@/lib/permissions";
-import { formatMoney, maybeCompletePosOrder, remainingBalanceCents } from "@/lib/pos";
+import {
+  checkOrderPayable,
+  formatMoney,
+  maybeCompletePosOrder,
+  remainingBalanceCents,
+} from "@/lib/pos";
 
 export async function POST(
   req: NextRequest,
@@ -17,8 +22,16 @@ export async function POST(
 
   const order = await prisma.posOrder.findUnique({ where: { id }, include: { payments: true } });
   if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!(await checkPermission(session.user.id, "canUsePos", order.locationId))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   if (order.status !== "OPEN") {
     return NextResponse.json({ error: "Order is not open" }, { status: 409 });
+  }
+
+  const block = await checkOrderPayable(id);
+  if (block) {
+    return NextResponse.json({ error: block.error, message: block.message }, { status: block.status });
   }
 
   const body = (await req.json().catch(() => null)) as {

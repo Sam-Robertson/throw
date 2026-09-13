@@ -2,13 +2,13 @@ import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { checkPermission } from "@/lib/permissions";
+import { POS_ORDER_INCLUDE } from "@/lib/pos";
+import { forbiddenResponse, locationWhere, resolveLocationScope } from "@/lib/locationScope";
 import type { Prisma } from "@prisma/client";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const allowed = await checkPermission(session.user.id, "canUsePos");
-  if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = (await req.json().catch(() => null)) as {
     locationId?: string;
@@ -19,13 +19,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "locationId is required" }, { status: 400 });
   }
 
+  const allowed = await checkPermission(session.user.id, "canUsePos", body.locationId);
+  if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
   const order = await prisma.posOrder.create({
     data: {
       locationId: body.locationId,
       customerId: body.customerId ?? null,
       staffId: session.user.id,
     },
-    include: { items: true, payments: true },
+    include: POS_ORDER_INCLUDE,
   });
 
   return NextResponse.json(order, { status: 201 });
@@ -34,11 +37,21 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const allowed = await checkPermission(session.user.id, "canUsePos");
-  if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { searchParams } = new URL(req.url);
   const locationId = searchParams.get("locationId");
+
+  const allowed = await checkPermission(session.user.id, "canUsePos", locationId ?? undefined);
+  if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  // Staff only see orders from the studios they're assigned to.
+  let scope;
+  try {
+    scope = resolveLocationScope(session, locationId);
+  } catch (err) {
+    return forbiddenResponse(err);
+  }
+
   const status = searchParams.get("status");
   const staffId = searchParams.get("staffId");
   const from = searchParams.get("from");
@@ -47,7 +60,7 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "25", 10) || 25));
 
   const where: Prisma.PosOrderWhereInput = {
-    ...(locationId ? { locationId } : {}),
+    ...locationWhere(scope, "locationId"),
     ...(status ? { status } : {}),
     ...(staffId ? { staffId } : {}),
     ...(from || to

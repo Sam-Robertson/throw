@@ -18,7 +18,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { getStripePromise } from './stripeClient';
 import { TerminalPane } from './TerminalPane';
-import { formatMoney, remainingBalanceCents, type PosOrder } from './types';
+import {
+  apiErrorMessage,
+  formatMoney,
+  giftCardCodesFromOrder,
+  orderHasDropIn,
+  remainingBalanceCents,
+  type ApiErrorBody,
+  type PosOrder,
+} from './types';
 
 type View = 'methods' | 'cash' | 'terminal' | 'card' | 'giftcard' | 'comp' | 'success';
 
@@ -91,6 +99,12 @@ export function PaymentSheet({
         {error && (
           <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-sm text-destructive">
             {error}
+          </div>
+        )}
+
+        {view === 'methods' && orderHasDropIn(order) && !order.customerId && (
+          <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900">
+            This order books a class seat. Close this and attach the customer before taking payment.
           </div>
         )}
 
@@ -185,6 +199,24 @@ export function PaymentSheet({
             {lastChangeCents !== null && lastChangeCents > 0 && (
               <p className="text-3xl font-bold">Change due {formatMoney(lastChangeCents)}</p>
             )}
+            {giftCardCodesFromOrder(order).length > 0 && (
+              <div className="w-full rounded-lg border-2 border-foreground p-4 text-left">
+                <p className="text-sm font-semibold">Gift card codes. Give these to the customer.</p>
+                {giftCardCodesFromOrder(order).map((g) =>
+                  g.codes.map((code) => (
+                    <div key={code} className="mt-2 flex items-center justify-between gap-3">
+                      <span className="font-mono text-2xl font-bold tracking-widest">{code}</span>
+                      <span className="text-sm text-muted-foreground">{formatMoney(g.amountCents)}</span>
+                    </div>
+                  )),
+                )}
+              </div>
+            )}
+            {order.note && (
+              <p className="w-full whitespace-pre-line rounded-md border bg-muted/40 p-2 text-left text-sm">
+                {order.note}
+              </p>
+            )}
             <div className="grid w-full grid-cols-1 gap-2">
               <Button
                 variant="outline"
@@ -252,8 +284,8 @@ function CashPane({
       setTendered('');
       onResult(data.order, data.changeCents);
     } else {
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setError(data.error ?? 'Failed to record cash payment');
+      const data = (await res.json().catch(() => ({}))) as ApiErrorBody;
+      setError(apiErrorMessage(data, 'Failed to record cash payment'));
     }
     setBusy(false);
   }
@@ -327,8 +359,8 @@ function CardPane({
       setClientSecret(data.clientSecret);
       setPaymentId(data.paymentId);
     } else {
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setError(data.error ?? 'Failed to start card payment');
+      const data = (await res.json().catch(() => ({}))) as ApiErrorBody;
+      setError(apiErrorMessage(data, 'Failed to start card payment'));
     }
     setBusy(false);
   }
@@ -438,8 +470,8 @@ function GiftCardPane({ orderId, busy, setBusy, setError, onBack, onResult }: Pa
       }
       onResult(data.order);
     } else {
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setError(data.error ?? 'Failed to apply gift card');
+      const data = (await res.json().catch(() => ({}))) as ApiErrorBody;
+      setError(apiErrorMessage(data, 'Failed to apply gift card'));
     }
     setBusy(false);
   }
@@ -493,8 +525,8 @@ function CompPane({
       const data = (await res.json()) as { order: PosOrder };
       onResult(data.order);
     } else {
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setError(data.error ?? 'Failed to comp order');
+      const data = (await res.json().catch(() => ({}))) as ApiErrorBody;
+      setError(apiErrorMessage(data, 'Failed to comp order'));
     }
     setBusy(false);
   }
