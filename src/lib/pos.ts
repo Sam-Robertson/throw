@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { sendInngestEvent } from "@/lib/inngest";
 import { calculatePosTax, recordTaxTransaction } from "@/lib/stripeTax";
 import { parseFiringMetadata } from "@/config/firingPrices";
+import { findUnsignedWaiver } from "@/lib/waivers";
 
 export interface OrderTotalsInput {
   unitPriceCents: number;
@@ -202,6 +203,17 @@ export async function checkOrderPayable(orderId: string): Promise<PaymentBlock |
         status: 409,
         error: "SESSION_CANCELLED",
         message: `${item.name} has been cancelled. Remove it from the order.`,
+      };
+    }
+
+    // Everyone needs a signed waiver for the studio they're booking at, POS
+    // included (Sam, 2026-09-12) — same rule as the online booking routes.
+    const unsignedWaiver = await findUnsignedWaiver(order.customerId, session.locationId);
+    if (unsignedWaiver) {
+      return {
+        status: 409,
+        error: "WAIVER_REQUIRED",
+        message: `This customer hasn't signed the ${unsignedWaiver.locationName} waiver. Have them sign it (they can sign in and go to /waiver) before taking payment.`,
       };
     }
 

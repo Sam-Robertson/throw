@@ -23,6 +23,7 @@ import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
 import { settleTerminalPayment, TERMINAL_METHOD } from "@/lib/terminal";
 import { checkOrderPayable, repriceOrder } from "@/lib/pos";
+import { getApplicableWaiver } from "@/lib/waivers";
 import { taxCodeForPosItem } from "@/config/taxCodes";
 
 const TIP_CENTS = 1000;
@@ -133,7 +134,25 @@ async function main() {
     check("drop-in without customer is refused", blocked?.error, "CUSTOMER_REQUIRED");
 
     await prisma.posOrder.update({ where: { id: order.id }, data: { customerId: customer.id } });
-    check("payable once a customer is attached", await checkOrderPayable(order.id), null);
+
+    // Everyone needs a signed waiver, POS drop-ins included.
+    const waiver = await getApplicableWaiver(location.id);
+    if (waiver) {
+      const unsigned = await checkOrderPayable(order.id);
+      check("drop-in with unsigned waiver is refused", unsigned?.error, "WAIVER_REQUIRED");
+      await prisma.waiverSignature.create({
+        data: {
+          userId: customer.id,
+          waiverVersionId: waiver.id,
+          signedAt: new Date(),
+          ipAddress: "terminal-e2e",
+          typedName: customer.name,
+        },
+      });
+    } else {
+      console.log("no active waiver anywhere; skipping the waiver check");
+    }
+    check("payable once a customer is attached and has signed", await checkOrderPayable(order.id), null);
 
     const { order: priced, taxWarning } = await repriceOrder(order.id);
     console.log(
@@ -215,8 +234,9 @@ async function main() {
     await prisma.posOrder.delete({ where: { id: order.id } }).catch(() => {});
     await prisma.studioSession.delete({ where: { id: studioSession.id } }).catch(() => {});
     await prisma.sessionType.delete({ where: { id: sessionType.id } }).catch(() => {});
+    await prisma.waiverSignature.deleteMany({ where: { userId: customer.id } }).catch(() => {});
     await prisma.user.delete({ where: { id: customer.id } }).catch(() => {});
-    console.log("cleaned up test order, session, session type and customer");
+    console.log("cleaned up test order, session, session type, waiver signature and customer");
   }
 
   console.log(failed === 0 ? "\nALL CHECKS PASSED" : `\n${failed} CHECK(S) FAILED`);

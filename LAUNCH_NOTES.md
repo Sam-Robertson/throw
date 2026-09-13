@@ -24,6 +24,12 @@ merged into this one in Phase 3.
 
 - **Phase 3: A's suggested refactor not applied.** A suggested C and D replace their guards with its new `requireStaffScope()` helper. Not applied: both already scope with `resolveLocationScope`, and `scripts/verify-launch.ts` confirms C's behaviour. It would be a refactor with no change in behaviour.
 - **Phase 3: upload route auth order.** `POST /api/upload` returned 503 `UPLOADS_NOT_CONFIGURED` to unauthenticated callers sending a malformed body. It now requires a session for everything except Vercel Blob's signed `blob.upload-completed` callback, and checks that before the configuration check.
+- **Follow-up (Sam's answers, 2026-09-12): POS waivers.** `checkOrderPayable` checks the waiver per drop-in, only before the first payment, like the seat check. A waiver can't become unsigned mid-order, so later legs of a split payment aren't re-checked. Staff can't sign on the customer's behalf; that's raised as Question 16.
+- **Follow-up: POS access.** `canUsePos` is implicit for STAFF but still location-scoped: STAFF must be assigned to the order's studio, and STAFF with no assignment still can't use the POS. The `canUsePos` key stays in role JSON and in the staff-roles API for compatibility; only the Roles page toggle was removed.
+- **Follow-up: membership location.**
+  - The backfill is its own migration, not an edit to `launch-sept-2026`. That migration was already applied to the local databases, and editing it would change its checksum.
+  - Provo is identified by the postal code `84606` that the previous migration sets.
+  - The webhook's "default studio" is the oldest active location, which is Provo in production (verified read-only). It's shared by new memberships and by invoice payments.
 - **Phase 3: dev database for verification.** The terminal e2e, the build and `scripts/verify-launch.ts` all ran against the local `throw_launch_dev` database, per the Phase 1 note above.
 
 ## Cross-workstream edits needed

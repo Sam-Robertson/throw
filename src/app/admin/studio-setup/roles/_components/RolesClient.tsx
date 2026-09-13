@@ -45,7 +45,8 @@ const PERMISSION_DEFS: { key: PermissionKey; label: string }[] = [
   { key: 'canManageSchedule', label: 'Manage Schedule' },
   { key: 'canCheckInMembers', label: 'Check-In Members' },
   { key: 'canManageTasks', label: 'Manage Tasks' },
-  { key: 'canUsePos', label: 'Use Point of Sale' },
+  // No 'canUsePos' toggle: every staff member can use the POS at their assigned
+  // studios (src/lib/permissions.ts), so the setting would have no effect.
 ];
 
 function emptyPermissions(): Record<PermissionKey, boolean> {

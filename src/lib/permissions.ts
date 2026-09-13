@@ -19,6 +19,17 @@ export async function checkPermission(
   if (user.role === "ADMIN") return true;
   if (user.role !== "STAFF") return false;
 
+  // Every staff member can use the POS (Sam, 2026-09-12), whatever their role's
+  // toggle says — but only at a studio they're assigned to, so location scoping
+  // still holds and staff with no assignment still can't.
+  if (key === "canUsePos") {
+    const assigned = await prisma.staffRoleAssignment.findFirst({
+      where: { userId, ...(locationId ? { locationId } : {}) },
+      select: { id: true },
+    });
+    return assigned !== null;
+  }
+
   const assignment = await prisma.staffRoleAssignment.findFirst({
     where: {
       userId,

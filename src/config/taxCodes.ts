@@ -1,8 +1,7 @@
 /**
  * Stripe Tax product tax codes for POS line items.
  *
- * PLACEHOLDERS: JP hasn't confirmed any of these. What's here is Sam's working
- * rule for launch:
+ * Confirmed by Sam (2026-09-12):
  *   - retail goods, clay, firing and custom items: general tangible goods
  *   - gift cards: nontaxable (tax is collected when the card is spent)
  *   - class drop-ins and memberships: nontaxable until JP says otherwise

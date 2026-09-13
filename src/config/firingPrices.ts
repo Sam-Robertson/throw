@@ -2,8 +2,8 @@
  * Clay & firing prices for the POS "Clay & firing" tab.
  *
  * Sources: the live website (membership FAQ "Weigh and Pay"), JP's June notes,
- * and the Momence product catalog export. EVERY value below needs JP's
- * confirmation before it's relied on — see the FLAG comments.
+ * and the Momence product catalog export. Values marked FLAG still need JP's
+ * confirmation; the recycled clay price was confirmed by Sam (2026-09-12).
  *
  * All money is integer cents; all weights are integer ounces.
  */
@@ -49,9 +49,8 @@ export const EXPERIENCE_BANDS: { maxOz: number; cents: number; label: string }[]
 export const COURSE_ALLOWANCE_OZ = 15 * 16;
 
 /**
- * Recycled clay purchase.
- * FLAG: placeholder. Momence had "Recycled Clay" at $0.50 / lb in these bag
- * sizes, but that product is marked deleted in the export. Confirm with JP.
+ * Recycled clay purchase: $0.50 / lb in these bag sizes. Confirmed by Sam
+ * (2026-09-12), even though the Momence product is marked deleted.
  */
 export const CLAY_CENTS_PER_LB = 50;
 export const CLAY_BAG_SIZES_LB = [1, 5, 10, 15, 25];

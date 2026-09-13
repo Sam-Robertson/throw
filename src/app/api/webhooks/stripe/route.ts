@@ -24,6 +24,20 @@ export const config = { api: { bodyParser: false } };
  * created the Membership, so userId/planId fall back to the subscription
  * metadata snapshot on the invoice (written by /api/memberships/subscribe).
  */
+/**
+ * The studio a membership or payment belongs to when neither the membership nor
+ * its plan names one: the oldest active studio, which is Provo. Sam's rule
+ * (2026-09-12) is that memberships default to Provo for now.
+ */
+async function defaultStudioLocationId(): Promise<string | undefined> {
+  const location = await prisma.location.findFirst({
+    where: { isActive: true },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  return location?.id;
+}
+
 async function recordInvoicePayment(invoice: Stripe.Invoice, subscriptionId: string) {
   if (!invoice.id || invoice.amount_paid <= 0) return;
 
@@ -42,19 +56,10 @@ async function recordInvoicePayment(invoice: Stripe.Invoice, subscriptionId: str
   const plan = planId
     ? await prisma.membershipPlan.findUnique({ where: { id: planId }, select: { locationId: true } })
     : null;
-  // Payment.locationId is required. Memberships created through checkout carry
-  // no location and most plans have none, so fall back to the oldest active
-  // studio rather than dropping the revenue row.
+  // Payment.locationId is required. Fall back to the default studio (Provo)
+  // rather than dropping the revenue row.
   const locationId =
-    membership?.locationId ??
-    plan?.locationId ??
-    (
-      await prisma.location.findFirst({
-        where: { isActive: true },
-        orderBy: { createdAt: "asc" },
-        select: { id: true },
-      })
-    )?.id;
+    membership?.locationId ?? plan?.locationId ?? (await defaultStudioLocationId());
   if (!locationId) {
     console.warn(`[stripe webhook] invoice ${invoice.id}: no location available; payment not recorded`);
     return;
@@ -131,10 +136,12 @@ export async function POST(req: NextRequest) {
         const currentPeriodStart = new Date(item.current_period_start * 1000);
         const currentPeriodEnd = new Date(item.current_period_end * 1000);
         const plan = await prisma.membershipPlan.findUnique({ where: { id: planId } });
+        const locationId = plan?.locationId ?? (await defaultStudioLocationId()) ?? null;
         const membership = await prisma.membership.create({
           data: {
             userId,
             planId,
+            locationId,
             status: "ACTIVE",
             stripeSubscriptionId: subscription.id,
             stripeCustomerId: customerId,

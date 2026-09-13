@@ -175,7 +175,9 @@ The repo had no migration history, so production needs baselining once.
    ```bash
    npx prisma migrate resolve --applied 0_init
    ```
-3. **Apply the launch migration:** `npx prisma migrate deploy`. It adds the columns and table, and fills in the Provo and Lehi structured addresses.
+3. **Apply the launch migrations:** `npx prisma migrate deploy`. This runs two migrations:
+   - `launch-sept-2026` adds the columns and table, and fills in the Provo and Lehi structured addresses.
+   - `memberships-default-provo` assigns every membership with no studio to Provo (445 Momence imports).
 4. **Check which database Vercel Preview uses.** The pushed branch builds a Preview. If Preview's `DATABASE_URL` is the production Neon database, pages that read the new columns will error until steps 1–3 are done. Either run them first, or point Preview at a Neon branch.
 
 ### 2.2 Vercel environment variables
@@ -202,10 +204,9 @@ The repo had no migration history, so production needs baselining once.
 
 ### 2.4 Data and people (before Sept 18)
 - **Assign "Staff" (`staff@throw.studio`)** to a studio in Roles & Permissions. They have no assignment, so after this deploy they see nothing.
-- **Grant `canUsePos` to a role** (for example Front Desk). None of the three existing STAFF roles has it, so only admins can use the POS today.
 - **Ask every STAFF user to sign out and back in after deploy.** Their location access is read at sign-in.
 - **Set `Location.smsNumber`** for Provo and Lehi once the two Sendblue numbers exist. There's no admin field for it yet; use SQL or Prisma Studio. Also register the inbound webhook for each number.
-- **Confirm Lehi's ZIP (84043)** in the `Location` row.
+- **Tell the front desk about waivers at the POS.** A drop-in now requires the customer to have signed that studio's waiver. There's no way to sign on the customer's behalf at the terminal yet: the customer signs in on their own device and signs at `/waiver`.
 
 ### 2.5 Scripts to run for Sept 25 (none have been run against production)
 - **Waivers.** Run `npm run import:waivers -- --dry-run path/to/waivers.csv`, then without `--dry-run`. It publishes Lehi's waiver from Provo's text first.
@@ -347,18 +348,21 @@ Copied from `LAUNCH_NOTES.md`. Phase 1 and integration calls first, then each wo
 
 These are decisions I deferred instead of guessing. Each has a working default in the code today.
 
-**Needs an answer before Sept 18**
-1. **POS drop-ins and waivers.** Should a front-desk drop-in require a signed waiver? Online bookings do; the POS currently doesn't. It's a one-call change (`findUnsignedWaiver` in `src/lib/waivers.ts`).
-2. **Who can use the POS?** No STAFF role has `canUsePos`. Which roles should get it (Front Desk?), and should instructors?
-3. **Momence memberships with no location.** 445 of 449 memberships have no studio, so they're currently visible to both studios' staff. Is that OK, or should I backfill them to Provo so Lehi staff don't see Provo's members?
-4. **Lehi ZIP.** Is 84043 correct for 4275 N Thanksgiving Way? Stripe Tax uses it.
+**Answered 2026-09-12, and built**
+1. **POS drop-ins require a signed waiver.** Yes. `checkOrderPayable` in `src/lib/pos.ts` returns 409 `WAIVER_REQUIRED` for a drop-in whose customer hasn't signed that studio's waiver. The terminal e2e covers it.
+2. **Any staff can use the POS.** `checkPermission(…, "canUsePos")` is now true for every STAFF user at a studio they're assigned to (`src/lib/permissions.ts`). The Roles page toggle was removed because it no longer did anything.
+3. **Memberships default to Provo.** A new migration, `20260913120000_memberships-default-provo`, backfills them. New memberships from the Stripe webhook take the plan's studio, else Provo.
+4. **Lehi ZIP 84043** is confirmed.
+5. **Tax codes** are confirmed. The placeholder flag is removed from `src/config/taxCodes.ts`.
+8. **Recycled clay at $0.50/lb** is confirmed. The flag is removed from `src/config/firingPrices.ts`.
 
-**For JP (pricing and tax), before the numbers go live**
-5. **Tax codes.** `src/config/taxCodes.ts` uses `txcd_99999999` for retail, custom and clay/firing, with gift cards, drop-ins and memberships non-taxable. Correct?
+**Still open, for JP (pricing), before the numbers go live**
 6. **Experience pieces over 2 lb** have no price. The POS refuses them and asks for a manual custom price. What should they cost?
 7. **Member weigh-and-pay rounding.** It's currently exact cents from ounces (a 13 oz piece under 12 in is $0.81). Round up to the next half pound or the next dollar instead?
-8. **Recycled clay at $0.50/lb** came from a deleted Momence product. Is it still sold, and at that price?
 9. **Pro price.** The website shows $110/month and the seed file $90. Which is right before Oct 25?
+
+**New, from answer 1**
+16. **Signing at the front desk.** Should staff be able to capture a walk-in's waiver signature on the POS or a studio tablet? Today the customer has to sign in on their own device and sign at `/waiver` before a drop-in can be paid for.
 
 **Can wait until after Sept 18**
 10. **Per-studio outbound SMS.** Once the two Sendblue numbers exist, should inbox replies come from the conversation's studio number? Today everything sends from one number.
