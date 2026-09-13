@@ -1,8 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
 import NextLink from 'next/link';
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
@@ -13,31 +11,30 @@ import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
 import Alert from '@mui/material/Alert';
 import Link from '@mui/material/Link';
-import Stack from '@mui/material/Stack';
 
-export default function LoginPage() {
-  const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
+export default function ForgotPasswordPage() {
   const [pending, setPending] = useState(false);
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setPending(true);
 
-    const form = new FormData(e.currentTarget);
-    const result = await signIn('credentials', {
-      email: form.get('email') as string,
-      password: form.get('password') as string,
-      redirect: false,
-    });
-
-    if (result?.error) {
-      setError('Invalid email or password');
+    const email = (new FormData(e.currentTarget).get('email') as string).trim();
+    try {
+      const res = await fetch('/api/auth/request-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      if (!res.ok) throw new Error('Request failed');
+      setSentTo(email);
+    } catch {
+      setError('Something went wrong. Please try again.');
+    } finally {
       setPending(false);
-    } else {
-      router.push('/dashboard');
-      router.refresh();
     }
   }
 
@@ -55,8 +52,12 @@ export default function LoginPage() {
       <Card sx={{ width: '100%', maxWidth: 400 }}>
         <Box component="form" onSubmit={handleSubmit}>
           <CardContent>
-            <Typography variant="h5" sx={{ mb: 3, fontWeight: 700 }}>
-              Sign in
+            <Typography variant="h5" sx={{ mb: 1, fontWeight: 700 }}>
+              Forgot your password?
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Enter your email and we&apos;ll send you a link to set a new one. New to the
+              online system? This is also how you set up your account.
             </Typography>
 
             {error && (
@@ -65,46 +66,35 @@ export default function LoginPage() {
               </Alert>
             )}
 
-            <Stack spacing={2}>
+            {sentTo ? (
+              <Alert severity="success">
+                If an account exists for {sentTo}, we&apos;ve sent a link to set your password.
+                It expires in 24 hours. Check your spam folder if it doesn&apos;t arrive in a few
+                minutes.
+              </Alert>
+            ) : (
               <TextField
                 id="email"
                 name="email"
                 type="email"
                 label="Email"
                 required
+                fullWidth
                 autoComplete="email"
                 autoFocus
               />
-              <TextField
-                id="password"
-                name="password"
-                type="password"
-                label="Password"
-                required
-                autoComplete="current-password"
-              />
-            </Stack>
+            )}
           </CardContent>
 
           <CardActions sx={{ flexDirection: 'column', gap: 1.5, px: 2.5, pb: 3 }}>
-            <Button
-              type="submit"
-              variant="contained"
-              fullWidth
-              size="large"
-              disabled={pending}
-            >
-              {pending ? 'Signing in…' : 'Sign in'}
-            </Button>
-            <Typography variant="body2" sx={{ textAlign: 'center' }}>
-              <Link component={NextLink} href="/forgot-password" underline="always">
-                Forgot password?
-              </Link>
-            </Typography>
+            {!sentTo && (
+              <Button type="submit" variant="contained" fullWidth size="large" disabled={pending}>
+                {pending ? 'Sending…' : 'Send link'}
+              </Button>
+            )}
             <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
-              Don&apos;t have an account?{' '}
-              <Link component={NextLink} href="/register" underline="always">
-                Register
+              <Link component={NextLink} href="/login" underline="always">
+                Back to sign in
               </Link>
             </Typography>
           </CardActions>
