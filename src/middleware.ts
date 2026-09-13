@@ -27,10 +27,11 @@ export default auth((req) => {
     }
   }
 
-  // /dashboard/*, /account/*, /book/*, /booking/* — require any authenticated user
+  // /dashboard/*, /account/*, /pieces/*, /book/*, /booking/* — require any authenticated user
   if (
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/account") ||
+    pathname.startsWith("/pieces") ||
     pathname.startsWith("/book") ||
     pathname.startsWith("/booking")
   ) {

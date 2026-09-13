@@ -9,6 +9,7 @@ import {
   scheduleBookingReminder,
   sendPosReceipt,
 } from "@/inngest/functions";
+import { schedulePieceIntakePrompt, logPieceIntakePrompt } from "@/inngest/pieces";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
@@ -20,5 +21,7 @@ export const { GET, POST, PUT } = serve({
     sendMembershipPaused,
     scheduleBookingReminder,
     sendPosReceipt,
+    schedulePieceIntakePrompt,
+    logPieceIntakePrompt,
   ],
 });
