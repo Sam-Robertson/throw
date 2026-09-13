@@ -19,6 +19,7 @@ import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
 import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
+import Switch from '@mui/material/Switch';
 import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
 import Tooltip from '@mui/material/Tooltip';
@@ -38,6 +39,7 @@ interface StudioSession {
   endsAt: string;
   capacity: number;
   isCancelled: boolean;
+  seriesId: string | null;
   sessionType: { id: string; name: string; durationMinutes: number; capacity: number };
   instructor: { id: string; name: string | null } | null;
   location: { id: string; name: string } | null;
@@ -93,6 +95,25 @@ interface UserOption {
 
 const NONE = '__none__';
 
+// Mirrors MAX_REPEAT_WEEKLY in /api/admin/studio-sessions, which enforces it.
+const MAX_REPEAT_WEEKLY = 12;
+const DEFAULT_REPEAT_COUNT = '4';
+
+interface SkippedSlot {
+  startsAt: string;
+  reason: string;
+}
+
+interface SessionWithBookings {
+  id: string;
+  startsAt: string;
+  bookingCount: number;
+}
+
+function formatSlot(iso: string): string {
+  return formatInTimeZone(new Date(iso), STUDIO_TIMEZONE, "EEE, MMM d 'at' h:mm a");
+}
+
 function getWeekDays(offset: number): Date[] {
   const nowMT = toZonedTime(new Date(), STUDIO_TIMEZONE);
   const weekStart = startOfWeek(addWeeks(nowMT, offset), { weekStartsOn: 1 });
@@ -123,9 +144,13 @@ export default function SchedulePage() {
     localTime: '09:00',
     instructorId: NONE,
     capacityOverride: '',
+    repeatWeekly: false,
+    repeatCount: DEFAULT_REPEAT_COUNT,
   });
   const [addSaving, setAddSaving] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  // Outcome of a repeat-weekly create, shown in the dialog before it closes.
+  const [addResult, setAddResult] = useState<{ created: number; skipped: SkippedSlot[] } | null>(null);
 
   const pickableSessionTypes = showAllClassTypes
     ? sessionTypes
@@ -136,6 +161,12 @@ export default function SchedulePage() {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [seriesDeleteOpen, setSeriesDeleteOpen] = useState(false);
+  const [seriesDeleting, setSeriesDeleting] = useState(false);
+  const [seriesDeleteError, setSeriesDeleteError] = useState<{
+    message: string;
+    sessions: SessionWithBookings[];
+  } | null>(null);
 
   const weekDays = getWeekDays(weekOffset);
   const { startHour, endHour } = useMemo(() => getGridBounds(sessions), [sessions]);
@@ -190,8 +221,11 @@ export default function SchedulePage() {
       localTime: defaultTime ?? '09:00',
       instructorId: NONE,
       capacityOverride: '',
+      repeatWeekly: false,
+      repeatCount: DEFAULT_REPEAT_COUNT,
     });
     setAddError(null);
+    setAddResult(null);
     setAddOpen(true);
   }
 
@@ -199,7 +233,12 @@ export default function SchedulePage() {
     setEditSession(session);
     setEditForm({ instructorId: session.instructor?.id ?? NONE, capacity: String(session.capacity) });
     setEditError(null);
+    setSeriesDeleteError(null);
   }
+
+  const repeatCountNumber = Number(addForm.repeatCount);
+  const repeatCountValid =
+    Number.isInteger(repeatCountNumber) && repeatCountNumber >= 1 && repeatCountNumber <= MAX_REPEAT_WEEKLY;
 
   async function handleAddSave() {
     setAddSaving(true);
@@ -213,8 +252,29 @@ export default function SchedulePage() {
         localTime: addForm.localTime,
         instructorId: addForm.instructorId === NONE ? null : addForm.instructorId,
         capacityOverride: addForm.capacityOverride ? Number(addForm.capacityOverride) : undefined,
+        ...(addForm.repeatWeekly && { repeatWeekly: { count: repeatCountNumber } }),
       }),
     });
+
+    if (addForm.repeatWeekly) {
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        created?: StudioSession[];
+        skipped?: SkippedSlot[];
+      };
+      if (!res.ok && !data.skipped) {
+        setAddError(data.error ?? 'Failed to create sessions');
+        setAddSaving(false);
+        return;
+      }
+      // The series spans several weeks, so reload the visible week rather than
+      // splicing in sessions that may belong to other weeks.
+      fetchSessions();
+      setAddResult({ created: data.created?.length ?? 0, skipped: data.skipped ?? [] });
+      setAddSaving(false);
+      return;
+    }
+
     if (!res.ok) {
       const data = await res.json().catch(() => ({})) as { error?: string };
       setAddError(data.error ?? 'Failed to create session');
@@ -225,6 +285,30 @@ export default function SchedulePage() {
     setSessions((prev) => [...prev, created]);
     setAddOpen(false);
     setAddSaving(false);
+  }
+
+  async function handleDeleteSeries() {
+    if (!editSession) return;
+    setSeriesDeleting(true);
+    setSeriesDeleteError(null);
+    const res = await fetch(`/api/admin/studio-sessions/${editSession.id}?scope=series`, {
+      method: 'DELETE',
+    });
+    setSeriesDeleting(false);
+    setSeriesDeleteOpen(false);
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        sessionsWithBookings?: SessionWithBookings[];
+      };
+      setSeriesDeleteError({
+        message: data.error ?? 'Failed to delete the series',
+        sessions: data.sessionsWithBookings ?? [],
+      });
+      return;
+    }
+    setEditSession(null);
+    fetchSessions();
   }
 
   async function handleEditSave() {
@@ -545,6 +629,28 @@ export default function SchedulePage() {
       <Dialog open={addOpen} onClose={() => setAddOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Add session</DialogTitle>
         <DialogContent>
+          {addResult ? (
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              {addResult.created > 0 ? (
+                <Alert severity="success">
+                  Created {addResult.created} weekly session{addResult.created === 1 ? '' : 's'}.
+                </Alert>
+              ) : (
+                <Alert severity="error">No sessions were created.</Alert>
+              )}
+              {addResult.skipped.length > 0 && (
+                <Alert severity="warning">
+                  Skipped {addResult.skipped.length} week{addResult.skipped.length === 1 ? '' : 's'} that
+                  already had this class at this time:
+                  <Box component="ul" sx={{ m: 0, mt: 0.5, pl: 2.5 }}>
+                    {addResult.skipped.map((s) => (
+                      <li key={s.startsAt}>{formatSlot(s.startsAt)} MT</li>
+                    ))}
+                  </Box>
+                </Alert>
+              )}
+            </Stack>
+          ) : (
           <Stack spacing={2.5} sx={{ pt: 1 }}>
             {addError && <Alert severity="error">{addError}</Alert>}
             <FormControl size="small" fullWidth>
@@ -611,13 +717,58 @@ export default function SchedulePage() {
               value={addForm.capacityOverride}
               onChange={(e) => setAddForm((f) => ({ ...f, capacityOverride: e.target.value }))}
             />
+            <Box>
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={addForm.repeatWeekly}
+                    onChange={(e) => setAddForm((f) => ({ ...f, repeatWeekly: e.target.checked }))}
+                  />
+                }
+                label="Repeat weekly"
+              />
+              {addForm.repeatWeekly && (
+                <TextField
+                  label="Number of weeks"
+                  type="number"
+                  size="small"
+                  fullWidth
+                  sx={{ mt: 1.5 }}
+                  slotProps={{ htmlInput: { min: 1, max: MAX_REPEAT_WEEKLY } }}
+                  value={addForm.repeatCount}
+                  onChange={(e) => setAddForm((f) => ({ ...f, repeatCount: e.target.value }))}
+                  error={!repeatCountValid}
+                  helperText={
+                    repeatCountValid
+                      ? 'One session per week on the same weekday and time, starting on the date above.'
+                      : `Enter a number from 1 to ${MAX_REPEAT_WEEKLY}.`
+                  }
+                />
+              )}
+            </Box>
           </Stack>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button variant="outlined" onClick={() => setAddOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleAddSave} disabled={addSaving}>
-            {addSaving ? 'Saving…' : 'Add session'}
-          </Button>
+          {addResult ? (
+            <Button variant="contained" onClick={() => setAddOpen(false)}>Done</Button>
+          ) : (
+            <>
+              <Button variant="outlined" onClick={() => setAddOpen(false)}>Cancel</Button>
+              <Button
+                variant="contained"
+                onClick={handleAddSave}
+                disabled={addSaving || (addForm.repeatWeekly && !repeatCountValid)}
+              >
+                {addSaving
+                  ? 'Saving…'
+                  : addForm.repeatWeekly && repeatCountValid
+                    ? `Add ${repeatCountNumber} session${repeatCountNumber === 1 ? '' : 's'}`
+                    : 'Add session'}
+              </Button>
+            </>
+          )}
         </DialogActions>
       </Dialog>
 
@@ -670,6 +821,25 @@ export default function SchedulePage() {
               <Typography variant="body2" color="text.secondary">
                 {editSession._count.bookings} booking{editSession._count.bookings === 1 ? '' : 's'} / {editSession.capacity} capacity
               </Typography>
+              {editSession.seriesId && (
+                <Typography variant="caption" color="text.secondary">
+                  Part of a weekly series.
+                </Typography>
+              )}
+              {seriesDeleteError && (
+                <Alert severity="error">
+                  {seriesDeleteError.message}
+                  {seriesDeleteError.sessions.length > 0 && (
+                    <Box component="ul" sx={{ m: 0, mt: 0.5, pl: 2.5 }}>
+                      {seriesDeleteError.sessions.map((s) => (
+                        <li key={s.id}>
+                          {formatSlot(s.startsAt)} MT · {s.bookingCount} booking{s.bookingCount === 1 ? '' : 's'}
+                        </li>
+                      ))}
+                    </Box>
+                  )}
+                </Alert>
+              )}
             </Stack>
           )}
         </DialogContent>
@@ -679,9 +849,19 @@ export default function SchedulePage() {
               color="error"
               variant="outlined"
               onClick={() => setCancelConfirmOpen(true)}
-              sx={{ mr: 'auto' }}
+              sx={{ mr: editSession.seriesId ? 0 : 'auto' }}
             >
               Cancel session
+            </Button>
+          )}
+          {editSession?.seriesId && (
+            <Button
+              color="error"
+              variant="text"
+              onClick={() => setSeriesDeleteOpen(true)}
+              sx={{ mr: 'auto' }}
+            >
+              Delete this and following
             </Button>
           )}
           <Button variant="outlined" onClick={() => setEditSession(null)}>Close</Button>
@@ -712,6 +892,35 @@ export default function SchedulePage() {
           </Button>
           <Button variant="contained" color="error" onClick={handleCancelSession}>
             Yes, cancel session
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete series confirmation */}
+      <Dialog
+        open={seriesDeleteOpen}
+        onClose={() => setSeriesDeleteOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Delete this and following sessions?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            This deletes this session and every later session in its weekly series. If any of
+            them has bookings, nothing is deleted and you&apos;ll see which ones.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button variant="outlined" onClick={() => setSeriesDeleteOpen(false)}>
+            Keep sessions
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDeleteSeries}
+            disabled={seriesDeleting}
+          >
+            {seriesDeleting ? 'Deleting…' : 'Delete sessions'}
           </Button>
         </DialogActions>
       </Dialog>

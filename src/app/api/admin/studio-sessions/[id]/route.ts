@@ -1,20 +1,27 @@
 import { type NextRequest, NextResponse } from "next/server";
+import type { Session } from "next-auth";
+import type { StudioSession } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { resolveLocationScope, scopeAllows } from "@/lib/locationScope";
 
-type GuardResult = { error: NextResponse } | { error: null };
+type GuardResult =
+  | { error: NextResponse; session: null }
+  | { error: null; session: Session };
 
 async function requireStaff(): Promise<GuardResult> {
   const session = await auth();
   if (!session)
     return {
       error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      session: null,
     };
   if (session.user.role !== "ADMIN" && session.user.role !== "STAFF")
     return {
       error: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
+      session: null,
     };
-  return { error: null };
+  return { error: null, session };
 }
 
 const sessionIncludes = {
@@ -23,6 +30,29 @@ const sessionIncludes = {
   location: { select: { id: true, name: true } },
   _count: { select: { bookings: true } },
 } as const;
+
+type LoadResult =
+  | { error: NextResponse; existing: null }
+  | { error: null; existing: StudioSession };
+
+/** Loads a session, returning 404 if missing and 403 if outside the caller's locations. */
+async function loadScopedSession(id: string, session: Session): Promise<LoadResult> {
+  const existing = await prisma.studioSession.findUnique({ where: { id } });
+  if (!existing)
+    return {
+      error: NextResponse.json({ error: "Not found" }, { status: 404 }),
+      existing: null,
+    };
+  if (!scopeAllows(resolveLocationScope(session), existing.locationId))
+    return {
+      error: NextResponse.json(
+        { error: "You don't have access to that location" },
+        { status: 403 },
+      ),
+      existing: null,
+    };
+  return { error: null, existing };
+}
 
 export async function PATCH(
   req: NextRequest,
@@ -36,9 +66,9 @@ export async function PATCH(
   if (!body)
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
 
-  const existing = await prisma.studioSession.findUnique({ where: { id } });
-  if (!existing)
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const loaded = await loadScopedSession(id, guard.session);
+  if (loaded.error) return loaded.error;
+  const existing = loaded.existing;
 
   const { instructorId, capacity, isCancelled } = body as Record<
     string,
@@ -68,14 +98,30 @@ export async function PATCH(
   return NextResponse.json(updated);
 }
 
+/**
+ * Deletes a session. With `?scope=series`, deletes this session and every
+ * later session in its repeat-weekly series — all or nothing: if any of them
+ * has a booking, nothing is deleted and the 409 lists which ones.
+ */
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const guard = await requireStaff();
   if (guard.error) return guard.error;
 
   const { id } = await params;
+
+  const loaded = await loadScopedSession(id, guard.session);
+  if (loaded.error) return loaded.error;
+
+  const scopeParam = new URL(req.url).searchParams.get("scope");
+  if (scopeParam === "series") return deleteSeriesFrom(loaded.existing);
+  if (scopeParam !== null)
+    return NextResponse.json(
+      { error: 'scope must be "series" or omitted' },
+      { status: 400 },
+    );
 
   const bookingCount = await prisma.booking.count({
     where: { studioSessionId: id },
@@ -91,4 +137,44 @@ export async function DELETE(
 
   await prisma.studioSession.delete({ where: { id } });
   return new NextResponse(null, { status: 204 });
+}
+
+async function deleteSeriesFrom(existing: StudioSession) {
+  if (!existing.seriesId)
+    return NextResponse.json(
+      { error: "This session is not part of a repeating series" },
+      { status: 400 },
+    );
+
+  const targets = await prisma.studioSession.findMany({
+    where: { seriesId: existing.seriesId, startsAt: { gte: existing.startsAt } },
+    select: { id: true, startsAt: true, _count: { select: { bookings: true } } },
+    orderBy: { startsAt: "asc" },
+  });
+
+  // Any booking row blocks deletion, cancelled ones included: Booking has a
+  // required foreign key to StudioSession, so the delete would fail on them
+  // anyway (same rule as the single-session delete above).
+  const withBookings = targets.filter((t) => t._count.bookings > 0);
+  if (withBookings.length > 0)
+    return NextResponse.json(
+      {
+        error: `Cannot delete the series: ${withBookings.length} session${withBookings.length === 1 ? " has" : "s have"} bookings`,
+        sessionsWithBookings: withBookings.map((t) => ({
+          id: t.id,
+          startsAt: t.startsAt.toISOString(),
+          bookingCount: t._count.bookings,
+        })),
+      },
+      { status: 409 },
+    );
+
+  const ids = targets.map((t) => t.id);
+  // `bookings: none` re-checks at delete time, so a booking made between the
+  // check above and here keeps its session rather than failing the delete.
+  const result = await prisma.studioSession.deleteMany({
+    where: { id: { in: ids }, bookings: { none: {} } },
+  });
+
+  return NextResponse.json({ deleted: result.count, ids });
 }
