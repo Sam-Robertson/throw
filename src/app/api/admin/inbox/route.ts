@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import {
+  forbiddenResponse,
+  locationWhereOrUnassigned,
+  resolveLocationScope,
+} from "@/lib/locationScope";
+import { requireStaffScope } from "@/lib/staffScope";
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "ADMIN" && session.user.role !== "STAFF")
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
   const { searchParams } = new URL(req.url);
+  const guard = await requireStaffScope(searchParams.get("locationId"));
+  if (guard.error) return guard.error;
+
   // segment: "customers" | "leads" | "instructors" | "plan:{slug}"
   const segment = searchParams.get("segment") ?? "customers";
   const q = searchParams.get("q")?.trim() ?? "";
@@ -47,6 +50,9 @@ export async function GET(req: NextRequest) {
     where: {
       channel: "sms", // inbox is SMS-only
       user: { AND: [userWhere, searchFilter] },
+      // Conversations from an SMS number not mapped to a studio (locationId
+      // null) stay visible to every studio.
+      ...locationWhereOrUnassigned(guard.scope),
     },
     orderBy: { lastMessageAt: "desc" },
     include: {
@@ -63,24 +69,38 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "ADMIN" && session.user.role !== "STAFF")
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const guard = await requireStaffScope();
+  if (guard.error) return guard.error;
 
   const body = (await req.json()) as {
     userId: string;
     messageBody: string;
+    locationId?: string;
   };
 
   if (!body.userId || !body.messageBody)
     return NextResponse.json({ error: "userId, messageBody required" }, { status: 400 });
+
+  // Tag the conversation with the studio it's started from: the one asked
+  // for (if the user may use it), else the user's only studio, else none.
+  let locationId: string | null = null;
+  if (body.locationId) {
+    try {
+      resolveLocationScope(guard.session, body.locationId);
+    } catch (err) {
+      return forbiddenResponse(err);
+    }
+    locationId = body.locationId;
+  } else if (guard.scope.locationIds?.length === 1) {
+    locationId = guard.scope.locationIds[0];
+  }
 
   const now = new Date();
 
   const conversation = await prisma.conversation.create({
     data: {
       userId: body.userId,
+      locationId,
       channel: "sms",
       lastMessageAt: now,
       messages: {

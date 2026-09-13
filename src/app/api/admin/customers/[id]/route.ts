@@ -1,18 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { normalizePhone } from "@/lib/consent";
 import { getTicketBalance } from "@/lib/credits";
+import { customerVisible, requireStaffScope } from "@/lib/staffScope";
+
+const NOT_VISIBLE = { error: "This customer belongs to a studio you don't have access to" };
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "ADMIN" && session.user.role !== "STAFF")
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const guard = await requireStaffScope();
+  if (guard.error) return guard.error;
 
   const { id } = await params;
 
@@ -64,6 +63,9 @@ export async function GET(
   if (!customer || customer.role !== "CUSTOMER") {
     return NextResponse.json({ error: "Customer not found" }, { status: 404 });
   }
+  if (!(await customerVisible(guard.scope, id))) {
+    return NextResponse.json(NOT_VISIBLE, { status: 403 });
+  }
 
   const currentMembership = customer.memberships.find(
     (m) => m.status === "ACTIVE" || m.status === "PAUSED",
@@ -88,13 +90,19 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "ADMIN" && session.user.role !== "STAFF")
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const guard = await requireStaffScope();
+  if (guard.error) return guard.error;
 
   const { id } = await params;
+
+  const existing = await prisma.user.findUnique({ where: { id }, select: { role: true } });
+  if (!existing || existing.role !== "CUSTOMER") {
+    return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+  }
+  if (!(await customerVisible(guard.scope, id))) {
+    return NextResponse.json(NOT_VISIBLE, { status: 403 });
+  }
+
   const body = await req.json().catch(() => ({})) as {
     name?: string;
     phone?: string;

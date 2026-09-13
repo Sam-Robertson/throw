@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { scopeAllowsUnassigned } from "@/lib/locationScope";
+import { requireStaffScope } from "@/lib/staffScope";
 
 const taskIncludes = {
   assignedTo: { select: { id: true, name: true, email: true } },
@@ -12,13 +14,23 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
-  if (!session)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "ADMIN" && session.user.role !== "STAFF")
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const guard = await requireStaffScope();
+  if (guard.error) return guard.error;
+  const { session } = guard;
 
   const { id } = await params;
+
+  const existing = await prisma.staffTask.findUnique({
+    where: { id },
+    select: { locationId: true },
+  });
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!scopeAllowsUnassigned(guard.scope, existing.locationId))
+    return NextResponse.json(
+      { error: "This task belongs to a studio you don't have access to" },
+      { status: 403 },
+    );
+
   const body = await request.json();
 
   const isAdmin = session.user.role === "ADMIN";

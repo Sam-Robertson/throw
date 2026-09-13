@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { scopeAllowsUnassigned } from "@/lib/locationScope";
+import { requireStaffScope } from "@/lib/staffScope";
+
+const NOT_VISIBLE = { error: "This conversation belongs to a studio you don't have access to" };
 
 // GET /api/admin/inbox/[id] — fetch conversation + all messages
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "ADMIN" && session.user.role !== "STAFF")
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const guard = await requireStaffScope();
+  if (guard.error) return guard.error;
 
   const { id } = await params;
 
@@ -23,6 +24,8 @@ export async function GET(
   });
 
   if (!conversation) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!scopeAllowsUnassigned(guard.scope, conversation.locationId))
+    return NextResponse.json(NOT_VISIBLE, { status: 403 });
 
   return NextResponse.json(conversation);
 }
@@ -32,12 +35,18 @@ export async function PATCH(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "ADMIN" && session.user.role !== "STAFF")
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const guard = await requireStaffScope();
+  if (guard.error) return guard.error;
 
   const { id } = await params;
+
+  const existing = await prisma.conversation.findUnique({
+    where: { id },
+    select: { locationId: true },
+  });
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!scopeAllowsUnassigned(guard.scope, existing.locationId))
+    return NextResponse.json(NOT_VISIBLE, { status: 403 });
 
   await prisma.$transaction([
     prisma.conversation.update({

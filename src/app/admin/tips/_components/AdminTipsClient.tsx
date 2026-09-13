@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { locationQueryValue, useLocationFilter } from "../../_components/LocationFilterContext";
 import {
   BarChart,
   Bar,
@@ -62,8 +63,13 @@ function maskName(fullName: string): string {
   return `${parts[0]} ${parts[parts.length - 1][0]}.`;
 }
 
-async function fetchTips(range: DateRange, instructorId?: string): Promise<TipsResponse> {
+async function fetchTips(
+  range: DateRange,
+  locationId: string | null,
+  instructorId?: string,
+): Promise<TipsResponse> {
   const params = new URLSearchParams({ from: range.from, to: range.to });
+  if (locationId) params.set("locationId", locationId);
   if (instructorId) params.set("instructorId", instructorId);
   const res = await fetch(`/api/admin/tips?${params.toString()}`);
   if (!res.ok) throw new Error("Failed to load tips");
@@ -82,17 +88,22 @@ export function AdminTipsClient() {
 
   // Unfiltered fetch — keeps the instructor filter dropdown populated regardless
   // of what's currently selected in it.
+  const { selectedLocationId, loading: scopeLoading } = useLocationFilter();
+  const locationId = locationQueryValue(selectedLocationId);
+
   useEffect(() => {
-    fetchTips(range)
+    if (scopeLoading) return;
+    fetchTips(range, locationId)
       .then((d) => setInstructorOptions(d.summary.byInstructor))
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range.from, range.to]);
+  }, [range.from, range.to, locationId, scopeLoading]);
 
   const load = useCallback(() => {
+    if (scopeLoading) return;
     setLoading(true);
     setError(false);
-    fetchTips(range, instructorFilter === "all" ? undefined : instructorFilter)
+    fetchTips(range, locationId, instructorFilter === "all" ? undefined : instructorFilter)
       .then((d) => {
         setData(d);
         setSelected(new Set());
@@ -102,7 +113,7 @@ export function AdminTipsClient() {
         setError(true);
         setLoading(false);
       });
-  }, [range, instructorFilter]);
+  }, [range, instructorFilter, locationId, scopeLoading]);
 
   useEffect(() => {
     load();

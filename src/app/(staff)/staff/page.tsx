@@ -12,6 +12,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { prisma } from "@/lib/prisma";
 import { checkPermission } from "@/lib/permissions";
+import { locationWhere, resolveLocationScope } from "@/lib/locationScope";
 import { formatMountainTime, STUDIO_TIMEZONE } from "@/lib/timezone";
 import { startOfDay, endOfDay, startOfMonth, endOfMonth } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
@@ -29,6 +30,11 @@ export default async function StaffPage() {
 
   const userId = session.user.id;
   const nowMT = toZonedTime(new Date(), STUDIO_TIMEZONE);
+
+  // STAFF see their assigned studios only; ADMIN sees every studio. The
+  // middleware already keeps anyone else out of /staff.
+  const scope = resolveLocationScope(session);
+  const noLocationAssigned = scope.locationIds !== null && scope.locationIds.length === 0;
   const firstName = session.user.name?.trim().split(/\s+/)[0] || session.user.email?.split("@")[0] || "there";
 
   const [assignment, canCheckInMembers, canManageTasks, canViewTips, canManageSchedule] =
@@ -48,7 +54,11 @@ export default async function StaffPage() {
   const todayEnd = fromZonedTime(endOfDay(nowMT), STUDIO_TIMEZONE);
 
   const todaySessions = await prisma.studioSession.findMany({
-    where: { startsAt: { gte: todayStart, lte: todayEnd }, isCancelled: false },
+    where: {
+      startsAt: { gte: todayStart, lte: todayEnd },
+      isCancelled: false,
+      ...locationWhere(scope),
+    },
     include: {
       sessionType: { select: { name: true } },
       instructor: { select: { id: true, name: true, email: true } },
@@ -127,7 +137,9 @@ export default async function StaffPage() {
         </Typography>
         {sessionRows.length === 0 ? (
           <Typography variant="body2" color="text.secondary">
-            No sessions scheduled today.
+            {noLocationAssigned
+              ? "You're not assigned to a studio yet, so there's nothing to show. Ask an admin to assign you a location."
+              : "No sessions scheduled today."}
           </Typography>
         ) : (
           <Paper variant="outlined" sx={{ borderRadius: 3, overflow: "hidden" }}>

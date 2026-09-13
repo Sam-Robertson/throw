@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useLocationFilter, withLocationParam } from './_components/LocationFilterContext';
 import NextLink from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -725,11 +726,14 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const { selectedLocationId, loading: scopeLoading } = useLocationFilter();
 
   useEffect(() => {
+    // Wait for the switcher to settle so the first fetch isn't the wrong scope.
+    if (scopeLoading) return;
     setLoading(true);
     setFetchError(null);
-    fetch('/api/admin/dashboard')
+    fetch(withLocationParam('/api/admin/dashboard', selectedLocationId))
       .then((r) => {
         if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
         return r.json() as Promise<DashboardData>;
@@ -740,7 +744,7 @@ export default function DashboardPage() {
         setFetchError(err.message);
         setLoading(false);
       });
-  }, []);
+  }, [selectedLocationId, scopeLoading]);
 
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',

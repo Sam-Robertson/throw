@@ -1,21 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-
-type GuardResult = { error: NextResponse } | { error: null };
-
-async function requireStaff(): Promise<GuardResult> {
-  const session = await auth();
-  if (!session)
-    return {
-      error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
-    };
-  if (session.user.role !== "ADMIN" && session.user.role !== "STAFF")
-    return {
-      error: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
-    };
-  return { error: null };
-}
+import { forbiddenResponse, locationWhere, resolveLocationScope } from "@/lib/locationScope";
+import { requireStaffScope } from "@/lib/staffScope";
 
 function slugify(name: string): string {
   return name
@@ -36,13 +22,13 @@ const upcomingCount = {
 } as const;
 
 export async function GET(req: NextRequest) {
-  const guard = await requireStaff();
+  const guard = await requireStaffScope(req.nextUrl.searchParams.get("locationId"));
   if (guard.error) return guard.error;
 
-  const locationId = req.nextUrl.searchParams.get("locationId");
-
+  // Strict match on locationId, as before: class types with no studio only
+  // appear in the unrestricted (ADMIN, all-locations) view.
   const sessionTypes = await prisma.sessionType.findMany({
-    where: locationId ? { locationId } : undefined,
+    where: locationWhere(guard.scope),
     orderBy: { name: "asc" },
     include: { ...upcomingCount, location: { select: { id: true, name: true } } },
   });
@@ -51,7 +37,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const guard = await requireStaff();
+  const guard = await requireStaffScope();
   if (guard.error) return guard.error;
 
   const body = await req.json().catch(() => null);
@@ -66,6 +52,13 @@ export async function POST(req: NextRequest) {
       { error: "Missing required fields" },
       { status: 400 },
     );
+
+  // STAFF may only create class types for a studio they're assigned to.
+  try {
+    resolveLocationScope(guard.session, String(locationId));
+  } catch (err) {
+    return forbiddenResponse(err);
+  }
 
   const slug = slugify(String(name));
   const slugExists = await prisma.sessionType.findUnique({ where: { slug } });

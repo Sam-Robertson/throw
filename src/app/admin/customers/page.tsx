@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { locationQueryValue, useLocationFilter } from '../_components/LocationFilterContext';
 import { useRouter } from 'next/navigation';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -40,11 +41,15 @@ export default function AdminCustomersPage() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const limit = 20;
+  const { selectedLocationId, loading: scopeLoading } = useLocationFilter();
 
   const load = useCallback(async () => {
+    if (scopeLoading) return;
     setLoading(true);
     const params = new URLSearchParams({ page: String(page), limit: String(limit) });
     if (search) params.set('q', search);
+    const loc = locationQueryValue(selectedLocationId);
+    if (loc) params.set('locationId', loc);
     const res = await fetch(`/api/admin/customers?${params}`);
     if (res.ok) {
       const data = await res.json() as { customers: Customer[]; total: number };
@@ -52,9 +57,12 @@ export default function AdminCustomersPage() {
       setTotal(data.total);
     }
     setLoading(false);
-  }, [page, search]);
+  }, [page, search, selectedLocationId, scopeLoading]);
 
   useEffect(() => { load(); }, [load]);
+
+  // A different studio is a different list — start from its first page.
+  useEffect(() => { setPage(1); }, [selectedLocationId]);
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();

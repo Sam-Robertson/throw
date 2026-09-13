@@ -1,15 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { customerScopeWhere, requireStaffScope } from "@/lib/staffScope";
 
 export async function GET(request: NextRequest) {
-  const session = await auth();
-  if (!session)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "ADMIN" && session.user.role !== "STAFF")
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
   const { searchParams } = new URL(request.url);
+  const guard = await requireStaffScope(searchParams.get("locationId"));
+  if (guard.error) return guard.error;
+
+  // Customers visible to this scope — see customerScopeWhere (walk-ins with no
+  // bookings are visible to every studio).
+  const scopeWhere = customerScopeWhere(guard.scope);
   const q = searchParams.get("q")?.trim() ?? "";
 
   // Typeahead mode (no page param): return simple array for TaskForm/etc.
@@ -22,6 +23,7 @@ export async function GET(request: NextRequest) {
           { name: { contains: q, mode: "insensitive" } },
           { email: { contains: q, mode: "insensitive" } },
         ],
+        AND: [scopeWhere],
       },
       select: { id: true, name: true, email: true },
       take: 10,
@@ -35,15 +37,16 @@ export async function GET(request: NextRequest) {
   const limit = Math.max(1, Math.min(100, parseInt(searchParams.get("limit") ?? "20")));
   const skip = (page - 1) * limit;
 
-  const where = q
-    ? {
-        role: "CUSTOMER" as const,
-        OR: [
-          { name: { contains: q, mode: "insensitive" as const } },
-          { email: { contains: q, mode: "insensitive" as const } },
-        ],
-      }
-    : { role: "CUSTOMER" as const };
+  const where: Prisma.UserWhereInput = {
+    role: "CUSTOMER",
+    ...(q && {
+      OR: [
+        { name: { contains: q, mode: "insensitive" } },
+        { email: { contains: q, mode: "insensitive" } },
+      ],
+    }),
+    AND: [scopeWhere],
+  };
 
   const now = new Date();
 

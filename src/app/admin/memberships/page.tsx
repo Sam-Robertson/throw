@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocationFilter, withLocationParam } from "../_components/LocationFilterContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,6 +55,8 @@ export default function AdminMembershipsPage() {
   const [events, setEvents] = useState<Record<string, MembershipEvent[]>>({});
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const { selectedLocationId, loading: scopeLoading } = useLocationFilter();
+  const listUrl = withLocationParam("/api/admin/memberships", selectedLocationId);
 
   useEffect(() => {
     fetch("/api/auth/session")
@@ -61,10 +64,15 @@ export default function AdminMembershipsPage() {
       .then((data: { user?: { role?: string } }) => {
         setIsAdmin(data?.user?.role === "ADMIN");
       });
-    fetch("/api/admin/memberships")
+  }, []);
+
+  useEffect(() => {
+    if (scopeLoading) return;
+    setLoading(true);
+    fetch(listUrl)
       .then((r) => r.json())
       .then((data) => { setMemberships(data); setLoading(false); });
-  }, []);
+  }, [listUrl, scopeLoading]);
 
   async function toggleExpand(id: string) {
     if (expandedId === id) {
@@ -94,7 +102,7 @@ export default function AdminMembershipsPage() {
       }
       // Refresh memberships list and events for this row
       const [membershipsRes, eventsRes] = await Promise.all([
-        fetch("/api/admin/memberships").then((r) => r.json()),
+        fetch(listUrl).then((r) => r.json()),
         fetch(`/api/admin/memberships/${id}/events`).then((r) => r.json()),
       ]);
       setMemberships(membershipsRes);

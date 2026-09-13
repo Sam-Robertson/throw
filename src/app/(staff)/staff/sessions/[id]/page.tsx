@@ -11,6 +11,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { prisma } from "@/lib/prisma";
 import { checkPermission } from "@/lib/permissions";
+import { resolveLocationScope, scopeAllows } from "@/lib/locationScope";
 import { formatMountainTime } from "@/lib/timezone";
 import { RosterClient, type RosterRow } from "./_components/RosterClient";
 
@@ -23,18 +24,6 @@ export default async function StaffSessionPage({
   if (!session) redirect("/login");
 
   const { id } = await params;
-
-  const allowed = await checkPermission(session.user.id, "canCheckInMembers");
-  if (!allowed) {
-    return (
-      <Container maxWidth="sm" sx={{ py: 8 }}>
-        <Typography variant="body1" color="text.secondary">
-          You don&apos;t have permission to check in members. Ask an admin if you think this is a
-          mistake.
-        </Typography>
-      </Container>
-    );
-  }
 
   const studioSession = await prisma.studioSession.findUnique({
     where: { id },
@@ -50,9 +39,47 @@ export default async function StaffSessionPage({
 
   if (!studioSession) notFound();
 
-  const activeWaiver = await prisma.waiverVersion.findFirst({
-    where: { isActive: true },
-  });
+  // STAFF may only open rosters for their own studios.
+  if (!scopeAllows(resolveLocationScope(session), studioSession.locationId)) {
+    return (
+      <Container maxWidth="sm" sx={{ py: 8 }}>
+        <Typography variant="body1" color="text.secondary">
+          This session is at a studio you&apos;re not assigned to. Ask an admin if you need
+          access.
+        </Typography>
+      </Container>
+    );
+  }
+
+  // Check the permission at this session's studio, not "any studio".
+  const allowed = await checkPermission(
+    session.user.id,
+    "canCheckInMembers",
+    studioSession.locationId ?? undefined,
+  );
+  if (!allowed) {
+    return (
+      <Container maxWidth="sm" sx={{ py: 8 }}>
+        <Typography variant="body1" color="text.secondary">
+          You don&apos;t have permission to check in members. Ask an admin if you think this is a
+          mistake.
+        </Typography>
+      </Container>
+    );
+  }
+
+  // Waivers are per studio: prefer this session's studio's active version,
+  // falling back to any active version if that studio has none.
+  const activeWaiver =
+    (studioSession.locationId
+      ? await prisma.waiverVersion.findFirst({
+          where: { isActive: true, locationId: studioSession.locationId },
+        })
+      : null) ??
+    (await prisma.waiverVersion.findFirst({
+      where: { isActive: true },
+      orderBy: { publishedAt: "desc" },
+    }));
 
   const relevantBookings = studioSession.bookings.filter(
     (b) => b.status === "CONFIRMED" || b.status === "NO_SHOW",

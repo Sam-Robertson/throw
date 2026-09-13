@@ -178,6 +178,7 @@ const MAIN_NAV: NavSection[] = [
       },
 
       { kind: 'link', href: '/admin/waivers', label: 'Waivers', icon: <GavelOutlinedIcon fontSize="small" /> },
+      { kind: 'link', href: '/admin/pieces', label: 'Pieces', icon: <Inventory2OutlinedIcon fontSize="small" /> },
     ],
   },
   {
@@ -478,7 +479,8 @@ function FlyoutNavItem({ label, icon, isActive, groups, flyoutTitle, pathname, o
  * to a single studio.
  */
 function LocationSwitcher() {
-  const { locations, selectedLocationId, setSelectedLocationId, loading } = useLocationFilter();
+  const { locations, selectedLocationId, setSelectedLocationId, loading, canSelectAll } =
+    useLocationFilter();
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 
   if (loading || locations.length === 0) return null;
@@ -534,14 +536,17 @@ function LocationSwitcher() {
         transformOrigin={{ vertical: 'top', horizontal: 'left' }}
         slotProps={{ paper: { sx: { mt: 0.5, minWidth: 216, borderRadius: 2 } } }}
       >
-        <LocationMenuItem
-          label="All Locations"
-          scope="Franchise"
-          franchise
-          selected={isFranchise}
-          onClick={() => choose(ALL_LOCATIONS)}
-        />
-        <Divider sx={{ my: 0.5 }} />
+        {/* STAFF are limited to their assigned studios, so no franchise view. */}
+        {canSelectAll && (
+          <LocationMenuItem
+            label="All Locations"
+            scope="Franchise"
+            franchise
+            selected={isFranchise}
+            onClick={() => choose(ALL_LOCATIONS)}
+          />
+        )}
+        {canSelectAll && <Divider sx={{ my: 0.5 }} />}
         {locations.map((loc) => (
           <LocationMenuItem
             key={loc.id}

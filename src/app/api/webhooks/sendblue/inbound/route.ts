@@ -109,12 +109,39 @@ export async function POST(req: NextRequest) {
   // has nowhere to be filed and is dropped.
   const user = await prisma.user.findFirst({ where: { phone: normalizedFrom } });
   if (user) {
-    let conversation = await prisma.conversation.findFirst({
-      where: { userId: user.id, channel: "sms" },
-    });
+    // Scope the conversation to the studio whose Sendblue line received the
+    // text (Location.smsNumber). No match — numbers not configured yet, or an
+    // unknown line — leaves locationId null, which every studio can see.
+    const normalizedTo = body.to_number ? normalizePhone(body.to_number) : "";
+    const receivingLocation = normalizedTo
+      ? await prisma.location.findFirst({
+          where: { smsNumber: normalizedTo },
+          select: { id: true },
+        })
+      : null;
+    const locationId = receivingLocation?.id ?? null;
+
+    let conversation = locationId
+      ? // Prefer this studio's thread; else adopt an unassigned one.
+        ((await prisma.conversation.findFirst({
+          where: { userId: user.id, channel: "sms", locationId },
+        })) ??
+        (await prisma.conversation.findFirst({
+          where: { userId: user.id, channel: "sms", locationId: null },
+        })))
+      : await prisma.conversation.findFirst({
+          where: { userId: user.id, channel: "sms" },
+          orderBy: { lastMessageAt: { sort: "desc", nulls: "last" } },
+        });
+
     if (!conversation) {
       conversation = await prisma.conversation.create({
-        data: { userId: user.id, channel: "sms" },
+        data: { userId: user.id, channel: "sms", locationId },
+      });
+    } else if (locationId && conversation.locationId === null) {
+      conversation = await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { locationId },
       });
     }
 

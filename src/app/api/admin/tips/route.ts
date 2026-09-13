@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { STUDIO_TIMEZONE } from "@/lib/timezone";
+import { locationWhere, resolveLocationScope } from "@/lib/locationScope";
 import { startOfMonth, endOfMonth } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 
@@ -37,10 +38,15 @@ export async function GET(req: NextRequest) {
   const from = fromParam ? new Date(fromParam + "T00:00:00.000Z") : def.from;
   const to = toParam ? new Date(toParam + "T23:59:59.999Z") : def.to;
 
+  // ADMIN-only route, so this never restricts — it just applies the
+  // switcher's studio (Tip.locationId is required, no nulls to handle).
+  const scope = resolveLocationScope(session, searchParams.get("locationId"));
+
   const tips = await prisma.tip.findMany({
     where: {
       createdAt: { gte: from, lte: to },
       ...(instructorId ? { instructorId } : {}),
+      ...locationWhere(scope),
     },
     orderBy: { createdAt: "desc" },
   });

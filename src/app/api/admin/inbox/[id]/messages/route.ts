@@ -1,18 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sendSms } from "@/lib/sms";
 import { resend } from "@/lib/resend";
+import { scopeAllowsUnassigned } from "@/lib/locationScope";
+import { requireStaffScope } from "@/lib/staffScope";
 
 // POST /api/admin/inbox/[id]/messages — send a reply
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "ADMIN" && session.user.role !== "STAFF")
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const guard = await requireStaffScope();
+  if (guard.error) return guard.error;
 
   const { id } = await params;
   const body = (await req.json()) as { body: string; subject?: string };
@@ -26,6 +25,11 @@ export async function POST(
   });
 
   if (!conversation) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!scopeAllowsUnassigned(guard.scope, conversation.locationId))
+    return NextResponse.json(
+      { error: "This conversation belongs to a studio you don't have access to" },
+      { status: 403 },
+    );
 
   const now = new Date();
 

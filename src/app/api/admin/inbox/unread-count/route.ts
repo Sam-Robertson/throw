@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { locationWhereOrUnassigned } from "@/lib/locationScope";
+import { requireStaffScope } from "@/lib/staffScope";
 
+// Sidebar badge: unread across everything this user may see (their whole
+// scope, not the switcher's current selection — the badge is global).
 export async function GET() {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "ADMIN" && session.user.role !== "STAFF")
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const guard = await requireStaffScope();
+  if (guard.error) return guard.error;
 
   const result = await prisma.conversation.aggregate({
+    where: locationWhereOrUnassigned(guard.scope),
     _sum: { adminUnread: true },
   });
 

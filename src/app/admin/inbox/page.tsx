@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { locationQueryValue, useLocationFilter } from '../_components/LocationFilterContext';
 import Avatar from '@mui/material/Avatar';
 import Badge from '@mui/material/Badge';
 import Box from '@mui/material/Box';
@@ -231,6 +232,7 @@ export default function InboxPage() {
   const [sending, setSending] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const { refresh: refreshBadge } = useInboxCount();
+  const { selectedLocationId, loading: scopeLoading } = useLocationFilter();
 
   // Load membership plans → build dynamic segment tabs
   useEffect(() => {
@@ -253,9 +255,12 @@ export default function InboxPage() {
 
   // Load conversations for current segment
   const loadConversations = useCallback(async () => {
+    if (scopeLoading) return;
     setLoading(true);
     const params = new URLSearchParams({ segment });
     if (debouncedSearch) params.set('q', debouncedSearch);
+    const loc = locationQueryValue(selectedLocationId);
+    if (loc) params.set('locationId', loc);
     const res = await fetch(`/api/admin/inbox?${params}`);
     if (res.ok) {
       const data: ConversationSummary[] = await res.json();
@@ -267,7 +272,7 @@ export default function InboxPage() {
       );
     }
     setLoading(false);
-  }, [segment, debouncedSearch]);
+  }, [segment, debouncedSearch, selectedLocationId, scopeLoading]);
 
   useEffect(() => {
     setSelectedId(null);

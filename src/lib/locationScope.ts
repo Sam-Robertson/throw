@@ -72,6 +72,11 @@ export function locationWhereOrUnassigned<F extends string = "locationId">(
 ): { OR?: Array<{ [K in F]: { in: string[] } | null }> } {
   if (scope.locationIds === null) return {};
   const key = (field ?? "locationId") as F;
+  // No assigned locations means nothing at all — not even unassigned rows.
+  if (scope.locationIds.length === 0) {
+    const none: string[] = [];
+    return { OR: [{ [key]: { in: none } } as { [K in F]: { in: string[] } }] };
+  }
   return {
     OR: [
       { [key]: { in: scope.locationIds } } as { [K in F]: { in: string[] } },
@@ -84,6 +89,17 @@ export function locationWhereOrUnassigned<F extends string = "locationId">(
 export function scopeAllows(scope: LocationScope, locationId: string | null): boolean {
   if (scope.locationIds === null) return true;
   return locationId !== null && scope.locationIds.includes(locationId);
+}
+
+/**
+ * Like scopeAllows, but a row with no location (null) is visible to any scope
+ * that has at least one location — the single-row counterpart of
+ * locationWhereOrUnassigned.
+ */
+export function scopeAllowsUnassigned(scope: LocationScope, locationId: string | null): boolean {
+  if (scope.locationIds === null) return true;
+  if (scope.locationIds.length === 0) return false;
+  return locationId === null || scope.locationIds.includes(locationId);
 }
 
 /** Converts a ForbiddenError into the standard JSON 403; rethrows anything else. */

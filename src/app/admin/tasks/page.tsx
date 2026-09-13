@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { locationQueryValue, useLocationFilter } from '../_components/LocationFilterContext';
 import NextLink from 'next/link';
 import { formatInTimeZone } from 'date-fns-tz';
 import { formatDistanceToNow } from 'date-fns';
@@ -332,6 +333,9 @@ export default function AdminTasksPage() {
   const [deleting, setDeleting] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
+  const { selectedLocationId, loading: scopeLoading } = useLocationFilter();
+  const selectedLocation = locationQueryValue(selectedLocationId);
+
   const drawerTask = tasks.find((t) => t.id === drawerTaskId) ?? null;
 
   async function loadStaff() {
@@ -340,8 +344,10 @@ export default function AdminTasksPage() {
   }
 
   const loadTasks = useCallback(async () => {
+    if (scopeLoading) return;
     setLoading(true);
     const params = new URLSearchParams();
+    if (selectedLocation) params.set('locationId', selectedLocation);
     if (statusFilter !== 'ALL') params.set('status', statusFilter);
     if (assigneeFilter === 'unassigned') params.set('assignedToId', 'unassigned');
     else if (assigneeFilter === 'me' && currentUserId) params.set('assignedToId', currentUserId);
@@ -349,7 +355,7 @@ export default function AdminTasksPage() {
     const res = await fetch(`/api/admin/tasks?${params}`);
     if (res.ok) setTasks(await res.json() as StaffTask[]);
     setLoading(false);
-  }, [statusFilter, assigneeFilter, currentUserId]);
+  }, [statusFilter, assigneeFilter, currentUserId, selectedLocation, scopeLoading]);
 
   useEffect(() => {
     fetch('/api/auth/session')
@@ -416,6 +422,9 @@ export default function AdminTasksPage() {
       linkedCustomerId: values.linkedCustomerId || null,
       dueAt: values.dueAt || null,
       ...(editingTask && { status: values.status }),
+      // New tasks belong to the studio selected in the switcher (none from
+      // the franchise view, which leaves them visible to every studio).
+      ...(!editingTask && selectedLocation && { locationId: selectedLocation }),
     };
     const res = editingTask
       ? await fetch(`/api/admin/tasks/${editingTask.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })

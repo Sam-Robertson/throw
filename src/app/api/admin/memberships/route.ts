@@ -1,15 +1,15 @@
-import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { membershipScopeWhere, requireStaffScope } from "@/lib/staffScope";
 
-export async function GET() {
-  const session = await auth();
-  if (!session)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "ADMIN" && session.user.role !== "STAFF")
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+export async function GET(req: NextRequest) {
+  const guard = await requireStaffScope(req.nextUrl.searchParams.get("locationId"));
+  if (guard.error) return guard.error;
 
+  // Membership or plan location in scope; location-less memberships (the
+  // Momence imports) are visible to every studio — see membershipScopeWhere.
   const memberships = await prisma.membership.findMany({
+    where: membershipScopeWhere(guard.scope),
     orderBy: { createdAt: "desc" },
     include: {
       user: { select: { name: true, email: true } },

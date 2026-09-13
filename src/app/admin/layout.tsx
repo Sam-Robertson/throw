@@ -15,7 +15,10 @@ export default async function AdminLayout({
 
   return (
     <InboxCountProvider>
-      <LocationFilterProvider>
+      <LocationFilterProvider
+        role={session.user.role}
+        assignedLocationIds={session.user.locationIds}
+      >
         <Box sx={{ display: "flex", minHeight: "100vh" }}>
           <AdminNav />
           <Box

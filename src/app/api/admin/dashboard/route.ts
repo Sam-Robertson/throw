@@ -1,16 +1,31 @@
-import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { startOfDay, endOfDay, subDays, format } from "date-fns";
+import { locationWhere, locationWhereOrUnassigned } from "@/lib/locationScope";
+import { membershipScopeWhere, requireStaffScope } from "@/lib/staffScope";
 
 const TZ = "America/Denver";
 
-export async function GET() {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "ADMIN" && session.user.role !== "STAFF")
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+export async function GET(req: NextRequest) {
+  const guard = await requireStaffScope(req.nextUrl.searchParams.get("locationId"));
+  if (guard.error) return guard.error;
+  const { session, scope } = guard;
+
+  // Scoping per source:
+  //   Payment       — Payment.locationId directly (imported Momence payments all
+  //                   defaulted to Provo, so Lehi's history starts at zero).
+  //   Bookings /
+  //   sessions      — the studio session's locationId (sessions with no location
+  //                   drop out of single-studio views).
+  //   StaffTask     — locationId, null visible to every studio (manual tasks are
+  //                   never tagged with one).
+  //   Membership    — membershipScopeWhere: membership or plan location, with
+  //                   location-less memberships visible everywhere.
+  const paymentScope = locationWhere(scope);
+  const sessionScope = locationWhere(scope);
+  const taskScope = locationWhereOrUnassigned(scope);
+  const membershipScope = membershipScopeWhere(scope);
 
   const now = new Date();
   const nowMT = toZonedTime(now, TZ);
@@ -37,23 +52,35 @@ export async function GET() {
     revLast7,
   ] = await Promise.all([
     prisma.payment.aggregate({
-      where: { status: "SUCCEEDED", createdAt: { gte: todayStartUTC, lte: todayEndUTC } },
+      where: {
+        status: "SUCCEEDED",
+        createdAt: { gte: todayStartUTC, lte: todayEndUTC },
+        ...paymentScope,
+      },
       _sum: { amountInCents: true },
     }),
     prisma.payment.aggregate({
-      where: { status: "SUCCEEDED", createdAt: { gte: ystStartUTC, lte: ystEndUTC } },
+      where: {
+        status: "SUCCEEDED",
+        createdAt: { gte: ystStartUTC, lte: ystEndUTC },
+        ...paymentScope,
+      },
       _sum: { amountInCents: true },
     }),
-    prisma.membership.count({ where: { status: "ACTIVE" } }),
+    prisma.membership.count({ where: { status: "ACTIVE", AND: [membershipScope] } }),
     prisma.booking.count({
       where: {
         status: "CONFIRMED",
-        studioSession: { startsAt: { gte: todayStartUTC, lte: todayEndUTC } },
+        studioSession: { startsAt: { gte: todayStartUTC, lte: todayEndUTC }, ...sessionScope },
       },
     }),
-    prisma.staffTask.count({ where: { status: { in: ["OPEN", "IN_PROGRESS"] } } }),
+    prisma.staffTask.count({ where: { status: { in: ["OPEN", "IN_PROGRESS"] }, ...taskScope } }),
     prisma.studioSession.findMany({
-      where: { startsAt: { gte: todayStartUTC, lte: todayEndUTC }, isCancelled: false },
+      where: {
+        startsAt: { gte: todayStartUTC, lte: todayEndUTC },
+        isCancelled: false,
+        ...sessionScope,
+      },
       include: {
         sessionType: { select: { name: true } },
         instructor: { select: { name: true } },
@@ -66,7 +93,7 @@ export async function GET() {
       orderBy: { startsAt: "asc" },
     }),
     prisma.staffTask.findMany({
-      where: { status: { in: ["OPEN", "IN_PROGRESS"] } },
+      where: { status: { in: ["OPEN", "IN_PROGRESS"] }, ...taskScope },
       include: {
         assignedTo: { select: { name: true, email: true } },
         linkedCustomer: { select: { name: true, email: true } },
@@ -75,7 +102,11 @@ export async function GET() {
       take: 6,
     }),
     prisma.booking.findMany({
-      where: { status: "CONFIRMED", createdAt: { gte: sevenDaysAgo } },
+      where: {
+        status: "CONFIRMED",
+        createdAt: { gte: sevenDaysAgo },
+        studioSession: { ...sessionScope },
+      },
       include: {
         user: { select: { name: true, email: true } },
         studioSession: { select: { sessionType: { select: { name: true } } } },
@@ -84,7 +115,7 @@ export async function GET() {
       take: 8,
     }),
     prisma.membership.findMany({
-      where: { createdAt: { gte: sevenDaysAgo } },
+      where: { createdAt: { gte: sevenDaysAgo }, AND: [membershipScope] },
       include: {
         user: { select: { name: true, email: true } },
         plan: { select: { name: true } },
@@ -93,18 +124,26 @@ export async function GET() {
       take: 8,
     }),
     prisma.payment.findMany({
-      where: { status: "SUCCEEDED", createdAt: { gte: sevenDaysAgo } },
+      where: { status: "SUCCEEDED", createdAt: { gte: sevenDaysAgo }, ...paymentScope },
       include: { user: { select: { name: true, email: true } } },
       orderBy: { createdAt: "desc" },
       take: 8,
     }),
-    prisma.membership.groupBy({ by: ["status"], _count: { id: true } }),
+    prisma.membership.groupBy({
+      by: ["status"],
+      where: { AND: [membershipScope] },
+      _count: { id: true },
+    }),
     prisma.membership.findMany({
-      where: { status: "ACTIVE" },
+      where: { status: "ACTIVE", AND: [membershipScope] },
       select: { plan: { select: { price: true, billingIntervalDays: true } } },
     }),
     prisma.payment.findMany({
-      where: { status: "SUCCEEDED", createdAt: { gte: sevenDaysAgoUTC, lte: todayEndUTC } },
+      where: {
+        status: "SUCCEEDED",
+        createdAt: { gte: sevenDaysAgoUTC, lte: todayEndUTC },
+        ...paymentScope,
+      },
       select: { amountInCents: true, createdAt: true },
     }),
   ]);

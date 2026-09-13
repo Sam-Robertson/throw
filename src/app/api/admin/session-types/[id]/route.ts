@@ -1,21 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  forbiddenResponse,
+  resolveLocationScope,
+  scopeAllowsUnassigned,
+} from "@/lib/locationScope";
+import { requireStaffScope } from "@/lib/staffScope";
 
-type GuardResult = { error: NextResponse } | { error: null };
-
-async function requireStaff(): Promise<GuardResult> {
-  const session = await auth();
-  if (!session)
-    return {
-      error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
-    };
-  if (session.user.role !== "ADMIN" && session.user.role !== "STAFF")
-    return {
-      error: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
-    };
-  return { error: null };
-}
+const NOT_VISIBLE = { error: "This class type belongs to a studio you don't have access to" };
 
 function slugify(name: string): string {
   return name
@@ -39,7 +31,7 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const guard = await requireStaff();
+  const guard = await requireStaffScope();
   if (guard.error) return guard.error;
 
   const { id } = await params;
@@ -50,6 +42,8 @@ export async function GET(
 
   if (!sessionType)
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!scopeAllowsUnassigned(guard.scope, sessionType.locationId))
+    return NextResponse.json(NOT_VISIBLE, { status: 403 });
 
   return NextResponse.json(sessionType);
 }
@@ -58,7 +52,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const guard = await requireStaff();
+  const guard = await requireStaffScope();
   if (guard.error) return guard.error;
 
   const { id } = await params;
@@ -69,9 +63,20 @@ export async function PATCH(
   const existing = await prisma.sessionType.findUnique({ where: { id } });
   if (!existing)
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!scopeAllowsUnassigned(guard.scope, existing.locationId))
+    return NextResponse.json(NOT_VISIBLE, { status: 403 });
 
   const { name, description, durationMinutes, capacity, dropInPriceCents, isBusyWindow, isActive, isTemplate, locationId } =
     body as Record<string, unknown>;
+
+  // Moving a class type to another studio requires access to that studio.
+  if (locationId !== undefined) {
+    try {
+      resolveLocationScope(guard.session, String(locationId));
+    } catch (err) {
+      return forbiddenResponse(err);
+    }
+  }
 
   const newSlug =
     name && String(name) !== existing.name ? slugify(String(name)) : undefined;
@@ -117,10 +122,19 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const guard = await requireStaff();
+  const guard = await requireStaffScope();
   if (guard.error) return guard.error;
 
   const { id } = await params;
+
+  const existing = await prisma.sessionType.findUnique({
+    where: { id },
+    select: { locationId: true },
+  });
+  if (!existing)
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!scopeAllowsUnassigned(guard.scope, existing.locationId))
+    return NextResponse.json(NOT_VISIBLE, { status: 403 });
 
   const futureCount = await prisma.studioSession.count({
     where: { sessionTypeId: id, startsAt: { gt: new Date() }, isCancelled: false },

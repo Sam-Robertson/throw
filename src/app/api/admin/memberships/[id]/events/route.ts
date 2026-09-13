@@ -1,18 +1,21 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { membershipScopeWhere, requireStaffScope } from "@/lib/staffScope";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "ADMIN" && session.user.role !== "STAFF")
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const guard = await requireStaffScope();
+  if (guard.error) return guard.error;
 
   const { id } = await params;
+
+  const visible = await prisma.membership.count({
+    where: { id, AND: [membershipScopeWhere(guard.scope)] },
+  });
+  if (visible === 0)
+    return NextResponse.json({ error: "Membership not found" }, { status: 404 });
 
   const events = await prisma.membershipEvent.findMany({
     where: { membershipId: id },
