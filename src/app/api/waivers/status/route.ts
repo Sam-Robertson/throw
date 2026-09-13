@@ -1,37 +1,46 @@
-import { NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
+import {
+  getApplicableWaiver,
+  hasSignedWaiver,
+  resolveWaiverForVersion,
+} from "@/lib/waivers";
 
-export async function GET() {
+// GET /api/waivers/status[?locationId=…|?versionId=…]
+// Waivers are per location. With no parameter this reports on the most
+// recently published active waiver (the fallback used for sessions without a
+// location), which matches the previous single-waiver behavior.
+export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const userId = session.user.id;
+  const { searchParams } = new URL(req.url);
+  const versionId = searchParams.get("versionId");
+  const locationId = searchParams.get("locationId");
 
-  const activeVersion = await prisma.waiverVersion.findFirst({
-    where: { isActive: true },
-    select: { id: true },
-  });
+  const waiver = versionId
+    ? await resolveWaiverForVersion(versionId)
+    : await getApplicableWaiver(locationId);
 
-  if (!activeVersion) {
+  if (!waiver) {
     return NextResponse.json({
       hasSigned: true,
       waiverVersionId: null,
       activeVersionId: null,
+      locationId: null,
     });
   }
 
-  const signature = await prisma.waiverSignature.findUnique({
-    where: {
-      userId_waiverVersionId: { userId, waiverVersionId: activeVersion.id },
-    },
-    select: { id: true },
-  });
+  const hasSigned = await hasSignedWaiver(userId, waiver.id);
 
   return NextResponse.json({
-    hasSigned: signature !== null,
-    waiverVersionId: signature?.id ?? null,
-    activeVersionId: activeVersion.id,
+    hasSigned,
+    // Kept for compatibility: historically this carried the signature's id
+    // when signed. It now carries the version id either way.
+    waiverVersionId: hasSigned ? waiver.id : null,
+    activeVersionId: waiver.id,
+    locationId: waiver.locationId,
   });
 }

@@ -1,8 +1,33 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+
+type BookingError = { message: string; waiverVersionId?: string };
+
+type ErrorBody = { error?: string; waiverVersionId?: string };
+
+// Maps the booking APIs' error codes to customer-facing copy.
+function describeError(data: ErrorBody): BookingError {
+  switch (data.error) {
+    case "WAIVER_REQUIRED":
+      return {
+        message: "You need to sign this studio's waiver before you can book.",
+        waiverVersionId: data.waiverVersionId,
+      };
+    case "SESSION_FULL":
+      return {
+        message:
+          "This session just filled up, so you haven't been charged. Please pick another time from the schedule.",
+      };
+    case "SESSION_IN_PAST":
+      return { message: "This session has already started and can no longer be booked." };
+    default:
+      return { message: data.error ?? "Something went wrong. Please try again." };
+  }
+}
 
 type Props = {
   sessionId: string;
@@ -45,10 +70,13 @@ export function BookingForm({
 }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<BookingError | null>(null);
   // Flips to true if the server disagrees with our client-side ticket count
   // (e.g. a race with another tab) and rejects with NO_TICKETS_REMAINING.
   const [forceDropIn, setForceDropIn] = useState(false);
+  // Paid drop-ins are refused once a session is full (no paying to waitlist),
+  // either because the page loaded full or the server said SESSION_FULL.
+  const [sessionFull, setSessionFull] = useState(spotsRemaining <= 0);
 
   const outOfTickets =
     hasMembership && !membershipUnlimited && (forceDropIn || (ticketsRemaining ?? 0) <= 0);
@@ -64,19 +92,17 @@ export function BookingForm({
         body: JSON.stringify({ studioSessionId: sessionId }),
       });
       if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as {
-          error?: string;
-        };
+        const data = (await res.json().catch(() => ({}))) as ErrorBody;
         if (res.status === 402 && data.error === "NO_TICKETS_REMAINING") {
           setForceDropIn(true);
           return;
         }
-        setError(data.error ?? "Something went wrong. Please try again.");
+        setError(describeError(data));
         return;
       }
       router.push("/dashboard?booked=1");
     } catch {
-      setError("Something went wrong. Please try again.");
+      setError({ message: "Something went wrong. Please try again." });
     } finally {
       setPending(false);
     }
@@ -92,21 +118,26 @@ export function BookingForm({
         body: JSON.stringify({ studioSessionId: sessionId }),
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(
-          (data as { error?: string }).error ??
-            "Something went wrong. Please try again.",
-        );
+        const data = (await res.json().catch(() => ({}))) as ErrorBody;
+        if (data.error === "SESSION_FULL") setSessionFull(true);
+        setError(describeError(data));
         return;
       }
       const { url } = (await res.json()) as { url: string };
       window.location.href = url;
     } catch {
-      setError("Something went wrong. Please try again.");
+      setError({ message: "Something went wrong. Please try again." });
     } finally {
       setPending(false);
     }
   }
+
+  const waiverHref = error?.waiverVersionId
+    ? `/waiver?${new URLSearchParams({
+        versionId: error.waiverVersionId,
+        callbackUrl: `/book/${sessionId}`,
+      }).toString()}`
+    : null;
 
   return (
     <div className="rounded-lg border bg-card p-8 shadow-sm">
@@ -142,9 +173,14 @@ export function BookingForm({
       </dl>
 
       {error && (
-        <p className="mb-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {error}
-        </p>
+        <div className="mb-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <p>{error.message}</p>
+          {waiverHref && (
+            <Link href={waiverHref} className="mt-1 inline-block font-medium underline underline-offset-4">
+              Sign the waiver
+            </Link>
+          )}
+        </div>
       )}
 
       {showMemberFreeFlow ? (
@@ -171,7 +207,7 @@ export function BookingForm({
               {ticketsResetDate ? `, or your tickets reset on ${ticketsResetDate}.` : "."}
             </p>
           )}
-          {!hasMembership && (
+          {!hasMembership && !sessionFull && (
             <p className="mb-4 text-sm text-muted-foreground">
               Drop-in price:{" "}
               <span className="font-semibold text-foreground">
@@ -179,13 +215,20 @@ export function BookingForm({
               </span>
             </p>
           )}
-          <Button onClick={handleDropIn} disabled={pending} size="lg">
-            {pending
-              ? "Redirecting to payment…"
-              : spotsRemaining <= 0
-                ? `Pay and Join Waitlist — ${formatPrice(dropInPriceCents)}`
+          {sessionFull ? (
+            <p className="text-sm text-muted-foreground">
+              This session is full.{" "}
+              <Link href="/schedule" className="underline underline-offset-4">
+                See other times
+              </Link>
+            </p>
+          ) : (
+            <Button onClick={handleDropIn} disabled={pending} size="lg">
+              {pending
+                ? "Redirecting to payment…"
                 : `Pay and Book — ${formatPrice(dropInPriceCents)}`}
-          </Button>
+            </Button>
+          )}
         </div>
       )}
     </div>

@@ -18,6 +18,19 @@ export async function POST(request: NextRequest) {
   if (!waiverVersionId)
     return NextResponse.json({ error: "waiverVersionId is required" }, { status: 400 });
 
+  // Only the current version of a studio's waiver can be signed; a stale or
+  // made-up id would otherwise fail on the foreign key (500) or record a
+  // signature against a superseded text.
+  const version = await prisma.waiverVersion.findUnique({
+    where: { id: waiverVersionId },
+    select: { isActive: true },
+  });
+  if (!version?.isActive)
+    return NextResponse.json(
+      { error: "That waiver is no longer current. Please reload and sign the latest version." },
+      { status: 404 },
+    );
+
   const existing = await prisma.waiverSignature.findUnique({
     where: { userId_waiverVersionId: { userId, waiverVersionId } },
   });

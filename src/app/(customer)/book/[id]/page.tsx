@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { formatMountainTime } from "@/lib/timezone";
 import { getTicketBalance } from "@/lib/credits";
+import { findUnsignedWaiver, waiverSignUrl } from "@/lib/waivers";
 import { BookingForm } from "./_components/BookingForm";
 
 async function getSession(id: string) {
@@ -61,25 +62,32 @@ export default async function BookPage({
     );
   }
 
-  // Waiver check
-  if (studioSession.locationId) {
-    const activeWaiver = await prisma.waiverVersion.findFirst({
-      where: { locationId: studioSession.locationId, isActive: true },
-      select: { id: true },
-    });
-    if (activeWaiver) {
-      const signed = await prisma.waiverSignature.findUnique({
-        where: {
-          userId_waiverVersionId: {
-            userId,
-            waiverVersionId: activeWaiver.id,
-          },
-        },
-      });
-      if (!signed) {
-        redirect(`/waiver?callbackUrl=/book/${id}`);
-      }
-    }
+  if (studioSession.startsAt <= new Date()) {
+    return (
+      <main className="mx-auto max-w-2xl px-4 py-10">
+        <div className="mb-6">
+          <Link
+            href="/schedule"
+            className="text-sm text-muted-foreground hover:underline"
+          >
+            ← Back to schedule
+          </Link>
+        </div>
+        <div className="rounded-lg border bg-card p-8 shadow-sm">
+          <h1 className="text-2xl font-bold">This session has started</h1>
+          <p className="mt-2 text-muted-foreground">
+            It can no longer be booked. Pick another time from the schedule.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  // Waiver check — the same per-location lookup the booking APIs enforce, so
+  // the page and the server never disagree about which waiver is required.
+  const unsignedWaiver = await findUnsignedWaiver(userId, studioSession.locationId);
+  if (unsignedWaiver) {
+    redirect(waiverSignUrl(unsignedWaiver.id, `/book/${id}`));
   }
 
   // Duplicate booking check — show already-booked state

@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
 import { formatMountainTime } from "@/lib/timezone";
+import { findUnsignedWaiver } from "@/lib/waivers";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -42,6 +43,28 @@ export async function POST(req: NextRequest) {
       { error: "Session is cancelled" },
       { status: 400 },
     );
+  }
+  if (studioSession.startsAt <= new Date()) {
+    return NextResponse.json({ error: "SESSION_IN_PAST" }, { status: 400 });
+  }
+
+  const unsignedWaiver = await findUnsignedWaiver(userId, studioSession.locationId);
+  if (unsignedWaiver) {
+    return NextResponse.json(
+      { error: "WAIVER_REQUIRED", waiverVersionId: unsignedWaiver.id },
+      { status: 403 },
+    );
+  }
+
+  // Capacity is checked before taking payment. This is not a reservation — two
+  // customers can still both pass here for the last spot — so the webhook's
+  // own capacity check (which waitlists an overflow booking) stays as the
+  // fallback for that race.
+  const confirmedCount = await prisma.booking.count({
+    where: { studioSessionId, status: "CONFIRMED" },
+  });
+  if (confirmedCount >= studioSession.capacity) {
+    return NextResponse.json({ error: "SESSION_FULL" }, { status: 409 });
   }
 
   const origin =

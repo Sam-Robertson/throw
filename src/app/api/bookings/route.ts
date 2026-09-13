@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sendInngestEvent } from "@/lib/inngest";
 import { consumeTicket } from "@/lib/credits";
+import { findUnsignedWaiver } from "@/lib/waivers";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -124,6 +125,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: "Session is cancelled" },
       { status: 400 },
+    );
+  }
+  if (studioSession.startsAt <= new Date()) {
+    return NextResponse.json({ error: "SESSION_IN_PAST" }, { status: 400 });
+  }
+
+  // Checked before the membership lookup so a missing waiver is reported even
+  // to non-members, and before consumeTicket so no ticket is ever spent on a
+  // booking that then gets refused.
+  const unsignedWaiver = await findUnsignedWaiver(userId, studioSession.locationId);
+  if (unsignedWaiver) {
+    return NextResponse.json(
+      { error: "WAIVER_REQUIRED", waiverVersionId: unsignedWaiver.id },
+      { status: 403 },
     );
   }
 
