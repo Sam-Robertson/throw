@@ -3,15 +3,14 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { SubscribeButton } from "./_components/SubscribeButton";
+import { billingPeriodLabel } from "@/lib/billingInterval";
+import { checkPlanPurchasable } from "@/lib/membershipCatalog";
+import { SubscribeForm } from "./_components/SubscribeForm";
 
 export const dynamic = "force-dynamic";
 
-function formatPrice(priceInCents: number, billingIntervalDays: number): string {
-  const dollars = (priceInCents / 100).toFixed(2);
-  if (billingIntervalDays <= 35) return `$${dollars}/mo`;
-  if (billingIntervalDays <= 100) return `$${dollars}/qtr`;
-  return `$${dollars}/yr`;
+function formatDollars(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
 }
 
 export default async function SubscribePage({
@@ -26,16 +25,26 @@ export default async function SubscribePage({
 
   const { planId } = await params;
 
-  const plan = await prisma.membershipPlan.findUnique({
-    where: { id: planId, isActive: true },
-  });
+  // Same rule as the subscribe route: legacy, non-public and sold-out plans
+  // can't be bought online, so there is nothing to show here.
+  const purchasable = await checkPlanPurchasable(
+    await prisma.membershipPlan.findUnique({ where: { id: planId } }),
+  );
+  if (!purchasable.ok) redirect("/membership");
+  const { plan, capUsage } = purchasable;
 
-  if (!plan) redirect("/membership");
+  const terms = await prisma.commitmentTerm.findMany({
+    where: { isActive: true },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+  });
 
   const priorMembershipCount = await prisma.membership.count({
     where: { userId: session.user.id },
   });
-  const chargeJoiningFee = plan.joiningFeeCents > 0 && priorMembershipCount === 0;
+  const firstTimeMember = priorMembershipCount === 0;
+  // With commitment terms set up, the joining fee comes from the chosen term.
+  const chargePlanJoiningFee = terms.length === 0 && plan.joiningFeeCents > 0 && firstTimeMember;
+  const period = billingPeriodLabel(plan.billingIntervalDays);
 
   return (
     <main className="mx-auto max-w-md px-4 py-16">
@@ -55,18 +64,24 @@ export default async function SubscribePage({
             <p className="text-sm text-muted-foreground">{plan.description}</p>
           )}
           <p className="text-2xl font-bold">
-            {formatPrice(plan.price, plan.billingIntervalDays)}
+            {formatDollars(plan.price)}
+            <span className="text-base font-normal text-muted-foreground"> / {period}</span>
           </p>
-          <p className="text-xs text-muted-foreground">
-            Billed every {plan.billingIntervalDays} days
-          </p>
-          {chargeJoiningFee && (
+          {capUsage && (
+            <p className="text-sm font-medium">
+              {capUsage.remaining} of {capUsage.cap} left
+            </p>
+          )}
+          {plan.forfeitsRateOnCancelOrFreeze && (
+            <p className="text-xs text-muted-foreground">
+              This rate is lost if you cancel or freeze your membership.
+            </p>
+          )}
+          {chargePlanJoiningFee && (
             <p className="text-sm">
               Plus a one-time{" "}
-              <span className="font-semibold">
-                ${(plan.joiningFeeCents / 100).toFixed(2)}
-              </span>{" "}
-              joining fee.
+              <span className="font-semibold">{formatDollars(plan.joiningFeeCents)}</span> joining
+              fee.
             </p>
           )}
           {plan.billingAnchorDay && (
@@ -78,7 +93,20 @@ export default async function SubscribePage({
           )}
         </CardContent>
       </Card>
-      <SubscribeButton planId={planId} />
+      <SubscribeForm
+        planId={plan.id}
+        firstTimeMember={firstTimeMember}
+        terms={terms.map((t) => ({
+          id: t.id,
+          name: t.name,
+          months: t.months,
+          joiningFeeCents: t.joiningFeeCents,
+          retailDiscountPercent: t.retailDiscountPercent,
+          includesGuestPass: t.includesGuestPass,
+          includesVideoLibrary: t.includesVideoLibrary,
+          freeMonths: t.freeMonths,
+        }))}
+      />
     </main>
   );
 }

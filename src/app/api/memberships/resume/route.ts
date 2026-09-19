@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
+import { ensureStripePriceForPlan } from "@/lib/stripePrices";
 
 export async function POST() {
   const session = await auth();
@@ -18,8 +19,14 @@ export async function POST() {
   if (!membership)
     return NextResponse.json({ error: "No paused membership found" }, { status: 404 });
 
-  if (!membership.plan.stripePriceId)
+  // Resuming keeps the member on their own plan, legacy or not, so this only
+  // needs a current Stripe Price for it.
+  let stripePriceId: string;
+  try {
+    stripePriceId = (await ensureStripePriceForPlan(membership.planId)).stripePriceId;
+  } catch {
     return NextResponse.json({ error: "Plan not configured for payments" }, { status: 400 });
+  }
 
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
 
@@ -28,7 +35,7 @@ export async function POST() {
 
   const subscription = await stripe.subscriptions.create({
     customer: user.stripeCustomerId,
-    items: [{ price: membership.plan.stripePriceId }],
+    items: [{ price: stripePriceId }],
     metadata: { userId, planId: membership.planId },
   });
 

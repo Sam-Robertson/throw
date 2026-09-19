@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { PURCHASABLE_PLAN_WHERE } from "@/lib/membershipCatalog";
 import { Badge } from "@/components/ui/badge";
 import { formatMountainTime } from "@/lib/timezone";
 import { getTicketBalance } from "@/lib/credits";
@@ -45,7 +46,14 @@ export default async function ManageMembershipPage() {
   const otherPlans =
     membership.status === "ACTIVE"
       ? await prisma.membershipPlan.findMany({
-          where: { isActive: true, id: { not: membership.planId } },
+          where: {
+            ...PURCHASABLE_PLAN_WHERE,
+            id: { not: membership.planId },
+            // Plans belong to a studio; only offer the member's own.
+            ...(membership.locationId
+              ? { OR: [{ locationId: membership.locationId }, { locationId: null }] }
+              : {}),
+          },
           orderBy: { price: "asc" },
         })
       : [];

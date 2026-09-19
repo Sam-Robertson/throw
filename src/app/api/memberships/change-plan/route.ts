@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
+import { checkPlanPurchasable } from "@/lib/membershipCatalog";
+import { ensureStripePriceForPlan } from "@/lib/stripePrices";
 
 export async function POST(request: Request) {
   const session = await auth();
@@ -25,12 +27,21 @@ export async function POST(request: Request) {
   if (!membership.stripeSubscriptionId)
     return NextResponse.json({ error: "No Stripe subscription found" }, { status: 400 });
 
-  const newPlan = await prisma.membershipPlan.findUnique({ where: { id: newPlanId } });
-  if (!newPlan || !newPlan.isActive)
-    return NextResponse.json({ error: "Plan not found or inactive" }, { status: 404 });
+  // A switch target has to be buyable online: never a legacy or private plan,
+  // and a founding plan only while its cap has room.
+  const check = await checkPlanPurchasable(
+    await prisma.membershipPlan.findUnique({ where: { id: newPlanId } }),
+  );
+  if (!check.ok)
+    return NextResponse.json({ error: check.code, message: check.message }, { status: check.status });
+  const newPlan = check.plan;
 
-  if (!newPlan.stripePriceId)
+  let newPriceId: string;
+  try {
+    newPriceId = (await ensureStripePriceForPlan(newPlan.id)).stripePriceId;
+  } catch {
     return NextResponse.json({ error: "New plan not configured for payments" }, { status: 400 });
+  }
 
   const stripeSubscription = await stripe.subscriptions.retrieve(
     membership.stripeSubscriptionId,
@@ -40,7 +51,7 @@ export async function POST(request: Request) {
     items: [
       {
         id: stripeSubscription.items.data[0].id,
-        price: newPlan.stripePriceId,
+        price: newPriceId,
       },
     ],
     proration_behavior: "create_prorations",
