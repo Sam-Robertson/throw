@@ -126,24 +126,26 @@ model VerificationToken {
 // ---------------------------------------------------------------------------
 
 model User {
-  id                    String    @id @default(cuid())
-  email                 String    @unique
-  emailVerified         DateTime? // UTC
-  name                  String?
-  phone                 String?
-  emergencyContactName  String?
-  emergencyContactPhone String?
-  hashedPassword        String?
-  role                  Role      @default(CUSTOMER)
-  stripeCustomerId      String?
-  smsMarketingOptIn        Boolean   @default(false)
-  smsMarketingOptInAt      DateTime?
-  smsMarketingOptInSource  String?
-  emailMarketingOptIn      Boolean   @default(false)
-  emailMarketingOptInAt    DateTime?
+  id                        String    @id @default(cuid())
+  email                     String    @unique
+  emailVerified             DateTime? // UTC
+  name                      String?
+  phone                     String?
+  emergencyContactName      String?
+  emergencyContactPhone     String?
+  hashedPassword            String?
+  role                      Role      @default(CUSTOMER)
+  stripeCustomerId          String?
+  // Store credit a customer can spend at the POS. Integer cents, never negative.
+  accountCreditCents        Int       @default(0)
+  smsMarketingOptIn         Boolean   @default(false)
+  smsMarketingOptInAt       DateTime?
+  smsMarketingOptInSource   String?
+  emailMarketingOptIn       Boolean   @default(false)
+  emailMarketingOptInAt     DateTime?
   emailMarketingOptInSource String?
-  createdAt             DateTime  @default(now()) // UTC
-  updatedAt             DateTime  @updatedAt      // UTC
+  createdAt                 DateTime  @default(now()) // UTC
+  updatedAt                 DateTime  @updatedAt // UTC
 
   accounts             Account[]
   sessions             Session[]
@@ -166,6 +168,8 @@ model User {
   openedCashDrawers    PosCashDrawer[]       @relation("PosCashDrawerOpenedBy")
   closedCashDrawers    PosCashDrawer[]       @relation("PosCashDrawerClosedBy")
   pieces               Piece[]
+  classCreditLedger    ClassCreditLedger[]
+  discountRedemptions  DiscountRedemption[]
 }
 
 model Location {
@@ -216,13 +220,17 @@ model Location {
   shelfWaitlistEntries   ShelfWaitlistEntry[]
   conversations          Conversation[]
   pieces                 Piece[]
+  sessionTypePrices      SessionTypeLocationPrice[]
+  membershipCapGroups    MembershipCapGroup[]
+  membershipAddOns       MembershipAddOn[]
+  freezePolicy           FreezePolicy?
 }
 
 model StaffRole {
   id          String   @id @default(cuid())
   locationId  String
   name        String
-  permissions Json     // { canViewTips, canViewMembershipReporting, canViewBilling, canManageSchedule, canCheckInMembers, canManageTasks }
+  permissions Json // { canViewTips, canViewMembershipReporting, canViewBilling, canManageSchedule, canCheckInMembers, canManageTasks }
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -259,17 +267,17 @@ model WaiverVersion {
 }
 
 model WaiverSignature {
-  id                  String   @id @default(cuid())
-  userId              String
-  waiverVersionId     String
-  signedAt            DateTime
-  ipAddress           String
-  createdAt           DateTime @default(now())
-  signatureImageData  String?  @db.Text
-  typedName           String?
+  id                 String   @id @default(cuid())
+  userId             String
+  waiverVersionId    String
+  signedAt           DateTime
+  ipAddress          String
+  createdAt          DateTime @default(now())
+  signatureImageData String?  @db.Text
+  typedName          String?
   // "platform" (signed here) or "momence" (imported historical signature,
   // with signedAt set from the source data).
-  source              String   @default("platform")
+  source             String   @default("platform")
 
   user          User          @relation(fields: [userId], references: [id])
   waiverVersion WaiverVersion @relation(fields: [waiverVersionId], references: [id])
@@ -278,34 +286,132 @@ model WaiverSignature {
 }
 
 model MembershipPlan {
-  id                   String   @id @default(cuid())
-  name                 String
-  slug                 String   @unique
-  description          String?
-  price                Int      // cents
-  billingIntervalDays  Int      // e.g. 28, 84, 365
-  hasShelfSpace        Boolean  @default(false)
-  hasPriorityBooking   Boolean  @default(false)
-  guestPassesPerPeriod Int      @default(0)
-  isActive             Boolean  @default(true)
-  stripePriceId        String?
-  locationId           String?
-  classTicketsPerPeriod   Int?     // null means unlimited
-  ticketRolloverEnabled   Boolean  @default(false)
-  ticketRolloverMaxTickets Int?    // cap on carried-over tickets, null = no cap
-  joiningFeeCents      Int      @default(0)
-  commitmentMonths     Int?     // null means month to month
-  retailDiscountPercent Int     @default(0)
-  shelfType            String?  // "FULL" | "HALF" | null for none
-  includesGuestPass    Boolean  @default(false)
-  includesOnlineCourse Boolean  @default(false)
-  billingAnchorDay     Int?     // 1 means bill on the 1st, null means anniversary
-  perks                Json?    // array of strings for the marketing page
-  createdAt            DateTime @default(now()) // UTC
-  updatedAt            DateTime @updatedAt      // UTC
+  id                           String    @id @default(cuid())
+  name                         String
+  slug                         String    @unique
+  description                  String?
+  price                        Int // cents
+  billingIntervalDays          Int // e.g. 28, 84, 365
+  hasShelfSpace                Boolean   @default(false)
+  hasPriorityBooking           Boolean   @default(false)
+  guestPassesPerPeriod         Int       @default(0)
+  isActive                     Boolean   @default(true)
+  stripePriceId                String?
+  locationId                   String?
+  classTicketsPerPeriod        Int? // null means unlimited
+  ticketRolloverEnabled        Boolean   @default(false)
+  ticketRolloverMaxTickets     Int? // cap on carried-over tickets, null = no cap
+  joiningFeeCents              Int       @default(0)
+  commitmentMonths             Int? // null means month to month
+  retailDiscountPercent        Int       @default(0)
+  shelfType                    String? // "FULL" | "HALF" | null for none
+  includesGuestPass            Boolean   @default(false)
+  includesOnlineCourse         Boolean   @default(false)
+  billingAnchorDay             Int? // 1 means bill on the 1st, null means anniversary
+  perks                        Json? // array of strings for the marketing page
+  // --- Catalog fields (docs/throw-catalog.md section 4) ---
+  tier                         String? // "BASIC" | "PRO" | "EXPERT" | "STUDENT": groups a plan across studios
+  // Public plans show on the marketing site and can be bought online.
+  // Non-public plans (legacy) are only ever assigned by staff.
+  isPublic                     Boolean   @default(true)
+  isLegacy                     Boolean   @default(false)
+  isFounding                   Boolean   @default(false)
+  // Founding plans share one cap across tiers through a cap group.
+  capGroupId                   String?
+  // The rate is lost if the member cancels or freezes (founding plans).
+  forfeitsRateOnCancelOrFreeze Boolean   @default(false)
+  // Seeded from another studio's price and not yet confirmed by the client.
+  priceNeedsConfirmation       Boolean   @default(false)
+  archivedAt                   DateTime?
+  createdAt                    DateTime  @default(now()) // UTC
+  updatedAt                    DateTime  @updatedAt // UTC
 
   memberships Membership[]
-  location    Location?    @relation(fields: [locationId], references: [id])
+  location    Location?           @relation(fields: [locationId], references: [id])
+  capGroup    MembershipCapGroup? @relation(fields: [capGroupId], references: [id])
+}
+
+// A shared cap on how many memberships can be sold across a set of plans,
+// e.g. "50 Lehi founding members in total across Basic, Pro and Expert".
+model MembershipCapGroup {
+  id         String   @id @default(cuid())
+  slug       String   @unique
+  name       String
+  cap        Int
+  locationId String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  location Location?        @relation(fields: [locationId], references: [id])
+  plans    MembershipPlan[]
+}
+
+// Commitment terms are independent of the tier: any standard plan can be
+// taken month to month, on 3 months, or on 12 months. months = null is
+// month to month.
+model CommitmentTerm {
+  id                    String   @id @default(cuid())
+  slug                  String   @unique
+  name                  String
+  months                Int?
+  joiningFeeCents       Int      @default(0)
+  retailDiscountPercent Int      @default(0)
+  includesGuestPass     Boolean  @default(false)
+  includesVideoLibrary  Boolean  @default(false)
+  freeMonths            Int      @default(0)
+  isActive              Boolean  @default(true)
+  sortOrder             Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  memberships Membership[]
+}
+
+// Paid extras on top of a membership (guest pass).
+model MembershipAddOn {
+  id                  String    @id @default(cuid())
+  slug                String    @unique
+  name                String
+  description         String?
+  priceCents          Int? // null = not priced yet, stays inactive
+  billingIntervalDays Int       @default(30)
+  stripePriceId       String?
+  locationId          String?
+  isActive            Boolean   @default(true)
+  archivedAt          DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  location    Location?                   @relation(fields: [locationId], references: [id])
+  assignments MembershipAddOnAssignment[]
+}
+
+model MembershipAddOnAssignment {
+  id           String    @id @default(cuid())
+  membershipId String
+  addOnId      String
+  // True when the add-on comes with the commitment term rather than being paid for.
+  included     Boolean   @default(false)
+  startedAt    DateTime  @default(now())
+  endedAt      DateTime?
+
+  membership Membership      @relation(fields: [membershipId], references: [id])
+  addOn      MembershipAddOn @relation(fields: [addOnId], references: [id])
+
+  @@index([membershipId])
+}
+
+// Freeze rules per studio. Null amounts mean "not decided yet" (catalog OPEN).
+model FreezePolicy {
+  id                        String   @id @default(cuid())
+  locationId                String   @unique
+  monthlyFeeCents           Int?
+  creditCentsPerFrozenMonth Int?
+  forfeitsFoundingRate      Boolean  @default(true)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  location Location @relation(fields: [locationId], references: [id])
 }
 
 model Membership {
@@ -316,25 +422,28 @@ model Membership {
   status               MembershipStatus @default(ACTIVE)
   stripeSubscriptionId String?          @unique
   stripeCustomerId     String?
-  currentPeriodStart   DateTime         // UTC
-  currentPeriodEnd     DateTime         // UTC
+  currentPeriodStart   DateTime // UTC
+  currentPeriodEnd     DateTime // UTC
   creditsRemaining     Int
-  pausedAt             DateTime?        // UTC
-  resumesAt            DateTime?        // UTC
-  cancelledAt          DateTime?        // UTC
+  pausedAt             DateTime? // UTC
+  resumesAt            DateTime? // UTC
+  cancelledAt          DateTime? // UTC
   commitmentEndsAt     DateTime?
   joiningFeePaid       Boolean          @default(false)
+  commitmentTermId     String?
   createdAt            DateTime         @default(now()) // UTC
-  updatedAt            DateTime         @updatedAt      // UTC
+  updatedAt            DateTime         @updatedAt // UTC
 
-  user             User              @relation(fields: [userId], references: [id])
-  plan             MembershipPlan    @relation(fields: [planId], references: [id])
-  location         Location?         @relation(fields: [locationId], references: [id])
-  membershipEvents MembershipEvent[]
-  bookings         Booking[]
-  creditLedger     MembershipCreditLedger[]
-  shelfSpace       ShelfSpace?
+  user                 User                        @relation(fields: [userId], references: [id])
+  plan                 MembershipPlan              @relation(fields: [planId], references: [id])
+  location             Location?                   @relation(fields: [locationId], references: [id])
+  membershipEvents     MembershipEvent[]
+  bookings             Booking[]
+  creditLedger         MembershipCreditLedger[]
+  shelfSpace           ShelfSpace?
   shelfWaitlistEntries ShelfWaitlistEntry[]
+  commitmentTerm       CommitmentTerm?             @relation(fields: [commitmentTermId], references: [id])
+  addOns               MembershipAddOnAssignment[]
 }
 
 // type vocabulary, enforced in code:
@@ -345,16 +454,16 @@ model Membership {
 //   ADJUSTMENT manual grant or deduction by an admin, either sign
 //   EXPIRY     zeroing out unused tickets at period end, negative
 model MembershipCreditLedger {
-  id            String   @id @default(cuid())
-  membershipId  String
-  type          String
-  delta         Int
-  bookingId     String?
-  periodStart   DateTime
-  periodEnd     DateTime
-  note          String?
-  createdById   String?
-  createdAt     DateTime @default(now())
+  id           String   @id @default(cuid())
+  membershipId String
+  type         String
+  delta        Int
+  bookingId    String?
+  periodStart  DateTime
+  periodEnd    DateTime
+  note         String?
+  createdById  String?
+  createdAt    DateTime @default(now())
 
   membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
 
@@ -377,7 +486,7 @@ model ShelfSpace {
   id           String   @id @default(cuid())
   locationId   String
   number       Int
-  shelfType    String   // "FULL" | "HALF"
+  shelfType    String // "FULL" | "HALF"
   membershipId String?  @unique
   notes        String?
   createdAt    DateTime @default(now())
@@ -390,56 +499,102 @@ model ShelfSpace {
 }
 
 model ShelfWaitlistEntry {
-  id           String   @id @default(cuid())
-  locationId   String
-  membershipId String
-  requestedType String  // "FULL" | "HALF"
-  notifiedAt   DateTime?
-  resolvedAt   DateTime?
-  createdAt    DateTime @default(now())
+  id            String    @id @default(cuid())
+  locationId    String
+  membershipId  String
+  requestedType String // "FULL" | "HALF"
+  notifiedAt    DateTime?
+  resolvedAt    DateTime?
+  createdAt     DateTime  @default(now())
 
   location   Location   @relation(fields: [locationId], references: [id])
   membership Membership @relation(fields: [membershipId], references: [id])
 }
 
 model SessionType {
-  id               String   @id @default(cuid())
-  name             String
-  slug             String   @unique
-  description      String?
-  durationMinutes  Int
-  capacity         Int
-  dropInPriceCents Int
-  isBusyWindow     Boolean  @default(false)
-  isActive         Boolean  @default(true)
+  id                 String    @id @default(cuid())
+  name               String
+  slug               String    @unique
+  description        String?
+  durationMinutes    Int
+  capacity           Int
+  dropInPriceCents   Int
+  isBusyWindow       Boolean   @default(false)
+  isActive           Boolean   @default(true)
   // Whether this shows up in the reusable "Event Templates" picker (recurring
   // classes/courses meant to be scheduled again) vs. a one-off historical
   // artifact (a private event, a single workshop) that shouldn't clutter it.
   // New rows default false; creating a class type by hand through the admin
   // UI explicitly sets true, since defining one IS the act of making a template.
-  isTemplate       Boolean  @default(false)
-  locationId       String?
-  createdAt        DateTime @default(now()) // UTC
-  updatedAt        DateTime @updatedAt      // UTC
+  isTemplate         Boolean   @default(false)
+  locationId         String?
+  // --- Catalog fields (docs/throw-catalog.md section 2) ---
+  kind               String    @default("EVENT") // "EVENT" | "COURSE"
+  tags               String[]  @default([])
+  // What dropInPriceCents buys. A wheel can seat more than one person.
+  priceUnit          String    @default("PER_PERSON") // "PER_WHEEL" | "PER_PERSON" | "FLAT"
+  maxPeoplePerWheel  Int       @default(1)
+  allowsWheelSharing Boolean   @default(false)
+  // Members can book it with a class ticket.
+  isTicketEligible   Boolean   @default(true)
+  // Only members can book it; never sold as a drop-in.
+  membersOnly        Boolean   @default(false)
+  // Private types (group events, internal blocks) never show on the public
+  // schedule or in the POS class list.
+  isPublic           Boolean   @default(true)
+  // Price for an active member when it differs (private lessons). Null = same price.
+  memberPriceCents   Int?
+  minAge             Int?
+  maxAge             Int?
+  archivedAt         DateTime?
+  createdAt          DateTime  @default(now()) // UTC
+  updatedAt          DateTime  @updatedAt // UTC
 
   studioSessions StudioSession[]
-  location       Location?       @relation(fields: [locationId], references: [id])
+  location       Location?                  @relation(fields: [locationId], references: [id])
+  locationPrices SessionTypeLocationPrice[]
+  discountCodes  DiscountCode[]
+}
+
+// Price of a class type at one studio. Overrides SessionType.dropInPriceCents
+// for sessions held there.
+model SessionTypeLocationPrice {
+  id               String   @id @default(cuid())
+  sessionTypeId    String
+  locationId       String
+  priceCents       Int
+  memberPriceCents Int?
+  // False while the client hasn't confirmed the number.
+  isConfirmed      Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  sessionType SessionType @relation(fields: [sessionTypeId], references: [id])
+  location    Location    @relation(fields: [locationId], references: [id])
+
+  @@unique([sessionTypeId, locationId])
 }
 
 model StudioSession {
-  id            String   @id @default(cuid())
-  sessionTypeId String
-  instructorId  String?
-  locationId    String?
-  startsAt      DateTime // UTC
-  endsAt        DateTime // UTC
-  capacity      Int
-  isCancelled   Boolean  @default(false)
+  id                       String   @id @default(cuid())
+  sessionTypeId            String
+  instructorId             String?
+  locationId               String?
+  startsAt                 DateTime // UTC
+  endsAt                   DateTime // UTC
+  capacity                 Int
+  isCancelled              Boolean  @default(false)
   // Groups sessions created together by "repeat weekly". No separate series
   // model — sessions sharing a seriesId are the series.
-  seriesId      String?
-  createdAt     DateTime @default(now()) // UTC
-  updatedAt     DateTime @updatedAt      // UTC
+  seriesId                 String?
+  // Display title for this session when it differs from the class type
+  // (a workshop's topic, a private group's name).
+  title                    String?
+  // Price for this session only (workshops are priced per session).
+  priceCentsOverride       Int?
+  isTicketEligibleOverride Boolean?
+  createdAt                DateTime @default(now()) // UTC
+  updatedAt                DateTime @updatedAt // UTC
 
   sessionType SessionType @relation(fields: [sessionTypeId], references: [id])
   instructor  User?       @relation(fields: [instructorId], references: [id])
@@ -462,9 +617,11 @@ model Booking {
   amountPaidCents       Int           @default(0)
   // Set when the booking was created by a POS DROP_IN line item.
   posOrderItemId        String?       @unique
-  cancelledAt           DateTime?     // UTC
+  // Wheels (or seats) this booking holds.
+  quantity              Int           @default(1)
+  cancelledAt           DateTime? // UTC
   createdAt             DateTime      @default(now()) // UTC
-  updatedAt             DateTime      @updatedAt      // UTC
+  updatedAt             DateTime      @updatedAt // UTC
 
   user          User          @relation(fields: [userId], references: [id])
   studioSession StudioSession @relation(fields: [studioSessionId], references: [id])
@@ -512,14 +669,14 @@ model StaffTask {
   description      String?
   status           TaskStatus      @default(OPEN)
   triggerType      TaskTriggerType @default(MANUAL)
-  dueAt            DateTime?       // UTC
-  completedAt      DateTime?       // UTC
+  dueAt            DateTime? // UTC
+  completedAt      DateTime? // UTC
   assignedToId     String?
   createdById      String
   linkedCustomerId String?
   locationId       String?
   createdAt        DateTime        @default(now()) // UTC
-  updatedAt        DateTime        @updatedAt      // UTC
+  updatedAt        DateTime        @updatedAt // UTC
 
   assignedTo     User?     @relation("AssignedTasks", fields: [assignedToId], references: [id])
   createdBy      User      @relation("CreatedTasks", fields: [createdById], references: [id])
@@ -536,7 +693,7 @@ model SmsAutomation {
   isActive        Boolean  @default(true)
   locationId      String?
   createdAt       DateTime @default(now()) // UTC
-  updatedAt       DateTime @updatedAt      // UTC
+  updatedAt       DateTime @updatedAt // UTC
 
   location Location? @relation(fields: [locationId], references: [id])
 }
@@ -578,15 +735,15 @@ model SmsLog {
 }
 
 model CommunityPost {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   authorId    String
   locationId  String?
   title       String?
-  body        String    @db.Text
+  body        String   @db.Text
   imageUrl    String?
-  isPublished Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  isPublished Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   author   User               @relation(fields: [authorId], references: [id])
   likes    CommunityLike[]
@@ -641,7 +798,7 @@ model PayRate {
   id          String   @id @default(cuid())
   userId      String
   rateType    String   @default("hourly") // "hourly" | "per_session"
-  amountCents Int      // cents per hour or per session
+  amountCents Int // cents per hour or per session
   notes       String?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
@@ -651,37 +808,108 @@ model PayRate {
 }
 
 model RetailProduct {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  priceCents  Int
-  sku         String?
-  inventory   Int      @default(0)
-  imageUrl    String?
-  isActive    Boolean  @default(true)
-  locationId  String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String    @id @default(cuid())
+  name           String
+  description    String?
+  priceCents     Int
+  sku            String?
+  inventory      Int       @default(0)
+  imageUrl       String?
+  isActive       Boolean   @default(true)
+  locationId     String?
+  // --- Catalog fields (docs/throw-catalog.md sections 2.2 and 3) ---
+  slug           String?   @unique // stable key for the sync script
+  category       String    @default("RETAIL") // "RETAIL" | "PIECES" | "FIRING" | "CLAY" | "CLASS_PACK" | "SHIPPING"
+  unit           String    @default("EACH") // "EACH" | "LB"
+  // False while the catalog has no price for it; such products stay inactive.
+  isPriced       Boolean   @default(true)
+  // Per-line minimum for by-weight products (member firing: $1 per piece).
+  minChargeCents Int?
+  // Only active members and enrolled students can buy it (member firing).
+  membersOnly    Boolean   @default(false)
+  // Pieces, firing, packs and shipping don't carry stock.
+  trackInventory Boolean   @default(true)
+  // Class credits granted when bought (class packs).
+  classCredits   Int?
+  taxCode        String? // Stripe Tax product tax code; null = category default
+  sortOrder      Int       @default(0)
+  archivedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   location Location? @relation(fields: [locationId], references: [id])
 }
 
-model DiscountCode {
-  id          String    @id @default(cuid())
-  code        String    @unique
-  description String?
-  type        String    @default("percent") // "percent" | "fixed_cents"
-  value       Int       // percent 0-100 OR fixed cents
-  maxUses     Int?
-  usedCount   Int       @default(0)
-  validFrom   DateTime?
-  validUntil  DateTime?
-  isActive    Boolean   @default(true)
-  locationId  String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+// Class pack credits. Never expire, not shareable. Balance = sum(delta).
+//   PURCHASE   bought a pack, positive
+//   BOOKING    spent on a booking, negative
+//   REFUND     booking cancelled, positive
+//   ADJUSTMENT manual, either sign
+model ClassCreditLedger {
+  id             String   @id @default(cuid())
+  userId         String
+  delta          Int
+  type           String
+  note           String?
+  posOrderItemId String?
+  bookingId      String?
+  createdAt      DateTime @default(now())
 
-  location Location? @relation(fields: [locationId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model DiscountCode {
+  id                        String    @id @default(cuid())
+  code                      String    @unique
+  description               String?
+  type                      String    @default("percent") // "percent" | "fixed_cents"
+  value                     Int // percent 0-100 OR fixed cents
+  maxUses                   Int?
+  usedCount                 Int       @default(0)
+  validFrom                 DateTime?
+  validUntil                DateTime?
+  isActive                  Boolean   @default(true)
+  locationId                String?
+  // --- Catalog fields (docs/throw-catalog.md section 6) ---
+  name                      String?
+  scope                     String    @default("EVERYTHING") // "RETAIL" | "PIECES" | "CLASSES" | "EVERYTHING"
+  appliesVia                String    @default("CODE") // "AUTOMATIC" | "CODE" | "STAFF"
+  // AUTOMATIC discounts apply when the attached member's commitment is this long.
+  autoCommitmentMonths      Int?
+  // Limit to one class type (KICKSTART50) or one product (Get Out Pass: the 1 lb piece).
+  sessionTypeId             String?
+  productSlug               String?
+  // Most units of the matching item one use can discount (one piece, one wheel).
+  maxUnits                  Int?
+  maxUsesPerCustomerPerYear Int?
+  requiresNote              Boolean   @default(false)
+  requiresGroupEvent        Boolean   @default(false)
+  archivedAt                DateTime?
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+
+  location          Location?            @relation(fields: [locationId], references: [id])
+  sessionType       SessionType?         @relation(fields: [sessionTypeId], references: [id])
+  redemptions       DiscountRedemption[]
+  posOrderDiscounts PosOrderDiscount[]
+}
+
+model DiscountRedemption {
+  id             String   @id @default(cuid())
+  discountCodeId String
+  userId         String?
+  posOrderId     String?
+  bookingId      String?
+  amountCents    Int
+  note           String?
+  createdAt      DateTime @default(now())
+
+  discountCode DiscountCode @relation(fields: [discountCodeId], references: [id])
+  user         User?        @relation(fields: [userId], references: [id])
+
+  @@index([discountCodeId, userId])
 }
 
 model GiftCard {
@@ -704,9 +932,9 @@ model TransactionalTemplate {
   id          String   @id @default(cuid())
   name        String
   description String?  @db.Text
-  trigger     String   // e.g. "booking_confirmed", "membership_renewed"
+  trigger     String // e.g. "booking_confirmed", "membership_renewed"
   channel     String   @default("email") // "email" | "sms"
-  subject     String?  // email subject
+  subject     String? // email subject
   body        String   @db.Text
   isActive    Boolean  @default(true)
   locationId  String?
@@ -724,7 +952,7 @@ model Conversation {
   id            String    @id @default(cuid())
   userId        String
   channel       String    @default("in_app") // "email" | "sms" | "in_app"
-  subject       String?   // email thread subject
+  subject       String? // email thread subject
   adminUnread   Int       @default(0)
   lastMessageAt DateTime?
   // Studio whose SMS line received the conversation. Null = visible to all.
@@ -757,9 +985,9 @@ model ConversationMessage {
 
 model SuppressionEntry {
   id        String   @id @default(cuid())
-  channel   String   // "SMS" | "EMAIL"
-  value     String   // normalized phone (E.164) or lowercased email
-  reason    String   // "USER_UNSUBSCRIBED" | "STOP_REPLY" | "BOUNCE" | "COMPLAINT" | "MANUAL"
+  channel   String // "SMS" | "EMAIL"
+  value     String // normalized phone (E.164) or lowercased email
+  reason    String // "USER_UNSUBSCRIBED" | "STOP_REPLY" | "BOUNCE" | "COMPLAINT" | "MANUAL"
   userId    String?
   note      String?
   createdAt DateTime @default(now())
@@ -778,32 +1006,38 @@ model SuppressionEntry {
 //   PosPayment.status:     PENDING | SUCCEEDED | FAILED | REFUNDED
 
 model PosOrder {
-  id            String    @id @default(cuid())
-  orderNumber   Int       @unique @default(autoincrement())
-  locationId    String
-  customerId    String?
-  staffId       String
-  status        String    @default("OPEN")
-  subtotalCents Int       @default(0)
-  discountCents Int       @default(0)
-  taxCents      Int       @default(0)
-  tipCents      Int       @default(0)
-  totalCents    Int       @default(0)
+  id                     String    @id @default(cuid())
+  orderNumber            Int       @unique @default(autoincrement())
+  locationId             String
+  customerId             String?
+  staffId                String
+  status                 String    @default("OPEN")
+  subtotalCents          Int       @default(0)
+  discountCents          Int       @default(0)
+  taxCents               Int       @default(0)
+  tipCents               Int       @default(0)
+  totalCents             Int       @default(0)
   // Latest Stripe Tax calculation (taxcalc_...) for the current items; turned
   // into a tax transaction when the order completes.
   stripeTaxCalculationId String?
-  note          String?
-  completedAt   DateTime?
-  voidedAt      DateTime?
-  voidReason    String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  note                   String?
+  // Walk-in class sales with no account: who the seat is for.
+  walkInName             String?
+  walkInPhone            String?
+  // Set while the order is set aside for a customer who stepped away.
+  parkedAt               DateTime?
+  completedAt            DateTime?
+  voidedAt               DateTime?
+  voidReason             String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
-  location Location       @relation(fields: [locationId], references: [id])
-  customer User?          @relation("PosOrderCustomer", fields: [customerId], references: [id])
-  staff    User           @relation("PosOrderStaff", fields: [staffId], references: [id])
-  items    PosOrderItem[]
-  payments PosPayment[]
+  location  Location           @relation(fields: [locationId], references: [id])
+  customer  User?              @relation("PosOrderCustomer", fields: [customerId], references: [id])
+  staff     User               @relation("PosOrderStaff", fields: [staffId], references: [id])
+  items     PosOrderItem[]
+  payments  PosPayment[]
+  discounts PosOrderDiscount[]
 
   @@index([locationId, createdAt])
   @@index([status])
@@ -820,11 +1054,33 @@ model PosOrderItem {
   discountCents  Int      @default(0)
   totalCents     Int
   taxCents       Int      @default(0)
-  taxCode        String?  // Stripe Tax product tax code; null = nontaxable
+  taxCode        String? // Stripe Tax product tax code; null = nontaxable
   metadata       Json?
+  note           String?
+  // Product category at the time of sale, so discounts can be scoped.
+  category       String?
   createdAt      DateTime @default(now())
 
   order PosOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+// A named discount on an order. amountCents is recomputed on every reprice
+// and spread across the matching items' discountCents.
+model PosOrderDiscount {
+  id             String   @id @default(cuid())
+  orderId        String
+  discountCodeId String?
+  name           String
+  amountCents    Int      @default(0)
+  automatic      Boolean  @default(false)
+  note           String?
+  appliedById    String?
+  createdAt      DateTime @default(now())
+
+  order        PosOrder      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  discountCode DiscountCode? @relation(fields: [discountCodeId], references: [id])
+
+  @@index([orderId])
 }
 
 model PosPayment {

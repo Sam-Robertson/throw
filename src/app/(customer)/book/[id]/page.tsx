@@ -4,7 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { formatMountainTime } from "@/lib/timezone";
 import { getTicketBalance } from "@/lib/credits";
-import { isSellable } from "@/lib/sellable";
+import { CLASS_PRICE_SELECT, isSellable, resolveClassPriceCents } from "@/lib/sellable";
 import { findUnsignedWaiver, waiverSignUrl } from "@/lib/waivers";
 import { BookingForm } from "./_components/BookingForm";
 
@@ -14,10 +14,9 @@ async function getSession(id: string) {
     include: {
       sessionType: {
         select: {
+          ...CLASS_PRICE_SELECT,
           name: true,
           durationMinutes: true,
-          dropInPriceCents: true,
-          isActive: true,
         },
       },
       instructor: { select: { name: true } },
@@ -41,6 +40,11 @@ export default async function BookPage({
   const userId = authSession.user.id;
   const studioSession = await getSession(id);
   if (!studioSession) notFound();
+  const priceCents = resolveClassPriceCents({
+    sessionType: studioSession.sessionType,
+    locationId: studioSession.locationId,
+    priceCentsOverride: studioSession.priceCentsOverride,
+  });
 
   if (studioSession.isCancelled) {
     return (
@@ -167,8 +171,8 @@ export default async function BookPage({
         ticketsResetDate={
           ticketBalance ? formatMountainTime(ticketBalance.periodEnd, "date") : null
         }
-        dropInPriceCents={studioSession.sessionType.dropInPriceCents}
-        forSale={isSellable(studioSession.sessionType)}
+        dropInPriceCents={priceCents}
+        forSale={isSellable(studioSession.sessionType, priceCents)}
         sessionName={studioSession.sessionType.name}
         sessionDate={formatMountainTime(studioSession.startsAt, "date")}
         sessionTime={formatMountainTime(studioSession.startsAt, "time")}

@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { checkPermission } from "@/lib/permissions";
 import { dropInSessionId, repriceOrder } from "@/lib/pos";
-import { isSellable } from "@/lib/sellable";
+import { CLASS_PRICE_SELECT, isSellable, resolveClassPriceCents } from "@/lib/sellable";
 import { formatMountainTime } from "@/lib/timezone";
 import { taxCodeForPosItem } from "@/config/taxCodes";
 import { parseFiringMetadata, quoteFiring } from "@/config/firingPrices";
@@ -96,7 +96,7 @@ export async function POST(
     const studioSession = await prisma.studioSession.findUnique({
       where: { id: studioSessionId },
       include: {
-        sessionType: true,
+        sessionType: { select: { ...CLASS_PRICE_SELECT, name: true } },
         _count: { select: { bookings: { where: { status: "CONFIRMED" } } } },
       },
     });
@@ -115,7 +115,12 @@ export async function POST(
         { status: 409 },
       );
     }
-    if (!isSellable(studioSession.sessionType)) {
+    const classPriceCents = resolveClassPriceCents({
+      sessionType: studioSession.sessionType,
+      locationId: studioSession.locationId,
+      priceCentsOverride: studioSession.priceCentsOverride,
+    });
+    if (!isSellable(studioSession.sessionType, classPriceCents)) {
       return NextResponse.json(
         { error: "NOT_FOR_SALE", message: `${studioSession.sessionType.name} isn't sold as a drop-in.` },
         { status: 400 },
@@ -155,7 +160,7 @@ export async function POST(
     }
 
     name = `${studioSession.sessionType.name}, ${formatMountainTime(studioSession.startsAt, "datetime")}`;
-    unitPriceCents = studioSession.sessionType.dropInPriceCents;
+    unitPriceCents = classPriceCents;
     refId = studioSession.sessionTypeId;
     quantity = 1;
     metadata = { studioSessionId, startsAt: studioSession.startsAt.toISOString() };

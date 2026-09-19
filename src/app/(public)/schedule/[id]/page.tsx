@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
-import { isSellable } from "@/lib/sellable";
+import { CLASS_PRICE_SELECT, isSellable, resolveClassPriceCents } from "@/lib/sellable";
 import { formatMountainTime } from "@/lib/timezone";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,11 +13,10 @@ async function getSession(id: string) {
     include: {
       sessionType: {
         select: {
+          ...CLASS_PRICE_SELECT,
           name: true,
           description: true,
           durationMinutes: true,
-          dropInPriceCents: true,
-          isActive: true,
         },
       },
       instructor: { select: { name: true } },
@@ -44,6 +43,11 @@ export default async function SessionDetailPage({
 
   if (!rawSession) notFound();
   const session = rawSession;
+  const priceCents = resolveClassPriceCents({
+    sessionType: session.sessionType,
+    locationId: session.locationId,
+    priceCentsOverride: session.priceCentsOverride,
+  });
 
   const now = new Date();
   const isPast = session.endsAt < now;
@@ -157,9 +161,7 @@ export default async function SessionDetailPage({
           <div>
             <dt className="font-medium">Drop-in price</dt>
             <dd className="text-muted-foreground">
-              {isSellable(session.sessionType)
-                ? formatPrice(session.sessionType.dropInPriceCents)
-                : "Members only"}
+              {isSellable(session.sessionType, priceCents) ? formatPrice(priceCents) : "Members only"}
             </dd>
           </div>
         </dl>

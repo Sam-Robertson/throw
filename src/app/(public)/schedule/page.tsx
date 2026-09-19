@@ -1,6 +1,12 @@
 import NextLink from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { formatMountainTime } from '@/lib/timezone';
+import {
+  CLASS_PRICE_SELECT,
+  PUBLICLY_LISTED_SESSION_TYPE,
+  isSellable,
+  resolveClassPriceCents,
+} from '@/lib/sellable';
 import Box from '@mui/material/Box';
 import Container from '@mui/material/Container';
 import Grid from '@mui/material/Grid';
@@ -18,7 +24,7 @@ import { md3 } from '@/lib/theme';
 async function getSessionTypes() {
   return prisma.sessionType.findMany({
     where: {
-      isActive: true,
+      ...PUBLICLY_LISTED_SESSION_TYPE,
       studioSessions: { some: { startsAt: { gte: new Date() }, isCancelled: false } },
     },
     select: { id: true, name: true, slug: true },
@@ -31,11 +37,11 @@ async function getSessions(typeSlug?: string) {
     where: {
       startsAt: { gte: new Date() },
       isCancelled: false,
-      sessionType: { isActive: true, ...(typeSlug ? { slug: typeSlug } : {}) },
+      sessionType: { ...PUBLICLY_LISTED_SESSION_TYPE, ...(typeSlug ? { slug: typeSlug } : {}) },
     },
     include: {
       sessionType: {
-        select: { name: true, slug: true, durationMinutes: true, dropInPriceCents: true },
+        select: { ...CLASS_PRICE_SELECT, name: true, slug: true, durationMinutes: true },
       },
       instructor: { select: { name: true } },
       _count: { select: { bookings: { where: { status: 'CONFIRMED' } } } },
@@ -66,6 +72,11 @@ function groupByDate(sessions: Session[]): Map<string, Session[]> {
 }
 
 function SessionCard({ session }: { session: Session }) {
+  const priceCents = resolveClassPriceCents({
+    sessionType: session.sessionType,
+    locationId: session.locationId,
+    priceCentsOverride: session.priceCentsOverride,
+  });
   const spotsRemaining = session.capacity - session._count.bookings;
   const isFull = spotsRemaining <= 0;
 
@@ -91,10 +102,9 @@ function SessionCard({ session }: { session: Session }) {
             },
             {
               label: 'Drop-in',
-              value:
-                session.sessionType.dropInPriceCents > 0
-                  ? formatPrice(session.sessionType.dropInPriceCents)
-                  : 'Members only',
+              value: isSellable(session.sessionType, priceCents)
+                ? formatPrice(priceCents)
+                : 'Members only',
             },
           ].map(({ label, value, error }) => (
             <Box key={label} sx={{ display: 'flex', gap: 1.5 }}>

@@ -4,7 +4,7 @@ import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { checkPermission } from "@/lib/permissions";
-import { SELLABLE_SESSION_TYPE } from "@/lib/sellable";
+import { CLASS_PRICE_SELECT, SELLABLE_SESSION_TYPE, resolveClassPriceCents } from "@/lib/sellable";
 import { STUDIO_TIMEZONE } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     }),
     prisma.sessionType.findMany({
       where: { ...SELLABLE_SESSION_TYPE, ...scope },
-      select: { id: true, name: true, dropInPriceCents: true },
+      select: { ...CLASS_PRICE_SELECT, name: true },
       orderBy: { name: "asc" },
     }),
     prisma.membershipPlan.findMany({
@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
             sessionType: SELLABLE_SESSION_TYPE,
           },
           include: {
-            sessionType: { select: { id: true, name: true, dropInPriceCents: true } },
+            sessionType: { select: { ...CLASS_PRICE_SELECT, name: true, kind: true } },
             instructor: { select: { name: true } },
             _count: { select: { bookings: { where: { status: "CONFIRMED" } } } },
           },
@@ -77,24 +77,32 @@ export async function GET(req: NextRequest) {
       priceCents: p.priceCents,
       stock: p.inventory,
     })),
-    sessionTypes: sessionTypes.map((s) => ({
-      id: s.id,
-      name: s.name,
-      dropInPriceCents: s.dropInPriceCents,
-    })),
+    sessionTypes: sessionTypes
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        dropInPriceCents: resolveClassPriceCents({ sessionType: s, locationId }),
+      }))
+      .filter((s) => s.dropInPriceCents > 0),
     membershipPlans: membershipPlans.map((m) => ({
       id: m.id,
       name: m.name,
       priceInCents: m.price,
       billingIntervalDays: m.billingIntervalDays,
     })),
-    upcomingSessions: upcomingSessions.map((s) => ({
+    upcomingSessions: upcomingSessions
+      .map((s) => ({ ...s, priceCents: resolveClassPriceCents({ sessionType: s.sessionType, locationId: s.locationId, priceCentsOverride: s.priceCentsOverride }) }))
+      // A session with no real price at this studio is not a POS item.
+      .filter((s) => s.priceCents > 0)
+      .map((s) => ({
       id: s.id,
       startsAt: s.startsAt,
       endsAt: s.endsAt,
       sessionTypeId: s.sessionType.id,
-      name: s.sessionType.name,
-      dropInPriceCents: s.sessionType.dropInPriceCents,
+      name: s.title ?? s.sessionType.name,
+      kind: s.sessionType.kind,
+      seriesId: s.seriesId,
+      dropInPriceCents: s.priceCents,
       instructorName: s.instructor?.name ?? null,
       capacity: s.capacity,
       confirmedCount: s._count.bookings,

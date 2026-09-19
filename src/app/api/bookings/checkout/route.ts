@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
-import { isSellable } from "@/lib/sellable";
+import { CLASS_PRICE_SELECT, isSellable, resolveClassPriceCents } from "@/lib/sellable";
 import { stripe } from "@/lib/stripe";
 import { formatMountainTime } from "@/lib/timezone";
 import { findUnsignedWaiver } from "@/lib/waivers";
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
 
   const studioSession = await prisma.studioSession.findUnique({
     where: { id: studioSessionId },
-    include: { sessionType: true },
+    include: { sessionType: { select: { ...CLASS_PRICE_SELECT, name: true } } },
   });
   if (!studioSession) {
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
@@ -47,7 +47,12 @@ export async function POST(req: NextRequest) {
   }
   // Paid checkout is only for class types that are actually for sale — never
   // a $0 or retired type. Members book free classes through /api/bookings.
-  if (!isSellable(studioSession.sessionType)) {
+  const priceCents = resolveClassPriceCents({
+    sessionType: studioSession.sessionType,
+    locationId: studioSession.locationId,
+    priceCentsOverride: studioSession.priceCentsOverride,
+  });
+  if (!isSellable(studioSession.sessionType, priceCents)) {
     return NextResponse.json({ error: "NOT_FOR_SALE" }, { status: 400 });
   }
   if (studioSession.startsAt <= new Date()) {
@@ -84,7 +89,7 @@ export async function POST(req: NextRequest) {
       {
         price_data: {
           currency: "usd",
-          unit_amount: studioSession.sessionType.dropInPriceCents,
+          unit_amount: priceCents,
           product_data: {
             name: studioSession.sessionType.name,
             description: formatMountainTime(studioSession.startsAt, "datetime"),
