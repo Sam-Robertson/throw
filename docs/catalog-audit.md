@@ -224,3 +224,100 @@ shipping for 5+ pieces; durations for Guided Pottery Time, Group Event and Priva
 Lesson; whether the Lehi After-School and Homeschool courses stay in the catalog
 and take tickets; GRAND30 dates and scope; Summer Camp ages (8–17 vs 10–17 on the
 site); what Kickstart students pay past their clay allowance.
+
+---
+
+## Prompt 3 results — membership plans
+
+Catalog data only: no customer `Membership` row or Stripe subscription was touched.
+Billing still migrates from Momence on 2026-10-25.
+
+| Thing | Where |
+|---|---|
+| Idempotent catalog sync (dry run by default, `--apply`, `--overwrite`) | `scripts/sync-membership-plans.ts` (`npm run sync:plans`) |
+| One rule for "can this plan be bought online" + cap counting | `src/lib/membershipCatalog.ts` (`PURCHASABLE_PLAN_WHERE`, `checkPlanPurchasable`, `getCapGroupUsage`) |
+| Stripe Product / Price management | `src/lib/stripePrices.ts` (`ensureStripePriceForPlan`) |
+| Days → month / year / N weeks, client safe | `src/lib/billingInterval.ts` |
+| Admin tabs: plans, commitment terms, add-ons, cap groups, freeze policy | `src/app/admin/membership-plans/**` |
+| Admin API | `src/app/api/admin/membership-plans/**`, `src/app/api/admin/membership-catalog/**` |
+| Subscribe with a commitment term; term recorded by the webhook | `src/app/api/memberships/subscribe/route.ts`, `src/app/(customer)/membership/subscribe/[planId]/**`, `src/app/api/webhooks/stripe/route.ts` |
+
+**Rows the sync produces**
+- Standard, public, both studios: `provo-basic` / `lehi-basic` $70 · 8 tickets · no shelf; `provo-pro` / `lehi-pro` $110 · 10 · half; `provo-expert` / `lehi-expert` $120 · 12 · full. 30 days, joining fee $25 by default. Lehi rows carry `priceNeedsConfirmation`.
+- Lehi founding: `lehi-founding-basic` $55, `-pro` $95, `-expert` $105; `isFounding`, `forfeitsRateOnCancelOrFreeze`, one cap group `lehi-founding` (cap 50).
+- Legacy, active but never public or purchasable: `pro-legacy` $90/mo, `student-monthly` $60/mo, `basic-annual` $500/yr. **0 tickets, no shelf**: both are OPEN, and `classTicketsPerPeriod = null` means unlimited in `src/lib/credits.ts`, so null was not safe.
+- Commitment terms: `month-to-month` ($25 fee), `3-month` (fee waived, 10% retail, video library), `12-month` (fee waived, 20% retail, guest pass, video library, 1 free month).
+- Add-on `guest-pass` $25 / 30 days, both studios. `FreezePolicy` per studio with null amounts (OPEN).
+- Retired, never deleted, prices and members untouched: `annual-membership`, `open-studio-monthly`, `studio-plus-monthly`, `pro-3-month-commitment-membership-726002`. Every imported Momence plan gets `isPublic=false`, `isLegacy=true`.
+- A row that differs from the catalog is reported and kept (admin edits win); `--overwrite` resets it. Second `--apply` reports "No changes."
+
+**Rules now enforced**
+- Online purchase and plan switching refuse with a code: `PLAN_NOT_FOUND`, `PLAN_INACTIVE`, `PLAN_LEGACY`, `PLAN_NOT_PUBLIC`, `PLAN_SOLD_OUT` (ACTIVE + PAUSED across the cap group ≥ cap), `TERM_NOT_FOUND`, `PLAN_NOT_PAYABLE`.
+- `/membership` lists only purchasable plans, by studio; founding plans show "N of 50 left" and disappear at the cap. Prices, tickets, perks, fees and term perks come from data.
+- Stripe Prices are never edited: a changed amount or interval creates a new Price and archives the old one. Prices are created lazily at checkout with the server's own key; no script writes a Stripe id (local `.env` holds a test key).
+- Admin: `stripePriceId` read-only; archive instead of delete; chips for Founding, Legacy, Needs confirmation, Archived; founding plans show "sold / cap".
+
+**Not implemented / follow-ups**
+- The 12-month "1 month free" is stored and shown but **no billing logic applies it**; staff apply it by hand, or set `freeMonths` to 0 in admin.
+- The guest pass is not purchasable at checkout (only the included assignment is recorded).
+- The cap check is check-then-checkout: a simultaneous last-seat race can oversell by one.
+- Price edits stay blocked on plans with active members (archive and create a new plan).
+- `prisma/seed.ts` still creates the old demo lineup in dev; the sync retires those slugs.
+
+## Prompt 4 results — class types
+
+`scripts/sync-class-types.ts` (`npm run catalog:sync-class-types`) replaces
+`scripts/cleanup-checkout-catalog.ts`. Dry run by default, idempotent, matches on slug
+then name pattern, skips what it can't find, leaves unknown active types under REVIEW.
+Canonical types are studio-independent and priced per studio. **Only upcoming sessions
+move**; past sessions, and so past bookings and orders, keep their original type, which
+is archived. Nothing is deleted. Verified on a local copy of production's 52 types.
+
+| | Before | After |
+|---|---|---|
+| Rows | 52 | 61 (9 created) |
+| Active | 52 (45 at $0) | 17 |
+| Archived | 0 | 44 |
+| Upcoming sessions moved | | 657 |
+| Past sessions / bookings repointed | | 0 (compared per type) |
+
+**Active after (17)**
+
+| Slug | Name | Kind | Price | Unit | Tickets | Public |
+|---|---|---|---|---|---|---|
+| `clay-together` | Clay Together: Pottery Wheel Experience | event | Provo $29.99 · Lehi $35.00 | per wheel (max 2, shareable) | yes | yes |
+| `pottery-kickstart` | Pottery Kickstart: 4 Week Course | course | $200 both studios | per wheel | yes | yes |
+| `guided-pottery-time` | Guided Pottery Time | event | 1 ticket | per person | yes | members only |
+| `kids-summer-camp` | Kids Summer Camp (8–17) | course | $199 | per person | no* | yes |
+| `group-event` | Group Event / Private Booking | event | $375 | flat | no* | private |
+| `workshop` | Workshop | event | per session | per person | per session* | yes |
+| `private-lesson` | Private Lesson | event | $55 · members $43 | per person | no* | private |
+| `lehi-after-school-course` | After-School Pottery Course (8–17) | course | Lehi $257 | per person | no (OPEN) | yes |
+| `lehi-homeschool-course` | Homeschool Pottery Course (8–17) | course | Lehi $257 | per person | no (OPEN) | yes |
+| 7 member classes | Pottery 101 ×4, Member Orientation, Member Event!, Open Studio (Members Only) | | 1 ticket | | yes | members only |
+| `busy-window-open-studio` | Busy Window | internal block | never sellable | | | private |
+
+\* Not stated in the catalog; set conservatively, change in admin. OPEN durations were
+copied from the rows they replace and the script never overwrites them.
+
+**Merged (upcoming sessions moved, type archived):** both Clay Together rows (Provo 533
+moved, 680 stay; Lehi 104 moved); every 4-week-course name into Pottery Kickstart;
+After-School Classes ($325 → $257); private parties and group bookings into Group Event
+with the old name kept as the session title; workshops into Workshop; private lessons
+into Private Lesson; Summer Kids Camp into Kids Summer Camp.
+**Archived outright:** 90 Min Pottery Class, Free Pottery Wheel Experience - Provo, Pay
+for Pottery Pieces (293 upcoming sessions left in place, hidden), Pottery Piece Pick Up!,
+Studio Tour, Orem Farmers Market, the themed one-offs, and the seed rows Open Studio
+($15), Wheel Throwing 101, Hand Building Workshop.
+
+**Root cause of $0.00:** every surface resolves the price through
+`resolveClassPriceCents` for the session's studio (POS, online checkout, booking page,
+public schedule, member booking API, admin lists). The public schedule printed $29.99 as
+"$30"; it now prints "$29.99 per wheel". Member ticket bookings refuse archived types
+(`CLASS_NOT_AVAILABLE`) and classes that aren't ticket eligible (`NOT_TICKET_ELIGIBLE`).
+Private, archived and internal session pages return 404 unless the viewer is booked.
+
+**Admin:** Active / Archived tabs, every catalog field, per-studio prices with an
+"unconfirmed" marker, archive and restore instead of delete, stable slugs. The schedule
+takes a per-session title, price override and class-ticket override; archived types
+can't be scheduled.
