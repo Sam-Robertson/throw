@@ -2,7 +2,8 @@ import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { checkPermission } from "@/lib/permissions";
-import { dropInSessionId, repriceOrder } from "@/lib/pos";
+import { MEMBERS_ONLY_MESSAGE, dropInSessionId, isMemberOrEnrolledStudent, repriceOrder } from "@/lib/pos";
+import { formatWeightLb, priceByWeight } from "@/lib/firing";
 import { CLASS_PRICE_SELECT, isSellable, resolveClassPriceCents } from "@/lib/sellable";
 import { formatMountainTime } from "@/lib/timezone";
 import { taxCodeForPosItem } from "@/config/taxCodes";
@@ -48,6 +49,9 @@ export async function POST(
     name?: string;
     quantity?: number;
     unitPriceCents?: number;
+    /** By-weight products (unit LB): the weight in pounds. */
+    weightLb?: number;
+    note?: string;
     metadata?: unknown;
   } | null;
 
@@ -65,6 +69,8 @@ export async function POST(
   let unitPriceCents: number;
   let refId: string | null = body.refId ?? null;
   let metadata = (body.metadata ?? undefined) as Prisma.InputJsonValue | undefined;
+  let category: string | null = null;
+  let taxCode = taxCodeForPosItem(itemType);
 
   if (itemType === "RETAIL") {
     if (!body.refId) {
@@ -72,17 +78,77 @@ export async function POST(
     }
     const product = await prisma.retailProduct.findUnique({ where: { id: body.refId } });
     if (!product) return NextResponse.json({ error: "Retail product not found" }, { status: 404 });
-    if (!product.isActive) {
+    if (!product.isActive || product.archivedAt) {
       return NextResponse.json({ error: "Product is not active" }, { status: 409 });
     }
-    if (quantity > product.inventory) {
+    // OPEN in the catalog: there is no price to charge yet.
+    if (!product.isPriced) {
       return NextResponse.json(
-        { error: `Only ${product.inventory} in stock` },
+        { error: "NOT_PRICED", message: `${product.name} doesn't have a price yet.` },
         { status: 409 },
       );
     }
-    name = product.name;
-    unitPriceCents = product.priceCents;
+    if (product.locationId && product.locationId !== order.locationId) {
+      return NextResponse.json(
+        { error: "WRONG_LOCATION", message: "That product is sold at a different studio." },
+        { status: 400 },
+      );
+    }
+    if (product.membersOnly && !(await isMemberOrEnrolledStudent(order.customerId))) {
+      return NextResponse.json({ error: "MEMBERS_ONLY", message: MEMBERS_ONLY_MESSAGE }, { status: 403 });
+    }
+    if (product.category === "CLASS_PACK" && !order.customerId) {
+      return NextResponse.json(
+        {
+          error: "CUSTOMER_REQUIRED",
+          message: "Class pack credits go on a customer's account. Attach the customer first.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const productMeta = {
+      productSlug: product.slug,
+      unit: product.unit,
+      ...(product.membersOnly ? { membersOnly: true } : {}),
+      ...(product.classCredits ? { classCredits: product.classCredits } : {}),
+    };
+
+    if (product.unit === "LB") {
+      // Sold by weight: the line is priced here from the weight (to 0.1 lb)
+      // and the product's rate and minimum, and can't be multiplied.
+      if (typeof body.weightLb !== "number") {
+        return NextResponse.json(
+          { error: "WEIGHT_REQUIRED", message: `${product.name} is sold by the pound. Enter the weight.` },
+          { status: 400 },
+        );
+      }
+      const priced = priceByWeight(body.weightLb, product.priceCents, product.minChargeCents);
+      if (!priced.ok) {
+        return NextResponse.json({ error: "INVALID_WEIGHT", message: priced.reason }, { status: 400 });
+      }
+      name = `${product.name}, ${formatWeightLb(priced.weightTenths)}`;
+      unitPriceCents = priced.cents;
+      quantity = 1;
+      metadata = {
+        ...productMeta,
+        weightLb: priced.weightLb,
+        weightTenths: priced.weightTenths,
+        rateCentsPerLb: product.priceCents,
+      };
+    } else {
+      if (product.trackInventory && quantity > product.inventory) {
+        return NextResponse.json(
+          { error: `Only ${product.inventory} in stock` },
+          { status: 409 },
+        );
+      }
+      name = product.name;
+      unitPriceCents = product.priceCents;
+      metadata = productMeta;
+    }
+    category = product.category;
+    taxCode = taxCodeForPosItem(itemType, product);
   } else if (itemType === "DROP_IN") {
     // A drop-in is one seat in one real session, booked for the order's
     // customer when the order completes.
@@ -230,7 +296,9 @@ export async function POST(
       unitPriceCents,
       discountCents: 0,
       totalCents,
-      taxCode: taxCodeForPosItem(itemType),
+      taxCode,
+      category,
+      note: typeof body.note === "string" && body.note.trim() ? body.note.trim().slice(0, 500) : null,
       metadata,
     },
   });

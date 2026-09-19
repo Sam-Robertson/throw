@@ -6,8 +6,10 @@ import { prisma } from "@/lib/prisma";
 import { sendInngestEvent } from "@/lib/inngest";
 import { sendSms } from "@/lib/sms";
 import { maybeCompletePosOrder } from "@/lib/pos";
+import { parseTenderMetadata, recordBookingTenders } from "@/lib/bookingCheckout";
 import { TERMINAL_METHOD, settleTerminalPayment } from "@/lib/terminal";
 import { grantPeriodAllowance } from "@/lib/credits";
+import { GUEST_PASS_ADD_ON_SLUG } from "@/lib/membershipCatalog";
 import { addMonths } from "date-fns";
 import { Prisma } from "@prisma/client";
 import type Stripe from "stripe";
@@ -125,7 +127,7 @@ export async function POST(req: NextRequest) {
 
   if (event.type === "customer.subscription.created") {
     const subscription = event.data.object as Stripe.Subscription;
-    const { userId, planId, joiningFeeCharged } = subscription.metadata ?? {};
+    const { userId, planId, joiningFeeCharged, commitmentTermId } = subscription.metadata ?? {};
     if (userId && planId) {
       const customerId =
         typeof subscription.customer === "string"
@@ -137,6 +139,11 @@ export async function POST(req: NextRequest) {
         const currentPeriodEnd = new Date(item.current_period_end * 1000);
         const plan = await prisma.membershipPlan.findUnique({ where: { id: planId } });
         const locationId = plan?.locationId ?? (await defaultStudioLocationId()) ?? null;
+        // The commitment term the customer chose at checkout (subscribe route).
+        const term = commitmentTermId
+          ? await prisma.commitmentTerm.findUnique({ where: { id: commitmentTermId } })
+          : null;
+        const commitmentMonths = term ? term.months : (plan?.commitmentMonths ?? null);
         const membership = await prisma.membership.create({
           data: {
             userId,
@@ -153,10 +160,9 @@ export async function POST(req: NextRequest) {
             // membership before) — it's carried here via subscription
             // metadata rather than re-derived, so the two never disagree.
             joiningFeePaid: joiningFeeCharged === "true",
+            commitmentTermId: term?.id ?? null,
             commitmentEndsAt:
-              plan?.commitmentMonths != null
-                ? addMonths(currentPeriodStart, plan.commitmentMonths)
-                : null,
+              commitmentMonths != null ? addMonths(currentPeriodStart, commitmentMonths) : null,
           },
         });
         await prisma.membershipEvent.create({
@@ -171,6 +177,24 @@ export async function POST(req: NextRequest) {
           name: "membership/created",
           data: { membershipId: membership.id, userId },
         });
+
+        // A term can come with the guest pass (12 month): record it as an
+        // included add-on, not a paid one. The term's free months are stored
+        // on CommitmentTerm but no billing logic applies them yet.
+        if (term?.includesGuestPass) {
+          const guestPass = await prisma.membershipAddOn.findUnique({
+            where: { slug: GUEST_PASS_ADD_ON_SLUG },
+          });
+          if (guestPass) {
+            await prisma.membershipAddOnAssignment.create({
+              data: { membershipId: membership.id, addOnId: guestPass.id, included: true },
+            });
+          } else {
+            console.warn(
+              `[stripe webhook] membership ${membership.id}: term includes a guest pass but no "${GUEST_PASS_ADD_ON_SLUG}" add-on exists`,
+            );
+          }
+        }
 
         // Fire purchase conversion for new membership
         prisma.adTracking
@@ -405,11 +429,23 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      // Stripe retries webhooks. A second delivery must not book twice or
+      // charge the gift card twice.
+      if (paymentIntentId) {
+        const alreadyBooked = await prisma.booking.findFirst({
+          where: { stripePaymentIntentId: paymentIntentId },
+          select: { id: true },
+        });
+        if (alreadyBooked) return NextResponse.json({ received: true });
+      }
+
       const confirmedCount = studioSession._count.bookings;
       const bookingStatus =
         confirmedCount >= studioSession.capacity ? "WAITLIST" : "CONFIRMED";
 
       const amountPaid = checkoutSession.amount_total ?? 0;
+      // Promo code and gift card chosen at checkout (src/lib/bookingCheckout.ts).
+      const tenders = parseTenderMetadata(metadata);
 
       const booking = await prisma.booking.create({
         data: {
@@ -418,9 +454,13 @@ export async function POST(req: NextRequest) {
           status: bookingStatus,
           source: "DROP_IN",
           stripePaymentIntentId: paymentIntentId,
-          amountPaidCents: amountPaid,
+          amountPaidCents: amountPaid + tenders.giftCardCents,
         },
       });
+
+      // The card payment succeeded, so now (and only now) the promo code is
+      // redeemed and the gift card is charged.
+      const tenderResult = await recordBookingTenders({ bookingId: booking.id, userId, ...tenders });
 
       if (studioSession.locationId && paymentIntentId) {
         await prisma.payment
@@ -433,6 +473,9 @@ export async function POST(req: NextRequest) {
               status: "SUCCEEDED",
               type: "DROP_IN",
               bookingId: booking.id,
+              ...(tenders.giftCardId || tenders.discountCodeId
+                ? { metadata: { ...tenders, ...tenderResult } }
+                : {}),
             },
           })
           .catch(() => {

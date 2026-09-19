@@ -17,7 +17,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const giftCard = await prisma.giftCard.update({
     where: { id },
     data: {
-      ...(body.balanceCents !== undefined && { balanceCents: body.balanceCents }),
+      ...(typeof body.balanceCents === "number" &&
+        Number.isInteger(body.balanceCents) &&
+        body.balanceCents >= 0 && { balanceCents: body.balanceCents }),
       ...(body.expiresAt !== undefined && { expiresAt: body.expiresAt ? new Date(body.expiresAt) : null }),
       ...(body.isActive !== undefined && { isActive: body.isActive }),
     },
@@ -31,7 +33,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (session.user.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
+  // Never deleted: POS payments and redemptions point at the card. Deactivating
+  // stops it being used and keeps its history.
   const { id } = await params;
-  await prisma.giftCard.delete({ where: { id } });
-  return new NextResponse(null, { status: 204 });
+  const giftCard = await prisma.giftCard.update({ where: { id }, data: { isActive: false } });
+  return NextResponse.json(giftCard);
 }

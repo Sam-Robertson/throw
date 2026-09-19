@@ -23,6 +23,7 @@ import LinearProgress from '@mui/material/LinearProgress';
 import Tooltip from '@mui/material/Tooltip';
 import Stack from '@mui/material/Stack';
 import Grid from '@mui/material/Grid';
+import { formatGiftCardCode, generateGiftCardCode } from '@/lib/giftCardCode';
 
 interface GiftCard {
   id: string;
@@ -37,22 +38,15 @@ interface GiftCard {
 interface CreateForm {
   code: string;
   initialDollars: string;
-  expiresAt: string;
 }
 
 const emptyCreate: CreateForm = {
   code: '',
   initialDollars: '',
-  expiresAt: '',
 };
 
-function generateCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  return Array.from({ length: 12 }, (_, i) => {
-    const c = chars[Math.floor(Math.random() * chars.length)];
-    return i === 4 || i === 8 ? `-${c}` : c;
-  }).join('');
-}
+// Same generator the POS uses when it sells a card (src/lib/giftCardCode.ts).
+const generateCode = generateGiftCardCode;
 
 export default function GiftCardsPage() {
   const [cards, setCards] = useState<GiftCard[]>([]);
@@ -94,7 +88,6 @@ export default function GiftCardsPage() {
       body: JSON.stringify({
         code: form.code.trim(),
         initialCents,
-        expiresAt: form.expiresAt || undefined,
       }),
     });
 
@@ -162,7 +155,7 @@ export default function GiftCardsPage() {
                   <TableRow key={card.id}>
                     <TableCell>
                       <Typography variant="body2" sx={{ fontWeight: 700, fontFamily: 'monospace' }}>
-                        {card.code}
+                        {formatGiftCardCode(card.code)}
                       </Typography>
                     </TableCell>
                     <TableCell>${(card.initialCents / 100).toFixed(2)}</TableCell>
@@ -228,19 +221,16 @@ export default function GiftCardsPage() {
                 <TextField
                   label="Initial Value ($)"
                   type="number"
-                  slotProps={{ htmlInput: { min: 1, step: 0.01 } }}
+                  slotProps={{ htmlInput: { min: 0.01, step: 0.01 } }}
                   value={form.initialDollars}
                   onChange={(e) => setForm({ ...form, initialDollars: e.target.value })}
                 />
               </Grid>
               <Grid size={{ xs: 6 }}>
-                <TextField
-                  label="Expires (optional)"
-                  type="date"
-                  value={form.expiresAt}
-                  onChange={(e) => setForm({ ...form, expiresAt: e.target.value })}
-                  slotProps={{ inputLabel: { shrink: true } }}
-                />
+                <Typography variant="caption" color="text.secondary">
+                  Any amount. Gift cards never expire and can be spent on anything, in the POS or at online class
+                  checkout.
+                </Typography>
               </Grid>
             </Grid>
           </Stack>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { checkPermission } from "@/lib/permissions";
+import { POS_ORDER_INCLUDE } from "@/lib/pos";
 
 export async function DELETE(
   _req: Request,
@@ -44,11 +45,19 @@ export async function DELETE(
     });
   }
 
+  // Account credit goes back to the customer it came from (externalRef).
+  if (payment.method === "ACCOUNT_CREDIT" && payment.externalRef && payment.status === "SUCCEEDED") {
+    await prisma.user.update({
+      where: { id: payment.externalRef },
+      data: { accountCreditCents: { increment: payment.amountCents } },
+    });
+  }
+
   await prisma.posPayment.delete({ where: { id: paymentId } });
 
   const updatedOrder = await prisma.posOrder.findUnique({
     where: { id },
-    include: { items: true, payments: true },
+    include: POS_ORDER_INCLUDE,
   });
 
   return NextResponse.json(updatedOrder);

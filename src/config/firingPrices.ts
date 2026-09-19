@@ -1,4 +1,17 @@
 /**
+ * @deprecated Hardcoded price book for the old POS "Clay & firing" tab
+ * (src/app/admin/pos/_components/FiringPanel.tsx), kept only so that panel and
+ * the CUSTOM `kind: "FIRING"` lines it creates keep working until the panel is
+ * replaced. Do not add to it and do not read prices from it.
+ *
+ * Prices now live in RetailProduct rows (scripts/sync-products.ts, editable in
+ * Studio Set-up > Products): pieces, member firing, clay. Member firing is
+ * priced per piece by src/lib/firing.ts (0.1 lb, round to the cent, $1.00
+ * minimum) through POST /api/pos/orders/[id]/firing, and by-weight products
+ * through POST /api/pos/orders/[id]/items with `weightLb`. Known differences
+ * from the catalog in THIS file: no per-piece minimum, ounces instead of
+ * 0.1 lb, one line for all pieces, and a 15 lb Kickstart allowance (catalog: 10 lb).
+ *
  * Clay & firing prices for the POS "Clay & firing" tab.
  *
  * Sources: the live website (membership FAQ "Weigh and Pay"), JP's June notes,

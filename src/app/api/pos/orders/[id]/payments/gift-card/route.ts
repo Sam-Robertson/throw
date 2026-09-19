@@ -2,7 +2,12 @@ import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { checkPermission } from "@/lib/permissions";
-import { checkOrderPayable, maybeCompletePosOrder, remainingBalanceCents } from "@/lib/pos";
+import {
+  checkOrderPayable,
+  findGiftCardByCode,
+  maybeCompletePosOrder,
+  remainingBalanceCents,
+} from "@/lib/pos";
 
 export async function POST(
   req: NextRequest,
@@ -41,7 +46,7 @@ export async function POST(
     return NextResponse.json({ error: "amountCents is required and must be positive" }, { status: 400 });
   }
 
-  const giftCard = await prisma.giftCard.findUnique({ where: { code: body.code.trim().toUpperCase() } });
+  const giftCard = await findGiftCardByCode(body.code);
   if (!giftCard) {
     return NextResponse.json({ error: "Gift card not found" }, { status: 404 });
   }
@@ -61,10 +66,18 @@ export async function POST(
     return NextResponse.json({ error: "There is no remaining balance to charge" }, { status: 400 });
   }
 
-  await prisma.giftCard.update({
-    where: { id: giftCard.id },
+  // Atomic: only decrements while the balance still covers it, so a card
+  // can't be spent twice at once or go negative.
+  const { count } = await prisma.giftCard.updateMany({
+    where: { id: giftCard.id, isActive: true, balanceCents: { gte: amountApplied } },
     data: { balanceCents: { decrement: amountApplied } },
   });
+  if (count === 0) {
+    return NextResponse.json(
+      { error: "This gift card's balance just changed. Check the balance and try again." },
+      { status: 409 },
+    );
+  }
 
   await prisma.posPayment.create({
     data: {

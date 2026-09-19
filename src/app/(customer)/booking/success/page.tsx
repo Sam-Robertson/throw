@@ -10,14 +10,67 @@ import { formatMountainTime } from "@/lib/timezone";
 export default async function BookingSuccessPage({
   searchParams,
 }: {
-  searchParams: Promise<{ session_id?: string }>;
+  searchParams: Promise<{ session_id?: string; booking_id?: string }>;
 }) {
   const authSession = await auth();
   if (!authSession?.user?.id) {
     redirect("/login");
   }
 
-  const { session_id } = await searchParams;
+  const { session_id, booking_id } = await searchParams;
+
+  // Booked without Stripe: a gift card (or a 100% promo code) covered it all.
+  if (!session_id && booking_id) {
+    const paidBooking = await prisma.booking.findFirst({
+      where: { id: booking_id, userId: authSession.user.id },
+      include: {
+        studioSession: {
+          include: { sessionType: { select: { name: true, durationMinutes: true } } },
+        },
+      },
+    });
+    if (!paidBooking) redirect("/schedule");
+
+    return (
+      <main className="mx-auto max-w-lg px-4 py-16">
+        <div className="rounded-lg border bg-card p-8 shadow-sm text-center">
+          <h1 className="mb-2 text-2xl font-bold">Booking confirmed!</h1>
+          <p className="mb-6 text-muted-foreground">
+            {paidBooking.amountPaidCents > 0
+              ? "Paid with your gift card. Your spot is confirmed."
+              : "Nothing to pay. Your spot is confirmed."}
+          </p>
+          <dl className="mb-6 space-y-2 text-left text-sm">
+            <div className="flex justify-between">
+              <dt className="font-medium">Session</dt>
+              <dd className="text-muted-foreground">{paidBooking.studioSession.sessionType.name}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="font-medium">Date &amp; time</dt>
+              <dd className="text-muted-foreground">
+                {formatMountainTime(paidBooking.studioSession.startsAt, "datetime")}
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="font-medium">Paid by gift card</dt>
+              <dd className="text-muted-foreground">
+                {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
+                  paidBooking.amountPaidCents / 100,
+                )}
+              </dd>
+            </div>
+          </dl>
+          <Link
+            href="/dashboard"
+            className="inline-flex h-10 items-center rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            Go to dashboard
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
   if (!session_id) {
     redirect("/schedule");
   }
@@ -78,6 +131,10 @@ export default async function BookingSuccessPage({
     : null;
 
   const amountPaid = checkoutSession.amount_total ?? 0;
+  const giftCardCents = parseInt(checkoutSession.metadata?.giftCardCents ?? "0", 10) || 0;
+  const discountCents = parseInt(checkoutSession.metadata?.discountCents ?? "0", 10) || 0;
+  const money = (cents: number) =>
+    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 
   return (
     <main className="mx-auto max-w-lg px-4 py-16">
@@ -138,14 +195,22 @@ export default async function BookingSuccessPage({
                 </dd>
               </div>
             )}
+            {discountCents > 0 && (
+              <div className="flex justify-between">
+                <dt className="font-medium">Promo code</dt>
+                <dd className="text-muted-foreground">−{money(discountCents)}</dd>
+              </div>
+            )}
+            {giftCardCents > 0 && (
+              <div className="flex justify-between">
+                <dt className="font-medium">Gift card</dt>
+                <dd className="text-muted-foreground">−{money(giftCardCents)}</dd>
+              </div>
+            )}
             <div className="flex justify-between">
               <dt className="font-medium">Amount paid</dt>
               <dd className="text-muted-foreground">
-                {new Intl.NumberFormat("en-US", {
-                  style: "currency",
-                  currency: "USD",
-                  maximumFractionDigits: 0,
-                }).format(amountPaid / 100)}
+                {money(amountPaid)}
               </dd>
             </div>
           </dl>

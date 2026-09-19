@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { checkPermission } from "@/lib/permissions";
 import { sendInngestEvent } from "@/lib/inngest";
-import { POS_ORDER_INCLUDE } from "@/lib/pos";
+import { POS_ORDER_INCLUDE, reverseCompletionSideEffects } from "@/lib/pos";
 
 const GRACE_PERIOD_MS = 24 * 60 * 60 * 1000;
 
@@ -46,15 +46,48 @@ export async function POST(
     );
   }
 
-  const updated = await prisma.posOrder.update({
+  await prisma.posOrder.update({
     where: { id },
     data: {
       status: "VOIDED",
       voidedAt: new Date(),
       voidReason: body.reason.trim(),
     },
-    include: POS_ORDER_INCLUDE,
   });
+
+  // Stored-value tenders are ours to give back, so a void returns them on the
+  // spot: gift card balances and account credit. The payment row is kept and
+  // marked REFUNDED. (Card payments are not refunded here — that's still a
+  // separate step in Stripe.)
+  const storedValuePayments = await prisma.posPayment.findMany({
+    where: { orderId: id, status: "SUCCEEDED", method: { in: ["GIFT_CARD", "ACCOUNT_CREDIT"] } },
+  });
+  for (const payment of storedValuePayments) {
+    // The status flip is the guard: whoever flips it does the restore, once.
+    const { count } = await prisma.posPayment.updateMany({
+      where: { id: payment.id, status: "SUCCEEDED" },
+      data: { status: "REFUNDED" },
+    });
+    if (count === 0) continue;
+    if (payment.method === "GIFT_CARD" && payment.giftCardId) {
+      await prisma.giftCard.update({
+        where: { id: payment.giftCardId },
+        data: { balanceCents: { increment: payment.amountCents } },
+      });
+    } else if (payment.method === "ACCOUNT_CREDIT" && payment.externalRef) {
+      await prisma.user.update({
+        where: { id: payment.externalRef },
+        data: { accountCreditCents: { increment: payment.amountCents } },
+      });
+    }
+  }
+
+  // Class pack credits come back off the customer and discount uses are released.
+  if (order.status === "COMPLETED") {
+    await reverseCompletionSideEffects(id);
+  }
+
+  const updated = await prisma.posOrder.findUniqueOrThrow({ where: { id }, include: POS_ORDER_INCLUDE });
 
   // A completed order may have booked drop-in seats; voiding the sale frees
   // them. (Money is not refunded here — that's still a separate step.)

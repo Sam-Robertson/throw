@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -12,15 +13,13 @@ import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import FormControlLabel from '@mui/material/FormControlLabel';
-import FormControl from '@mui/material/FormControl';
+import Grid from '@mui/material/Grid';
 import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
-import InputLabel from '@mui/material/InputLabel';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
-import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
 import Table from '@mui/material/Table';
@@ -34,69 +33,204 @@ import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 
 import AddIcon from '@mui/icons-material/Add';
-import AllInclusiveIcon from '@mui/icons-material/AllInclusive';
+import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
-import PersonOutlinedIcon from '@mui/icons-material/PersonOutlined';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import SearchIcon from '@mui/icons-material/Search';
+import UnarchiveOutlinedIcon from '@mui/icons-material/UnarchiveOutlined';
 
-// ── Types mirroring Stripe SDK v22 PromotionCode shape ───────────────────
-interface StripeCoupon {
-  id: string;
-  name: string | null;
-  percent_off: number | null;
-  amount_off: number | null;
-  currency: string | null;
-  times_redeemed: number;
-  valid: boolean;
-}
+import { STUDIO_TIMEZONE } from '@/lib/timezone';
 
-interface StripePromoCode {
+// ── Types (rows of the DiscountCode table) ────────────────────────────────
+type DiscountType = 'percent' | 'fixed_cents';
+type Scope = 'EVERYTHING' | 'RETAIL' | 'PIECES' | 'CLASSES';
+type AppliesVia = 'CODE' | 'STAFF' | 'AUTOMATIC';
+
+interface Discount {
   id: string;
   code: string;
-  active: boolean;
-  // SDK v22: coupon lives inside promotion.coupon (expanded)
-  promotion: { coupon: StripeCoupon | null; type: 'coupon' };
-  expires_at: number | null;           // unix timestamp
-  max_redemptions: number | null;
-  times_redeemed: number;
-  restrictions: {
-    first_time_transaction: boolean;
+  name: string | null;
+  description: string | null;
+  type: DiscountType;
+  value: number;
+  scope: Scope;
+  appliesVia: AppliesVia;
+  autoCommitmentMonths: number | null;
+  sessionTypeId: string | null;
+  productSlug: string | null;
+  maxUnits: number | null;
+  maxUses: number | null;
+  usedCount: number;
+  maxUsesPerCustomerPerYear: number | null;
+  requiresNote: boolean;
+  requiresGroupEvent: boolean;
+  locationId: string | null;
+  validFrom: string | null;
+  validUntil: string | null;
+  isActive: boolean;
+  archivedAt: string | null;
+  sessionType: { id: string; name: string } | null;
+  location: { id: string; name: string } | null;
+}
+
+interface Options {
+  sessionTypes: { id: string; name: string }[];
+  products: { slug: string; name: string; category: string }[];
+  locations: { id: string; name: string }[];
+}
+
+const SCOPE_LABELS: Record<Scope, string> = {
+  EVERYTHING: 'Everything (except gift cards)',
+  RETAIL: 'Retail only (never clay or firing)',
+  PIECES: 'Pieces only',
+  CLASSES: 'Classes',
+};
+
+const VIA_LABELS: Record<AppliesVia, string> = {
+  CODE: 'Promo code',
+  STAFF: 'Staff applied',
+  AUTOMATIC: 'Automatic (member commitment)',
+};
+
+const VIA_HELP: Record<AppliesVia, string> = {
+  CODE: 'Customers type it at online class checkout; staff can type it in the POS.',
+  STAFF: 'Shows in the POS discount list for staff to apply.',
+  AUTOMATIC: 'Applies by itself in the POS when a member with this commitment is on the order.',
+};
+
+interface FormState {
+  code: string;
+  name: string;
+  description: string;
+  type: DiscountType;
+  value: string;
+  scope: Scope;
+  appliesVia: AppliesVia;
+  autoCommitmentMonths: string;
+  sessionTypeId: string;
+  productSlug: string;
+  maxUnits: string;
+  maxUses: string;
+  maxUsesPerCustomerPerYear: string;
+  requiresNote: boolean;
+  requiresGroupEvent: boolean;
+  locationId: string;
+  validFrom: string;
+  validUntil: string;
+  isActive: boolean;
+}
+
+const emptyForm: FormState = {
+  code: '',
+  name: '',
+  description: '',
+  type: 'percent',
+  value: '',
+  scope: 'CLASSES',
+  appliesVia: 'CODE',
+  autoCommitmentMonths: '',
+  sessionTypeId: '',
+  productSlug: '',
+  maxUnits: '',
+  maxUses: '',
+  maxUsesPerCustomerPerYear: '',
+  requiresNote: false,
+  requiresGroupEvent: false,
+  locationId: '',
+  validFrom: '',
+  validUntil: '',
+  isActive: true,
+};
+
+// Dates are whole studio days: a code starts at 12:00 am and ends at 11:59 pm Mountain Time.
+function toDateInput(iso: string | null): string {
+  return iso ? formatInTimeZone(new Date(iso), STUDIO_TIMEZONE, 'yyyy-MM-dd') : '';
+}
+
+function fromDateInput(value: string, endOfDay: boolean): string | null {
+  if (!value) return null;
+  return fromZonedTime(`${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}`, STUDIO_TIMEZONE).toISOString();
+}
+
+function toForm(d: Discount): FormState {
+  return {
+    code: d.code,
+    name: d.name ?? '',
+    description: d.description ?? '',
+    type: d.type,
+    value: d.type === 'percent' ? String(d.value) : (d.value / 100).toFixed(2),
+    scope: d.scope,
+    appliesVia: d.appliesVia,
+    autoCommitmentMonths: d.autoCommitmentMonths != null ? String(d.autoCommitmentMonths) : '',
+    sessionTypeId: d.sessionTypeId ?? '',
+    productSlug: d.productSlug ?? '',
+    maxUnits: d.maxUnits != null ? String(d.maxUnits) : '',
+    maxUses: d.maxUses != null ? String(d.maxUses) : '',
+    maxUsesPerCustomerPerYear: d.maxUsesPerCustomerPerYear != null ? String(d.maxUsesPerCustomerPerYear) : '',
+    requiresNote: d.requiresNote,
+    requiresGroupEvent: d.requiresGroupEvent,
+    locationId: d.locationId ?? '',
+    validFrom: toDateInput(d.validFrom),
+    validUntil: toDateInput(d.validUntil),
+    isActive: d.isActive,
   };
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────
-function formatDiscount(code: StripePromoCode) {
-  const c = code.promotion.coupon;
-  if (!c) return '—';
-  if (c.percent_off != null) return `${c.percent_off}% off`;
-  if (c.amount_off != null) return `$${(c.amount_off / 100).toFixed(2)} off`;
-  return '—';
+function formatDiscount(d: Discount) {
+  return d.type === 'percent' ? `${d.value}% off` : `$${(d.value / 100).toFixed(2)} off`;
 }
 
-function formatExpiry(ts: number | null) {
-  if (!ts) return null;
-  return new Date(ts * 1000).toLocaleDateString('en-US', {
-    month: 'short', day: 'numeric', year: 'numeric',
-  });
+function formatDates(d: Discount) {
+  const fmt = (iso: string) => formatInTimeZone(new Date(iso), STUDIO_TIMEZONE, 'MMM d, yyyy');
+  if (d.validFrom && d.validUntil) return `${fmt(d.validFrom)} – ${fmt(d.validUntil)}`;
+  if (d.validFrom) return `From ${fmt(d.validFrom)}`;
+  if (d.validUntil) return `Until ${fmt(d.validUntil)}`;
+  return 'No dates';
 }
 
-function isExpired(ts: number | null) {
-  if (!ts) return false;
-  return ts * 1000 < Date.now();
+type Status = 'Archived' | 'Inactive' | 'Scheduled' | 'Expired' | 'Used up' | 'Active';
+
+function statusOf(d: Discount): Status {
+  const now = Date.now();
+  if (d.archivedAt) return 'Archived';
+  if (!d.isActive) return 'Inactive';
+  if (d.validFrom && new Date(d.validFrom).getTime() > now) return 'Scheduled';
+  if (d.validUntil && new Date(d.validUntil).getTime() < now) return 'Expired';
+  if (d.maxUses != null && d.usedCount >= d.maxUses) return 'Used up';
+  return 'Active';
+}
+
+/** "Kickstart only · 1 unit · once per customer per year · note required" */
+function limitsOf(d: Discount, options: Options): string[] {
+  const limits: string[] = [];
+  if (d.sessionType) limits.push(`${d.sessionType.name} only`);
+  if (d.productSlug) {
+    limits.push(`${options.products.find((p) => p.slug === d.productSlug)?.name ?? d.productSlug} only`);
+  }
+  if (d.maxUnits != null) limits.push(`${d.maxUnits} unit${d.maxUnits === 1 ? '' : 's'} per use`);
+  if (d.maxUsesPerCustomerPerYear != null) limits.push(`${d.maxUsesPerCustomerPerYear}× per customer per year`);
+  if (d.autoCommitmentMonths != null) limits.push(`${d.autoCommitmentMonths} month commitment`);
+  if (d.requiresNote) limits.push('note required');
+  if (d.requiresGroupEvent) limits.push('group event orders only');
+  return limits;
 }
 
 // ── Row overflow menu ─────────────────────────────────────────────────────
 function RowMenu({
-  code,
+  discount,
+  onEdit,
   onToggle,
   onCopy,
+  onArchive,
 }: {
-  code: StripePromoCode;
+  discount: Discount;
+  onEdit: () => void;
   onToggle: () => void;
   onCopy: () => void;
+  onArchive: () => void;
 }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   return (
@@ -117,22 +251,31 @@ function RowMenu({
         slotProps={{ paper: { sx: { minWidth: 200, borderRadius: 2 } } }}
         onClick={(e) => e.stopPropagation()}
       >
-        <MenuItem
-          onClick={() => { setAnchor(null); onCopy(); }}
-          sx={{ fontSize: '0.875rem' }}
-        >
+        <MenuItem onClick={() => { setAnchor(null); onEdit(); }} sx={{ fontSize: '0.875rem' }}>
+          <ListItemIcon><EditOutlinedIcon fontSize="small" /></ListItemIcon>
+          Edit
+        </MenuItem>
+        <MenuItem onClick={() => { setAnchor(null); onCopy(); }} sx={{ fontSize: '0.875rem' }}>
           <ListItemIcon><ContentCopyIcon fontSize="small" /></ListItemIcon>
           Copy code
         </MenuItem>
         <Divider />
-        <MenuItem
-          onClick={() => { setAnchor(null); onToggle(); }}
-          sx={{ fontSize: '0.875rem', color: code.active ? 'error.main' : 'success.main' }}
-        >
+        {!discount.archivedAt && (
+          <MenuItem
+            onClick={() => { setAnchor(null); onToggle(); }}
+            sx={{ fontSize: '0.875rem', color: discount.isActive ? 'error.main' : 'success.main' }}
+          >
+            <ListItemIcon>
+              <PowerSettingsNewIcon fontSize="small" sx={{ color: discount.isActive ? 'error.main' : 'success.main' }} />
+            </ListItemIcon>
+            {discount.isActive ? 'Deactivate' : 'Activate'}
+          </MenuItem>
+        )}
+        <MenuItem onClick={() => { setAnchor(null); onArchive(); }} sx={{ fontSize: '0.875rem' }}>
           <ListItemIcon>
-            <PowerSettingsNewIcon fontSize="small" sx={{ color: code.active ? 'error.main' : 'success.main' }} />
+            {discount.archivedAt ? <UnarchiveOutlinedIcon fontSize="small" /> : <ArchiveOutlinedIcon fontSize="small" />}
           </ListItemIcon>
-          {code.active ? 'Deactivate' : 'Reactivate'}
+          {discount.archivedAt ? 'Restore' : 'Archive'}
         </MenuItem>
       </Menu>
     </>
@@ -141,38 +284,33 @@ function RowMenu({
 
 // ── Main page ─────────────────────────────────────────────────────────────
 export default function DiscountCodesPage() {
-  const [codes, setCodes] = useState<StripePromoCode[]>([]);
+  const [discounts, setDiscounts] = useState<Discount[]>([]);
+  const [options, setOptions] = useState<Options>({ sessionTypes: [], products: [], locations: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
-  // Toggle confirm dialog
-  const [toggleTarget, setToggleTarget] = useState<StripePromoCode | null>(null);
-  const [toggling, setToggling] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState<Discount | null>(null);
 
-  // Create dialog
-  const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState({
-    code: '',
-    discountType: 'percent' as 'percent' | 'fixed',
-    discountValue: '',
-    expiresAt: '',
-    maxRedemptions: '',
-    firstTimeOnly: false,
-  });
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
+  // Create / edit dialog
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<Discount | null>(null);
+  const [form, setForm] = useState<FormState>(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   async function load() {
-    setLoading(true);
     setError(null);
     const res = await fetch('/api/admin/discount-codes');
     if (!res.ok) {
       const d = await res.json().catch(() => ({})) as { error?: string };
-      setError(d.error ?? 'Failed to load discount codes');
+      setError(d.error ?? 'Failed to load discounts');
     } else {
-      setCodes(await res.json() as StripePromoCode[]);
+      const data = await res.json() as { discounts: Discount[]; options: Options };
+      setDiscounts(data.discounts);
+      setOptions(data.options);
     }
     setLoading(false);
   }
@@ -181,26 +319,43 @@ export default function DiscountCodesPage() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    if (!q) return codes;
-    return codes.filter((c) =>
-      c.code.toLowerCase().includes(q) ||
-      c.promotion.coupon?.name?.toLowerCase().includes(q),
+    const visible = discounts.filter((d) => showArchived || !d.archivedAt);
+    if (!q) return visible;
+    return visible.filter((d) =>
+      d.code.toLowerCase().includes(q) ||
+      d.name?.toLowerCase().includes(q) ||
+      d.description?.toLowerCase().includes(q),
     );
-  }, [codes, search]);
+  }, [discounts, search, showArchived]);
+  const archivedCount = discounts.filter((d) => d.archivedAt).length;
 
-  async function handleToggle(code: StripePromoCode) {
-    setToggling(true);
-    const res = await fetch(`/api/admin/discount-codes/${code.id}`, {
+  function openCreate() {
+    setEditTarget(null);
+    setForm(emptyForm);
+    setFormError(null);
+    setDialogOpen(true);
+  }
+
+  function openEdit(d: Discount) {
+    setEditTarget(d);
+    setForm(toForm(d));
+    setFormError(null);
+    setDialogOpen(true);
+  }
+
+  async function patch(d: Discount, body: Record<string, unknown>) {
+    const res = await fetch(`/api/admin/discount-codes/${d.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ active: !code.active }),
+      body: JSON.stringify(body),
     });
     if (res.ok) {
-      const updated = await res.json() as StripePromoCode;
-      setCodes((prev) => prev.map((c) => c.id === updated.id ? { ...c, active: updated.active } : c));
+      const updated = await res.json() as Discount;
+      setDiscounts((prev) => prev.map((x) => x.id === updated.id ? updated : x));
+    } else {
+      const data = await res.json().catch(() => ({})) as { error?: string };
+      setError(data.error ?? 'Update failed');
     }
-    setToggleTarget(null);
-    setToggling(false);
   }
 
   function copyCode(code: string) {
@@ -209,70 +364,84 @@ export default function DiscountCodesPage() {
     setTimeout(() => setCopied(null), 2000);
   }
 
-  async function handleCreate() {
-    setCreating(true);
-    setCreateError(null);
+  async function handleSave() {
+    setSaving(true);
+    setFormError(null);
 
-    const value = parseFloat(form.discountValue);
+    const value = parseFloat(form.value);
     if (!form.code.trim() || isNaN(value) || value <= 0) {
-      setCreateError('Code and discount amount are required');
-      setCreating(false);
+      setFormError('Code and discount amount are required');
+      setSaving(false);
       return;
     }
+    const optionalInt = (s: string) => (s.trim() ? parseInt(s, 10) : null);
 
     const payload = {
       code: form.code.trim().toUpperCase(),
-      discountType: form.discountType,
-      // percent: pass as-is; fixed: convert dollars → cents
-      discountValue: form.discountType === 'percent' ? value : Math.round(value * 100),
-      expiresAt: form.expiresAt || undefined,
-      maxRedemptions: form.maxRedemptions ? parseInt(form.maxRedemptions, 10) : undefined,
-      firstTimeOnly: form.firstTimeOnly,
+      name: form.name.trim() || null,
+      description: form.description.trim() || null,
+      type: form.type,
+      // percent: whole percent; fixed: dollars → cents
+      value: form.type === 'percent' ? Math.round(value) : Math.round(value * 100),
+      scope: form.scope,
+      appliesVia: form.appliesVia,
+      autoCommitmentMonths: form.appliesVia === 'AUTOMATIC' ? optionalInt(form.autoCommitmentMonths) : null,
+      sessionTypeId: form.sessionTypeId || null,
+      productSlug: form.productSlug || null,
+      maxUnits: optionalInt(form.maxUnits),
+      maxUses: optionalInt(form.maxUses),
+      maxUsesPerCustomerPerYear: optionalInt(form.maxUsesPerCustomerPerYear),
+      requiresNote: form.requiresNote,
+      requiresGroupEvent: form.requiresGroupEvent,
+      locationId: form.locationId || null,
+      validFrom: fromDateInput(form.validFrom, false),
+      validUntil: fromDateInput(form.validUntil, true),
+      isActive: form.isActive,
     };
 
-    const res = await fetch('/api/admin/discount-codes', {
-      method: 'POST',
+    const isEdit = editTarget !== null;
+    const res = await fetch(isEdit ? `/api/admin/discount-codes/${editTarget.id}` : '/api/admin/discount-codes', {
+      method: isEdit ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
 
     if (!res.ok) {
       const d = await res.json().catch(() => ({})) as { error?: string };
-      setCreateError(d.error ?? 'Failed to create code');
+      setFormError(d.error ?? 'Save failed');
     } else {
-      const created = await res.json() as StripePromoCode;
-      setCodes((prev) => [created, ...prev]);
-      setCreateOpen(false);
-      setForm({ code: '', discountType: 'percent', discountValue: '', expiresAt: '', maxRedemptions: '', firstTimeOnly: false });
+      setDialogOpen(false);
+      await load();
     }
-    setCreating(false);
+    setSaving(false);
   }
+
+  const headCell = { fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem' };
 
   return (
     <Box sx={{ p: { xs: 3, md: 4 } }}>
       {/* ── Header ── */}
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
         <Box>
-          <Typography variant="h2" sx={{ fontWeight: 700 }}>Discount Codes</Typography>
+          <Typography variant="h2" sx={{ fontWeight: 700 }}>Discounts</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Managed via Stripe. Changes sync instantly.
+            Promo codes, staff discounts and automatic member discounts. They apply in the POS and at online class
+            checkout. Sales tax is worked out after the discount.
           </Typography>
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setCreateError(null); setCreateOpen(true); }}>
-          Create code
+        <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate} sx={{ flexShrink: 0 }}>
+          New discount
         </Button>
       </Stack>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>{error}</Alert>
-      )}
+      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
       <Paper variant="outlined" sx={{ borderRadius: 3, overflow: 'hidden' }}>
         {/* ── Search toolbar ── */}
-        <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+        <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
           <TextField
             size="small"
-            placeholder="Search codes…"
+            placeholder="Search discounts…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             slotProps={{
@@ -284,151 +453,110 @@ export default function DiscountCodesPage() {
                 ),
               },
             }}
-            sx={{ width: { xs: '100%', sm: 260 } }}
+            sx={{ width: { xs: '100%', sm: 280 } }}
           />
+          {archivedCount > 0 && (
+            <FormControlLabel
+              sx={{ ml: 2 }}
+              control={<Switch size="small" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />}
+              label={<Typography variant="body2" color="text.secondary">Show archived ({archivedCount})</Typography>}
+            />
+          )}
         </Box>
 
         {/* ── Table ── */}
         <TableContainer>
-          <Table size="small">
+          <Table>
             <TableHead>
               <TableRow>
-                <TableCell sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem', pl: 2 }}>Code</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem' }}>Discount</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem' }}>Expires</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem', textAlign: 'center' }}>Redeemed</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem', textAlign: 'center' }}>Limit</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem' }}>Status</TableCell>
+                <TableCell sx={{ ...headCell, pl: 2 }}>Code</TableCell>
+                <TableCell sx={headCell}>Discount</TableCell>
+                <TableCell sx={headCell}>Applies to</TableCell>
+                <TableCell sx={headCell}>How</TableCell>
+                <TableCell sx={headCell}>Dates</TableCell>
+                <TableCell sx={headCell}>Used</TableCell>
+                <TableCell sx={headCell}>Status</TableCell>
                 <TableCell padding="checkbox" />
               </TableRow>
             </TableHead>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
-                    <Typography color="text.secondary">Loading from Stripe…</Typography>
+                  <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
+                    <Typography color="text.secondary">Loading…</Typography>
                   </TableCell>
                 </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 8 }}>
+                  <TableCell colSpan={8} align="center" sx={{ py: 8 }}>
                     <LocalOfferOutlinedIcon sx={{ fontSize: 44, color: 'text.disabled', mb: 1.5, display: 'block', mx: 'auto' }} />
                     <Typography color="text.secondary" sx={{ fontWeight: 500 }}>
-                      {search ? 'No codes match your search' : 'No discount codes yet'}
+                      {search ? 'No discounts match your search' : 'No discounts yet'}
                     </Typography>
-                    {!search && (
-                      <Button variant="outlined" size="small" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)} sx={{ mt: 2 }}>
-                        Create your first code
-                      </Button>
-                    )}
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((code) => {
-                  const expired = isExpired(code.expires_at);
-                  const expiry = formatExpiry(code.expires_at);
-                  const inactive = !code.active || expired;
-
+                filtered.map((d) => {
+                  const status = statusOf(d);
+                  const limits = limitsOf(d, options);
                   return (
                     <TableRow
-                      key={code.id}
+                      key={d.id}
                       hover
-                      sx={{ opacity: inactive ? 0.55 : 1, '& td': { py: 1 } }}
+                      onClick={() => openEdit(d)}
+                      sx={{ cursor: 'pointer', opacity: status === 'Active' || status === 'Scheduled' ? 1 : 0.55, '& td': { py: 1.25 } }}
                     >
-                      {/* Code */}
                       <TableCell sx={{ pl: 2 }}>
-                        <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
-                          <Typography
-                            variant="body2"
-                            sx={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '0.875rem', letterSpacing: '0.04em' }}
-                          >
-                            {code.code}
-                          </Typography>
-                          <Tooltip title={copied === code.code ? 'Copied!' : 'Copy code'}>
-                            <IconButton
-                              size="small"
-                              onClick={() => copyCode(code.code)}
-                              sx={{ color: copied === code.code ? 'success.main' : 'text.disabled', width: 22, height: 22 }}
-                            >
-                              <ContentCopyIcon sx={{ fontSize: 13 }} />
+                        <Stack direction="row" sx={{ alignItems: 'center', gap: 0.5 }}>
+                          <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>{d.code}</Typography>
+                          <Tooltip title={copied === d.code ? 'Copied' : 'Copy code'}>
+                            <IconButton size="small" onClick={(e) => { e.stopPropagation(); copyCode(d.code); }}>
+                              <ContentCopyIcon sx={{ fontSize: 14 }} />
                             </IconButton>
                           </Tooltip>
-                          {code.restrictions.first_time_transaction && (
-                            <Tooltip title="First-time customers only">
-                              <PersonOutlinedIcon sx={{ fontSize: 15, color: 'text.disabled' }} />
-                            </Tooltip>
-                          )}
                         </Stack>
-                        {code.promotion.coupon?.name && code.promotion.coupon.name !== code.code && (
-                          <Typography variant="caption" color="text.disabled">{code.promotion.coupon.name}</Typography>
-                        )}
+                        {d.name && <Typography variant="caption" color="text.secondary">{d.name}</Typography>}
                       </TableCell>
-
-                      {/* Discount */}
                       <TableCell>
-                        <Chip
-                          label={formatDiscount(code)}
-                          size="small"
-                          variant="outlined"
-                          color="primary"
-                          sx={{ fontWeight: 700, fontFamily: 'monospace' }}
-                        />
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{formatDiscount(d)}</Typography>
                       </TableCell>
-
-                      {/* Expires */}
                       <TableCell>
-                        {expiry ? (
-                          <Typography variant="body2" sx={{ fontSize: '0.8125rem', color: expired ? 'error.main' : 'text.secondary' }}>
-                            {expiry}
-                            {expired && ' (expired)'}
+                        <Typography variant="body2">{SCOPE_LABELS[d.scope] ?? d.scope}</Typography>
+                        {(limits.length > 0 || d.location) && (
+                          <Typography variant="caption" color="text.secondary">
+                            {[d.location ? `${d.location.name} only` : null, ...limits].filter(Boolean).join(' · ')}
                           </Typography>
-                        ) : (
-                          <Tooltip title="No expiration">
-                            <AllInclusiveIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
-                          </Tooltip>
                         )}
                       </TableCell>
-
-                      {/* Redeemed */}
-                      <TableCell align="center">
-                        <Typography variant="body2" sx={{ fontWeight: code.times_redeemed > 0 ? 600 : 400, color: code.times_redeemed > 0 ? 'text.primary' : 'text.disabled', fontSize: '0.875rem' }}>
-                          {code.times_redeemed > 0 ? code.times_redeemed : '—'}
+                      <TableCell>
+                        <Typography variant="body2">{VIA_LABELS[d.appliesVia] ?? d.appliesVia}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color={d.validFrom || d.validUntil ? undefined : 'text.disabled'}>
+                          {formatDates(d)}
                         </Typography>
                       </TableCell>
-
-                      {/* Limit */}
-                      <TableCell align="center">
-                        {code.max_redemptions ? (
-                          <Typography variant="body2" sx={{ fontSize: '0.875rem', color: code.times_redeemed >= code.max_redemptions ? 'error.main' : 'text.secondary' }}>
-                            {code.times_redeemed} / {code.max_redemptions}
-                          </Typography>
-                        ) : (
-                          <Tooltip title="Unlimited">
-                            <AllInclusiveIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
-                          </Tooltip>
-                        )}
-                      </TableCell>
-
-                      {/* Status */}
                       <TableCell>
-                        {expired ? (
-                          <Chip label="Expired" size="small" color="default" variant="outlined" />
-                        ) : (
-                          <Chip
-                            label={code.active ? 'Active' : 'Inactive'}
-                            size="small"
-                            color={code.active ? 'success' : 'default'}
-                            variant={code.active ? 'filled' : 'outlined'}
-                          />
-                        )}
+                        <Typography variant="body2">
+                          {d.usedCount}{d.maxUses != null ? ` / ${d.maxUses}` : ''}
+                        </Typography>
                       </TableCell>
-
-                      {/* Row menu */}
-                      <TableCell padding="checkbox" sx={{ pr: 1 }}>
+                      <TableCell>
+                        <Chip
+                          label={status}
+                          size="small"
+                          color={status === 'Active' ? 'success' : status === 'Scheduled' ? 'info' : 'default'}
+                          variant={status === 'Active' ? 'filled' : 'outlined'}
+                          sx={{ height: 20, fontSize: '0.7rem' }}
+                        />
+                      </TableCell>
+                      <TableCell padding="checkbox" sx={{ pr: 1 }} onClick={(e) => e.stopPropagation()}>
                         <RowMenu
-                          code={code}
-                          onToggle={() => setToggleTarget(code)}
-                          onCopy={() => copyCode(code.code)}
+                          discount={d}
+                          onEdit={() => openEdit(d)}
+                          onCopy={() => copyCode(d.code)}
+                          onToggle={() => void patch(d, { isActive: !d.isActive })}
+                          onArchive={() => (d.archivedAt ? void patch(d, { archived: false }) : setArchiveTarget(d))}
                         />
                       </TableCell>
                     </TableRow>
@@ -438,144 +566,279 @@ export default function DiscountCodesPage() {
             </TableBody>
           </Table>
         </TableContainer>
-
-        {/* Footer count */}
-        {filtered.length > 0 && (
-          <Box sx={{ px: 2, py: 1.25, borderTop: '1px solid', borderColor: 'divider' }}>
-            <Typography variant="caption" color="text.secondary">
-              {filtered.length} code{filtered.length !== 1 ? 's' : ''}
-              {search ? ` matching "${search}"` : ''}
-              {' · '}
-              {codes.filter((c) => c.active && !isExpired(c.expires_at)).length} active
-            </Typography>
-          </Box>
-        )}
       </Paper>
 
-      {/* ── Create dialog ── */}
-      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>Create discount code</DialogTitle>
+      {/* ── Create / Edit dialog ── */}
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>{editTarget ? `Edit ${editTarget.code}` : 'New discount'}</DialogTitle>
         <DialogContent sx={{ pt: '16px !important' }}>
           <Stack spacing={2.5}>
-            {createError && <Alert severity="error">{createError}</Alert>}
+            {formError && <Alert severity="error">{formError}</Alert>}
+
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 5 }}>
+                <TextField
+                  label="Code"
+                  required
+                  fullWidth
+                  value={form.code}
+                  disabled={editTarget !== null && editTarget.usedCount > 0}
+                  onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+                  slotProps={{ htmlInput: { style: { fontFamily: 'monospace' } } }}
+                  helperText={editTarget && editTarget.usedCount > 0 ? "Used codes can't be renamed." : 'Not case sensitive.'}
+                  autoFocus={!editTarget}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 7 }}>
+                <TextField
+                  label="Name"
+                  fullWidth
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  helperText="Shown to staff in the POS and on receipts."
+                />
+              </Grid>
+            </Grid>
 
             <TextField
-              label="Promo code"
-              required
-              value={form.code}
-              onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase().replace(/\s/g, '') })}
-              placeholder="e.g. SUMMER25, CLAY50"
-              slotProps={{ htmlInput: { style: { fontFamily: 'monospace', fontWeight: 700, letterSpacing: '0.05em' } } }}
-              helperText="Uppercase letters and numbers only. Customers enter this at checkout."
-              autoFocus
+              label="Description (optional)"
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              multiline
+              rows={2}
             />
 
-            <Stack direction="row" spacing={2}>
-              <FormControl sx={{ minWidth: 160 }}>
-                <InputLabel id="dtype-label">Discount type</InputLabel>
-                <Select
-                  labelId="dtype-label"
-                  value={form.discountType}
-                  label="Discount type"
-                  onChange={(e) => setForm({ ...form, discountType: e.target.value as 'percent' | 'fixed', discountValue: '' })}
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Type"
+                  value={form.type}
+                  onChange={(e) => setForm({ ...form, type: e.target.value as DiscountType })}
                 >
-                  <MenuItem value="percent">Percentage (%)</MenuItem>
-                  <MenuItem value="fixed">Fixed amount ($)</MenuItem>
-                </Select>
-              </FormControl>
+                  <MenuItem value="percent">Percent off</MenuItem>
+                  <MenuItem value="fixed_cents">Dollar amount off</MenuItem>
+                </TextField>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  label={form.type === 'percent' ? 'Percent' : 'Amount'}
+                  required
+                  fullWidth
+                  type="number"
+                  value={form.value}
+                  onChange={(e) => setForm({ ...form, value: e.target.value })}
+                  slotProps={{
+                    htmlInput: form.type === 'percent' ? { min: 1, max: 100, step: 1 } : { min: 0.01, step: 0.01 },
+                    input: {
+                      startAdornment: form.type === 'fixed_cents' ? <InputAdornment position="start">$</InputAdornment> : undefined,
+                      endAdornment: form.type === 'percent' ? <InputAdornment position="end">%</InputAdornment> : undefined,
+                    },
+                  }}
+                />
+              </Grid>
+            </Grid>
+
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Applies to"
+                  value={form.scope}
+                  onChange={(e) => setForm({ ...form, scope: e.target.value as Scope })}
+                >
+                  {(Object.keys(SCOPE_LABELS) as Scope[]).map((s) => (
+                    <MenuItem key={s} value={s}>{SCOPE_LABELS[s]}</MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  select
+                  fullWidth
+                  label="How it's applied"
+                  value={form.appliesVia}
+                  onChange={(e) => setForm({ ...form, appliesVia: e.target.value as AppliesVia })}
+                >
+                  {(Object.keys(VIA_LABELS) as AppliesVia[]).map((v) => (
+                    <MenuItem key={v} value={v}>{VIA_LABELS[v]}</MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+            </Grid>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: '-8px !important' }}>
+              {VIA_HELP[form.appliesVia]}
+            </Typography>
+
+            {form.appliesVia === 'AUTOMATIC' && (
               <TextField
-                label={form.discountType === 'percent' ? 'Percent off' : 'Dollars off'}
+                label="Commitment length (months)"
                 required
                 type="number"
-                value={form.discountValue}
-                onChange={(e) => setForm({ ...form, discountValue: e.target.value })}
-                slotProps={{
-                  htmlInput: { min: 0.01, max: form.discountType === 'percent' ? 100 : undefined, step: form.discountType === 'percent' ? 1 : 0.01 },
-                  input: {
-                    startAdornment: form.discountType === 'fixed'
-                      ? <InputAdornment position="start">$</InputAdornment>
-                      : undefined,
-                    endAdornment: form.discountType === 'percent'
-                      ? <InputAdornment position="end">%</InputAdornment>
-                      : undefined,
-                  },
-                }}
-                sx={{ flex: 1 }}
-              />
-            </Stack>
-
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-              <TextField
-                label="Expiration date (optional)"
-                type="date"
-                value={form.expiresAt}
-                onChange={(e) => setForm({ ...form, expiresAt: e.target.value })}
-                slotProps={{ inputLabel: { shrink: true } }}
-                helperText="Code deactivates at midnight on this date."
-                sx={{ flex: 1 }}
-              />
-              <TextField
-                label="Max redemptions (optional)"
-                type="number"
-                value={form.maxRedemptions}
-                onChange={(e) => setForm({ ...form, maxRedemptions: e.target.value })}
                 slotProps={{ htmlInput: { min: 1 } }}
-                helperText="Leave blank for unlimited."
-                sx={{ flex: 1 }}
+                value={form.autoCommitmentMonths}
+                onChange={(e) => setForm({ ...form, autoCommitmentMonths: e.target.value })}
+                helperText="A member gets the single longest-commitment discount they qualify for."
+              />
+            )}
+
+            <Divider />
+            <Typography variant="subtitle2">Limits</Typography>
+
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Class type"
+                  value={form.sessionTypeId}
+                  onChange={(e) => setForm({ ...form, sessionTypeId: e.target.value })}
+                  helperText="Only this class type."
+                >
+                  <MenuItem value="">Any class type</MenuItem>
+                  {/* Keep an archived or inactive type selectable on the discount that already has it. */}
+                  {editTarget?.sessionType && !options.sessionTypes.some((t) => t.id === editTarget.sessionType!.id) && (
+                    <MenuItem value={editTarget.sessionType.id}>{editTarget.sessionType.name}</MenuItem>
+                  )}
+                  {options.sessionTypes.map((t) => (
+                    <MenuItem key={t.id} value={t.id}>{t.name}</MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Product"
+                  value={form.productSlug}
+                  onChange={(e) => setForm({ ...form, productSlug: e.target.value })}
+                  helperText="Only this product."
+                >
+                  <MenuItem value="">Any product</MenuItem>
+                  {form.productSlug && !options.products.some((p) => p.slug === form.productSlug) && (
+                    <MenuItem value={form.productSlug}>{form.productSlug}</MenuItem>
+                  )}
+                  {options.products.map((p) => (
+                    <MenuItem key={p.slug} value={p.slug}>{p.name}</MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <TextField
+                  label="Max units"
+                  fullWidth
+                  type="number"
+                  slotProps={{ htmlInput: { min: 1 } }}
+                  value={form.maxUnits}
+                  onChange={(e) => setForm({ ...form, maxUnits: e.target.value })}
+                  helperText="Items discounted per use (one piece, one wheel)."
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <TextField
+                  label="Max uses"
+                  fullWidth
+                  type="number"
+                  slotProps={{ htmlInput: { min: 1 } }}
+                  value={form.maxUses}
+                  onChange={(e) => setForm({ ...form, maxUses: e.target.value })}
+                  helperText={editTarget ? `Used ${editTarget.usedCount} so far.` : 'In total. Blank = no limit.'}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <TextField
+                  label="Per customer per year"
+                  fullWidth
+                  type="number"
+                  slotProps={{ htmlInput: { min: 1 } }}
+                  value={form.maxUsesPerCustomerPerYear}
+                  onChange={(e) => setForm({ ...form, maxUsesPerCustomerPerYear: e.target.value })}
+                  helperText="Needs a customer on the order."
+                />
+              </Grid>
+              <Grid size={{ xs: 12 }}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Studio"
+                  value={form.locationId}
+                  onChange={(e) => setForm({ ...form, locationId: e.target.value })}
+                >
+                  <MenuItem value="">All studios</MenuItem>
+                  {options.locations.map((l) => (
+                    <MenuItem key={l.id} value={l.id}>{l.name}</MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  label="Start date"
+                  fullWidth
+                  type="date"
+                  value={form.validFrom}
+                  onChange={(e) => setForm({ ...form, validFrom: e.target.value })}
+                  slotProps={{ inputLabel: { shrink: true } }}
+                  helperText="Blank = already started."
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  label="End date"
+                  fullWidth
+                  type="date"
+                  value={form.validUntil}
+                  onChange={(e) => setForm({ ...form, validUntil: e.target.value })}
+                  slotProps={{ inputLabel: { shrink: true } }}
+                  helperText="Last day it works. Blank = no end."
+                />
+              </Grid>
+            </Grid>
+
+            <Stack>
+              <FormControlLabel
+                control={<Switch checked={form.requiresNote} onChange={(e) => setForm({ ...form, requiresNote: e.target.checked })} />}
+                label="Staff must add a note"
+              />
+              <FormControlLabel
+                control={<Switch checked={form.requiresGroupEvent} onChange={(e) => setForm({ ...form, requiresGroupEvent: e.target.checked })} />}
+                label="Only on orders tied to a group event"
+              />
+              <FormControlLabel
+                control={<Switch checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />}
+                label="Active"
               />
             </Stack>
-
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={form.firstTimeOnly}
-                  onChange={(e) => setForm({ ...form, firstTimeOnly: e.target.checked })}
-                />
-              }
-              label={
-                <Box>
-                  <Typography variant="body2" sx={{ fontWeight: 500 }}>First-time customers only</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Stripe will reject this code for returning customers.
-                  </Typography>
-                </Box>
-              }
-            />
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
-          <Button variant="outlined" onClick={() => setCreateOpen(false)} disabled={creating}>
-            Cancel
-          </Button>
-          <Button variant="contained" onClick={handleCreate} disabled={creating}>
-            {creating ? 'Creating in Stripe…' : 'Create code'}
+          <Button variant="outlined" onClick={() => setDialogOpen(false)} disabled={saving}>Cancel</Button>
+          <Button variant="contained" onClick={handleSave} disabled={saving}>
+            {saving ? 'Saving…' : editTarget ? 'Save changes' : 'Create discount'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* ── Toggle confirm ── */}
-      <Dialog open={toggleTarget !== null} onClose={() => setToggleTarget(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>
-          {toggleTarget?.active ? 'Deactivate' : 'Reactivate'} &ldquo;{toggleTarget?.code}&rdquo;?
-        </DialogTitle>
+      {/* ── Archive confirmation ── */}
+      <Dialog open={archiveTarget !== null} onClose={() => setArchiveTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Archive {archiveTarget?.code}?</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            {toggleTarget?.active
-              ? 'Customers will no longer be able to use this code at checkout.'
-              : 'This code will become valid for use at checkout again.'}
+            It stops working everywhere and leaves this list. Past uses are kept, and you can restore it from
+            &ldquo;Show archived&rdquo;.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button variant="outlined" onClick={() => setToggleTarget(null)} disabled={toggling}>
-            Cancel
-          </Button>
+          <Button variant="outlined" onClick={() => setArchiveTarget(null)}>Cancel</Button>
           <Button
             variant="contained"
-            color={toggleTarget?.active ? 'error' : 'primary'}
-            onClick={() => toggleTarget && handleToggle(toggleTarget)}
-            disabled={toggling}
+            onClick={() => {
+              if (archiveTarget) void patch(archiveTarget, { archived: true });
+              setArchiveTarget(null);
+            }}
           >
-            {toggling ? 'Saving…' : toggleTarget?.active ? 'Deactivate' : 'Reactivate'}
+            Archive
           </Button>
         </DialogActions>
       </Dialog>

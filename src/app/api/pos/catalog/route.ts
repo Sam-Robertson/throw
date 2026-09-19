@@ -1,11 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { addDays, endOfDay, startOfDay } from "date-fns";
+import { addDays, endOfDay, startOfDay, subDays } from "date-fns";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { checkPermission } from "@/lib/permissions";
 import { CLASS_PRICE_SELECT, SELLABLE_SESSION_TYPE, resolveClassPriceCents } from "@/lib/sellable";
 import { STUDIO_TIMEZONE } from "@/lib/timezone";
+import { GROUP_EVENT_LOOKBACK_DAYS, GROUP_EVENT_SESSION_TYPE, getFiringProducts } from "@/lib/pos";
+import { PRODUCT_CATEGORIES, PRODUCT_CATEGORY_LABELS } from "@/config/taxCodes";
 
 export const dynamic = "force-dynamic";
 
@@ -36,11 +38,13 @@ export async function GET(req: NextRequest) {
   const from = fromZonedTime(startOfDay(nowMT), STUDIO_TIMEZONE);
   const to = fromZonedTime(endOfDay(addDays(nowMT, DROP_IN_DAYS - 1)), STUDIO_TIMEZONE);
 
-  const [retailProducts, sessionTypes, membershipPlans, upcomingSessions] = await Promise.all([
+  const now = new Date();
+  const [retailProducts, sessionTypes, membershipPlans, upcomingSessions, staffDiscounts, groupEvents, firing] = await Promise.all([
+    // Sellable products only: active, not archived, and priced (OPEN catalog
+    // items stay out of the register until the client gives a price).
     prisma.retailProduct.findMany({
-      where: { isActive: true, ...scope },
-      select: { id: true, name: true, priceCents: true, inventory: true },
-      orderBy: { name: "asc" },
+      where: { isActive: true, isPriced: true, archivedAt: null, ...scope },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     }),
     prisma.sessionType.findMany({
       where: { ...SELLABLE_SESSION_TYPE, ...scope },
@@ -68,15 +72,107 @@ export async function GET(req: NextRequest) {
           orderBy: { startsAt: "asc" },
         })
       : Promise.resolve([]),
+    // Discounts staff can put on an order by hand at this studio. Promo codes
+    // are typed in (POST …/discounts { code }); automatic ones apply themselves.
+    prisma.discountCode.findMany({
+      where: {
+        appliesVia: "STAFF",
+        isActive: true,
+        archivedAt: null,
+        AND: [
+          { OR: [{ validFrom: null }, { validFrom: { lte: now } }] },
+          { OR: [{ validUntil: null }, { validUntil: { gte: now } }] },
+          locationId ? { OR: [{ locationId: null }, { locationId }] } : {},
+        ],
+      },
+      include: { sessionType: { select: { name: true } } },
+      orderBy: { name: "asc" },
+    }),
+    // Recent group events here, for discounts that need one (GROUPEXTRAS20).
+    locationId
+      ? prisma.studioSession.findMany({
+          where: {
+            locationId,
+            isCancelled: false,
+            startsAt: { gte: subDays(from, GROUP_EVENT_LOOKBACK_DAYS - 1), lte: to },
+            sessionType: GROUP_EVENT_SESSION_TYPE,
+          },
+          select: { id: true, title: true, startsAt: true, sessionType: { select: { name: true } } },
+          orderBy: { startsAt: "desc" },
+        })
+      : Promise.resolve([]),
+    getFiringProducts(),
   ]);
 
+  const products = retailProducts.map((p) => ({
+    id: p.id,
+    slug: p.slug,
+    name: p.name,
+    description: p.description,
+    category: p.category,
+    unit: p.unit,
+    priceCents: p.priceCents,
+    isPriced: p.isPriced,
+    minChargeCents: p.minChargeCents,
+    membersOnly: p.membersOnly,
+    trackInventory: p.trackInventory,
+    // null when stock isn't tracked (pieces, firing, clay, packs, shipping).
+    stock: p.trackInventory ? p.inventory : null,
+    classCredits: p.classCredits,
+    imageUrl: p.imageUrl,
+    sortOrder: p.sortOrder,
+  }));
+
   return NextResponse.json({
-    retailProducts: retailProducts.map((p) => ({
-      id: p.id,
-      name: p.name,
-      priceCents: p.priceCents,
-      stock: p.inventory,
+    // Shelf retail only, in the shape the register has always used. Catalog
+    // products (pieces, firing, clay, packs, shipping) are in `products`.
+    retailProducts: retailProducts
+      .filter((p) => p.category === "RETAIL")
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        priceCents: p.priceCents,
+        stock: p.inventory,
+        trackInventory: p.trackInventory,
+      })),
+    // Every sellable product, and the same list grouped by category in catalog order.
+    products,
+    productGroups: PRODUCT_CATEGORIES.map((category) => ({
+      category,
+      label: PRODUCT_CATEGORY_LABELS[category],
+      products: products.filter((p) => p.category === category),
+    })).filter((g) => g.products.length > 0),
+    staffDiscounts: staffDiscounts.map((d) => ({
+      id: d.id,
+      code: d.code,
+      name: d.name ?? d.code,
+      description: d.description,
+      type: d.type,
+      value: d.value,
+      scope: d.scope,
+      sessionTypeId: d.sessionTypeId,
+      sessionTypeName: d.sessionType?.name ?? null,
+      productSlug: d.productSlug,
+      maxUnits: d.maxUnits,
+      maxUsesPerCustomerPerYear: d.maxUsesPerCustomerPerYear,
+      requiresNote: d.requiresNote,
+      requiresGroupEvent: d.requiresGroupEvent,
+      // Needs a customer on the order (the yearly limit is per customer).
+      requiresCustomer: d.maxUsesPerCustomerPerYear != null,
     })),
+    groupEventSessions: groupEvents.map((g) => ({
+      id: g.id,
+      name: g.title ?? g.sessionType.name,
+      startsAt: g.startsAt,
+    })),
+    // Member glaze firing price book, or null when the firing products aren't set up.
+    firingRates: firing
+      ? {
+          ...firing.rates,
+          standardProductId: firing.standard.id,
+          oversizeProductId: firing.oversize.id,
+        }
+      : null,
     sessionTypes: sessionTypes
       .map((s) => ({
         id: s.id,

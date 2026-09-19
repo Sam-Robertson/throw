@@ -9,7 +9,11 @@
     "lint": "next lint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "test": "vitest run",
     "seed": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed.ts",
+    "sync:plans": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}' node --require ts-node/register scripts/sync-membership-plans.ts",
+    "catalog:sync-class-types": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}' node --require ts-node/register scripts/sync-class-types.ts",
+    "sync:products": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/sync-products.ts",
     "momence:export": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}' node --env-file=.env.local --require ts-node/register scripts/momence-export.ts",
     "momence:export:catalog": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}' node --env-file=.env.local --require ts-node/register scripts/momence-catalog-export.ts",
     "momence:map": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"CommonJS\"}' node --require ts-node/register scripts/momence-map.ts",
@@ -80,6 +84,7 @@
     "prisma": "^6.3.0",
     "tailwindcss": "^4.1.6",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.11"
   }
 }

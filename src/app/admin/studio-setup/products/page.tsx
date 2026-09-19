@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
@@ -32,7 +32,8 @@ import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
 
 import AddIcon from '@mui/icons-material/Add';
-import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
+import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
+import UnarchiveOutlinedIcon from '@mui/icons-material/UnarchiveOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
@@ -41,8 +42,11 @@ import SearchIcon from '@mui/icons-material/Search';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
 
+import { PRODUCT_CATEGORIES, PRODUCT_CATEGORY_LABELS, PRODUCT_CATEGORY_TAX_CODES, type ProductCategory } from '@/config/taxCodes';
+
 interface Product {
   id: string;
+  slug: string | null;
   name: string;
   description: string | null;
   priceCents: number;
@@ -50,6 +54,17 @@ interface Product {
   inventory: number;
   imageUrl: string | null;
   isActive: boolean;
+  category: string;
+  unit: string;
+  isPriced: boolean;
+  minChargeCents: number | null;
+  membersOnly: boolean;
+  trackInventory: boolean;
+  classCredits: number | null;
+  taxCode: string | null;
+  effectiveTaxCode?: string | null;
+  sortOrder: number;
+  archivedAt: string | null;
 }
 
 interface FormState {
@@ -60,6 +75,15 @@ interface FormState {
   inventory: string;
   imageUrl: string;
   isActive: boolean;
+  category: ProductCategory;
+  unit: 'EACH' | 'LB';
+  isPriced: boolean;
+  minChargeDollars: string;
+  membersOnly: boolean;
+  trackInventory: boolean;
+  classCredits: string;
+  taxCode: string;
+  sortOrder: string;
 }
 
 const emptyForm: FormState = {
@@ -70,18 +94,41 @@ const emptyForm: FormState = {
   inventory: '0',
   imageUrl: '',
   isActive: true,
+  category: 'RETAIL',
+  unit: 'EACH',
+  isPriced: true,
+  minChargeDollars: '',
+  membersOnly: false,
+  trackInventory: true,
+  classCredits: '',
+  taxCode: '',
+  sortOrder: '0',
 };
 
 function toForm(p: Product): FormState {
   return {
     name: p.name,
     description: p.description ?? '',
-    priceDollars: (p.priceCents / 100).toFixed(2),
+    priceDollars: p.isPriced ? (p.priceCents / 100).toFixed(2) : '',
     sku: p.sku ?? '',
     inventory: String(p.inventory),
     imageUrl: p.imageUrl ?? '',
     isActive: p.isActive,
+    category: (PRODUCT_CATEGORIES as readonly string[]).includes(p.category) ? (p.category as ProductCategory) : 'RETAIL',
+    unit: p.unit === 'LB' ? 'LB' : 'EACH',
+    isPriced: p.isPriced,
+    minChargeDollars: p.minChargeCents != null ? (p.minChargeCents / 100).toFixed(2) : '',
+    membersOnly: p.membersOnly,
+    trackInventory: p.trackInventory,
+    classCredits: p.classCredits != null ? String(p.classCredits) : '',
+    taxCode: p.taxCode ?? '',
+    sortOrder: String(p.sortOrder),
   };
+}
+
+function priceLabel(p: Product): string {
+  const price = `$${(p.priceCents / 100).toFixed(2)}${p.unit === 'LB' ? ' / lb' : ''}`;
+  return p.minChargeCents ? `${price} (min $${(p.minChargeCents / 100).toFixed(2)})` : price;
 }
 
 // ── Product thumbnail ─────────────────────────────────────────────────────
@@ -152,10 +199,10 @@ function StockPill({ value, onAdjust }: { value: number; onAdjust: (delta: numbe
 }
 
 // ── Row menu ──────────────────────────────────────────────────────────────
-function RowMenu({ product, onEdit, onDelete, onToggleActive }: {
+function RowMenu({ product, onEdit, onArchive, onToggleActive }: {
   product: Product;
   onEdit: () => void;
-  onDelete: () => void;
+  onArchive: () => void;
   onToggleActive: () => void;
 }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -177,14 +224,21 @@ function RowMenu({ product, onEdit, onDelete, onToggleActive }: {
           <ListItemIcon><EditOutlinedIcon fontSize="small" /></ListItemIcon>
           Edit product
         </MenuItem>
-        <MenuItem onClick={() => { setAnchor(null); onToggleActive(); }} sx={{ fontSize: '0.875rem' }}>
+        {/* No price yet (OPEN in the catalog) or archived: can't be switched on. */}
+        <MenuItem
+          disabled={!product.isActive && (!product.isPriced || product.archivedAt !== null)}
+          onClick={() => { setAnchor(null); onToggleActive(); }}
+          sx={{ fontSize: '0.875rem' }}
+        >
           <ListItemIcon><VisibilityOffOutlinedIcon fontSize="small" /></ListItemIcon>
           {product.isActive ? 'Deactivate' : 'Activate'}
         </MenuItem>
         <Divider />
-        <MenuItem onClick={() => { setAnchor(null); onDelete(); }} sx={{ fontSize: '0.875rem', color: 'error.main' }}>
-          <ListItemIcon><DeleteOutlinedIcon fontSize="small" sx={{ color: 'error.main' }} /></ListItemIcon>
-          Delete product
+        <MenuItem onClick={() => { setAnchor(null); onArchive(); }} sx={{ fontSize: '0.875rem' }}>
+          <ListItemIcon>
+            {product.archivedAt ? <UnarchiveOutlinedIcon fontSize="small" /> : <ArchiveOutlinedIcon fontSize="small" />}
+          </ListItemIcon>
+          {product.archivedAt ? 'Restore product' : 'Archive product'}
         </MenuItem>
       </Menu>
     </>
@@ -199,7 +253,8 @@ export default function ProductsPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Product | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<Product | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -214,14 +269,30 @@ export default function ProductsPage() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    if (!q) return products;
-    return products.filter(
+    const visible = products.filter((p) => showArchived || !p.archivedAt);
+    if (!q) return visible;
+    return visible.filter(
       (p) =>
         p.name.toLowerCase().includes(q) ||
         p.sku?.toLowerCase().includes(q) ||
+        p.slug?.toLowerCase().includes(q) ||
         p.description?.toLowerCase().includes(q),
     );
-  }, [products, search]);
+  }, [products, search, showArchived]);
+
+  // One table section per category, in catalog order.
+  const groups = useMemo(
+    () =>
+      PRODUCT_CATEGORIES.map((category) => ({
+        category,
+        label: PRODUCT_CATEGORY_LABELS[category],
+        products: filtered
+          .filter((p) => p.category === category)
+          .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
+      })).filter((g) => g.products.length > 0),
+    [filtered],
+  );
+  const archivedCount = products.filter((p) => p.archivedAt).length;
 
   function openCreate() {
     setEditTarget(null);
@@ -240,20 +311,37 @@ export default function ProductsPage() {
   async function handleSave() {
     setSaving(true);
     setError(null);
-    const priceCents = Math.round(parseFloat(form.priceDollars) * 100);
-    if (!form.name.trim() || isNaN(priceCents)) {
-      setError('Name and price are required');
+    // A product with no price yet (OPEN in the catalog) is saved at $0, not priced, inactive.
+    const priceCents = form.isPriced ? Math.round(parseFloat(form.priceDollars) * 100) : 0;
+    if (!form.name.trim() || isNaN(priceCents) || priceCents < 0) {
+      setError(form.isPriced ? 'Name and price are required' : 'Name is required');
+      setSaving(false);
+      return;
+    }
+    const minChargeCents = form.minChargeDollars.trim() ? Math.round(parseFloat(form.minChargeDollars) * 100) : null;
+    const classCredits = form.classCredits.trim() ? parseInt(form.classCredits, 10) : null;
+    if ((minChargeCents !== null && (isNaN(minChargeCents) || minChargeCents < 0)) || (classCredits !== null && (isNaN(classCredits) || classCredits < 0))) {
+      setError('Minimum charge and class credits must be zero or more');
       setSaving(false);
       return;
     }
     const payload = {
       name: form.name.trim(),
-      description: form.description.trim() || undefined,
+      description: form.description.trim() || null,
       priceCents,
-      sku: form.sku.trim() || undefined,
+      sku: form.sku.trim() || null,
       inventory: parseInt(form.inventory, 10) || 0,
-      imageUrl: form.imageUrl.trim() || undefined,
-      isActive: form.isActive,
+      imageUrl: form.imageUrl.trim() || null,
+      isActive: form.isPriced && form.isActive,
+      category: form.category,
+      unit: form.unit,
+      isPriced: form.isPriced,
+      minChargeCents,
+      membersOnly: form.membersOnly,
+      trackInventory: form.trackInventory,
+      classCredits,
+      taxCode: form.taxCode.trim() || null,
+      sortOrder: parseInt(form.sortOrder, 10) || 0,
     };
     const isEdit = editTarget !== null;
     const url = isEdit ? `/api/admin/products/${editTarget.id}` : '/api/admin/products';
@@ -272,10 +360,15 @@ export default function ProductsPage() {
     setSaving(false);
   }
 
-  async function handleDelete(p: Product) {
-    setDeleteTarget(null);
-    await fetch(`/api/admin/products/${p.id}`, { method: 'DELETE' });
-    setProducts((prev) => prev.filter((x) => x.id !== p.id));
+  // Products are archived, never deleted: past orders keep pointing at them.
+  async function handleArchive(p: Product, archived: boolean) {
+    setArchiveTarget(null);
+    const res = await fetch(`/api/admin/products/${p.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ archived }),
+    });
+    if (res.ok) await load();
   }
 
   async function handleToggleActive(p: Product) {
@@ -309,7 +402,7 @@ export default function ProductsPage() {
     <Box sx={{ p: { xs: 3, md: 4 } }}>
       {/* ── Header ── */}
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-        <Typography variant="h2" sx={{ fontWeight: 700 }}>Retail products</Typography>
+        <Typography variant="h2" sx={{ fontWeight: 700 }}>Products</Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -321,7 +414,7 @@ export default function ProductsPage() {
 
       <Paper variant="outlined" sx={{ borderRadius: 3, overflow: 'hidden' }}>
         {/* ── Search toolbar ── */}
-        <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+        <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
           <TextField
             size="small"
             placeholder="Search products…"
@@ -338,6 +431,13 @@ export default function ProductsPage() {
             }}
             sx={{ width: { xs: '100%', sm: 280 } }}
           />
+          {archivedCount > 0 && (
+            <FormControlLabel
+              sx={{ ml: 2 }}
+              control={<Switch size="small" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />}
+              label={<Typography variant="body2" color="text.secondary">Show archived ({archivedCount})</Typography>}
+            />
+          )}
         </Box>
 
         {/* ── Table ── */}
@@ -349,7 +449,7 @@ export default function ProductsPage() {
                 <TableCell sx={{ width: 68, pl: 2 }} />
                 <TableCell sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem' }}>Name</TableCell>
                 <TableCell sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem', width: 120 }}>SKU</TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem', width: 100 }}>Price</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem', width: 190 }}>Price</TableCell>
                 <TableCell sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem', width: 120 }}>Stock</TableCell>
                 <TableCell padding="checkbox" />
               </TableRow>
@@ -387,14 +487,23 @@ export default function ProductsPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((p) => (
+                groups.map((group) => (
+                  <Fragment key={group.category}>
+                  <TableRow>
+                    <TableCell colSpan={6} sx={{ bgcolor: 'action.hover', py: 0.75, pl: 2 }}>
+                      <Typography variant="overline" sx={{ fontWeight: 700, color: 'text.secondary' }}>
+                        {group.label} · {group.products.length}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                  {group.products.map((p) => (
                   <TableRow
                     key={p.id}
                     hover
                     onClick={() => openEdit(p)}
                     sx={{
                       cursor: 'pointer',
-                      opacity: p.isActive ? 1 : 0.5,
+                      opacity: p.isActive ? 1 : 0.55,
                       '& td': { py: 1 },
                     }}
                   >
@@ -423,9 +532,17 @@ export default function ProductsPage() {
                             {p.description}
                           </Typography>
                         )}
-                        {!p.isActive && (
-                          <Chip label="Inactive" size="small" variant="outlined" sx={{ width: 'fit-content', height: 16, fontSize: '0.65rem' }} />
-                        )}
+                        <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap' }}>
+                          {p.archivedAt ? (
+                            <Chip label="Archived" size="small" variant="outlined" sx={{ height: 16, fontSize: '0.65rem' }} />
+                          ) : !p.isPriced ? (
+                            <Chip label="Not priced — inactive" size="small" color="warning" variant="outlined" sx={{ height: 16, fontSize: '0.65rem' }} />
+                          ) : !p.isActive ? (
+                            <Chip label="Inactive" size="small" variant="outlined" sx={{ height: 16, fontSize: '0.65rem' }} />
+                          ) : null}
+                          {p.membersOnly && <Chip label="Members only" size="small" variant="outlined" sx={{ height: 16, fontSize: '0.65rem' }} />}
+                          {p.classCredits != null && <Chip label={`${p.classCredits} class credits`} size="small" variant="outlined" sx={{ height: 16, fontSize: '0.65rem' }} />}
+                        </Stack>
                       </Stack>
                     </TableCell>
 
@@ -445,14 +562,18 @@ export default function ProductsPage() {
 
                     {/* Price */}
                     <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
-                        ${(p.priceCents / 100).toFixed(2)}
+                      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.875rem', color: p.isPriced ? undefined : 'text.disabled' }}>
+                        {p.isPriced ? priceLabel(p) : 'No price yet'}
                       </Typography>
                     </TableCell>
 
                     {/* Stock stepper */}
                     <TableCell onClick={(e) => e.stopPropagation()}>
-                      <StockPill value={p.inventory} onAdjust={(d) => handleStockAdjust(p, d)} />
+                      {p.trackInventory ? (
+                        <StockPill value={p.inventory} onAdjust={(d) => handleStockAdjust(p, d)} />
+                      ) : (
+                        <Typography variant="caption" color="text.disabled">Not tracked</Typography>
+                      )}
                     </TableCell>
 
                     {/* Row menu */}
@@ -460,11 +581,13 @@ export default function ProductsPage() {
                       <RowMenu
                         product={p}
                         onEdit={() => openEdit(p)}
-                        onDelete={() => setDeleteTarget(p)}
+                        onArchive={() => (p.archivedAt ? handleArchive(p, false) : setArchiveTarget(p))}
                         onToggleActive={() => handleToggleActive(p)}
                       />
                     </TableCell>
                   </TableRow>
+                  ))}
+                  </Fragment>
                 ))
               )}
             </TableBody>
@@ -531,12 +654,68 @@ export default function ProductsPage() {
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
-                  label="Price ($)"
-                  required
+                  select
+                  fullWidth
+                  label="Category"
+                  value={form.category}
+                  onChange={(e) => setForm({ ...form, category: e.target.value as ProductCategory })}
+                  helperText="Decides the POS tab, the tax code and which discounts apply."
+                >
+                  {PRODUCT_CATEGORIES.map((c) => (
+                    <MenuItem key={c} value={c}>{PRODUCT_CATEGORY_LABELS[c]}</MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Sold by"
+                  value={form.unit}
+                  onChange={(e) => setForm({ ...form, unit: e.target.value as 'EACH' | 'LB' })}
+                  helperText={form.unit === 'LB' ? 'Staff enter the weight (to 0.1 lb) at the register.' : ' '}
+                >
+                  <MenuItem value="EACH">Each</MenuItem>
+                  <MenuItem value="LB">Pound (by weight)</MenuItem>
+                </TextField>
+              </Grid>
+            </Grid>
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={form.isPriced}
+                  onChange={(e) => setForm({ ...form, isPriced: e.target.checked, isActive: e.target.checked && form.isActive })}
+                />
+              }
+              label="Has a price"
+            />
+            {!form.isPriced && (
+              <Alert severity="warning">
+                Not priced — inactive. This product stays out of the POS until it has a price.
+              </Alert>
+            )}
+
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  label={form.unit === 'LB' ? 'Price per lb ($)' : 'Price ($)'}
+                  required={form.isPriced}
+                  disabled={!form.isPriced}
                   type="number"
                   slotProps={{ htmlInput: { min: 0, step: 0.01 } }}
                   value={form.priceDollars}
                   onChange={(e) => setForm({ ...form, priceDollars: e.target.value })}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  label="Minimum charge ($, optional)"
+                  type="number"
+                  slotProps={{ htmlInput: { min: 0, step: 0.01 } }}
+                  value={form.minChargeDollars}
+                  onChange={(e) => setForm({ ...form, minChargeDollars: e.target.value })}
+                  helperText="Per line, for by-weight products (member firing: $1.00 per piece)."
                 />
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
@@ -550,19 +729,83 @@ export default function ProductsPage() {
               </Grid>
             </Grid>
 
-            <TextField
-              label="Inventory / Stock count"
-              type="number"
-              slotProps={{ htmlInput: { min: 0 } }}
-              value={form.inventory}
-              onChange={(e) => setForm({ ...form, inventory: e.target.value })}
-              helperText="Set to 0 if you don't track inventory for this product."
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={form.trackInventory}
+                  onChange={(e) => setForm({ ...form, trackInventory: e.target.checked })}
+                />
+              }
+              label="Track inventory"
             />
+            {form.trackInventory && (
+              <TextField
+                label="Inventory / Stock count"
+                type="number"
+                slotProps={{ htmlInput: { min: 0 } }}
+                value={form.inventory}
+                onChange={(e) => setForm({ ...form, inventory: e.target.value })}
+                helperText="The POS won't sell more than this. Turn tracking off for pieces, firing, clay by the pound, packs and shipping."
+              />
+            )}
 
             <FormControlLabel
               control={
                 <Switch
-                  checked={form.isActive}
+                  checked={form.membersOnly}
+                  onChange={(e) => setForm({ ...form, membersOnly: e.target.checked })}
+                />
+              }
+              label="Members and enrolled students only"
+            />
+
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <TextField
+                  label="Class credits"
+                  type="number"
+                  slotProps={{ htmlInput: { min: 0 } }}
+                  value={form.classCredits}
+                  onChange={(e) => setForm({ ...form, classCredits: e.target.value })}
+                  helperText="Class packs only."
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <TextField
+                  label="Tax code"
+                  value={form.taxCode}
+                  onChange={(e) => setForm({ ...form, taxCode: e.target.value })}
+                  placeholder={PRODUCT_CATEGORY_TAX_CODES[form.category] ?? 'Not taxed'}
+                  slotProps={{ htmlInput: { style: { fontFamily: 'monospace' } } }}
+                  helperText="Stripe Tax code. Blank = category default."
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <TextField
+                  label="Sort order"
+                  type="number"
+                  value={form.sortOrder}
+                  onChange={(e) => setForm({ ...form, sortOrder: e.target.value })}
+                  helperText="Lower shows first."
+                />
+              </Grid>
+            </Grid>
+
+            {editTarget?.slug && (
+              <TextField
+                label="Slug"
+                value={editTarget.slug}
+                disabled
+                slotProps={{ htmlInput: { style: { fontFamily: 'monospace' } } }}
+                helperText="Read-only. The catalog sync matches products on this."
+              />
+            )}
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={form.isPriced && form.isActive}
+                  disabled={!form.isPriced}
                   onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
                 />
               }
@@ -580,16 +823,19 @@ export default function ProductsPage() {
         </DialogActions>
       </Dialog>
 
-      {/* ── Delete confirmation ── */}
-      <Dialog open={deleteTarget !== null} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Delete &ldquo;{deleteTarget?.name}&rdquo;?</DialogTitle>
+      {/* ── Archive confirmation ── */}
+      <Dialog open={archiveTarget !== null} onClose={() => setArchiveTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Archive &ldquo;{archiveTarget?.name}&rdquo;?</DialogTitle>
         <DialogContent>
-          <DialogContentText>This cannot be undone.</DialogContentText>
+          <DialogContentText>
+            It comes off the POS and out of this list. Past orders keep it, and you can restore it any time from
+            &ldquo;Show archived&rdquo;.
+          </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button variant="outlined" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-          <Button variant="contained" color="error" onClick={() => deleteTarget && handleDelete(deleteTarget)}>
-            Delete
+          <Button variant="outlined" onClick={() => setArchiveTarget(null)}>Cancel</Button>
+          <Button variant="contained" onClick={() => archiveTarget && handleArchive(archiveTarget, true)}>
+            Archive
           </Button>
         </DialogActions>
       </Dialog>

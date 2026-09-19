@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { checkPermission } from "@/lib/permissions";
-import { repriceOrder } from "@/lib/pos";
+import { MEMBER_FIRING_KIND, manualDiscountCents, metadataObject, repriceOrder } from "@/lib/pos";
 import { parseFiringMetadata } from "@/config/firingPrices";
 
 export async function PATCH(
@@ -32,16 +32,24 @@ export async function PATCH(
 
   const body = (await req.json().catch(() => null)) as {
     quantity?: number;
+    /** The manual dollar discount on this line. Named discounts are separate (see /discounts). */
     discountCents?: number;
+    /** Free-text line note ("blue mug, chipped"). Null or "" clears it. */
+    note?: string | null;
   } | null;
   if (!body) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
 
   const quantity =
     body.quantity !== undefined ? Math.max(1, Math.floor(body.quantity)) : item.quantity;
 
-  // A drop-in is one seat for one customer, and a firing line is already
-  // priced for the weight entered — neither can be multiplied.
-  const quantityLocked = item.itemType === "DROP_IN" || parseFiringMetadata(item.metadata) !== null;
+  // A drop-in is one seat for one customer, and a firing or by-weight line is
+  // already priced for the weight entered — none of them can be multiplied.
+  const meta = metadataObject(item.metadata);
+  const quantityLocked =
+    item.itemType === "DROP_IN" ||
+    parseFiringMetadata(item.metadata) !== null ||
+    meta.kind === MEMBER_FIRING_KIND ||
+    meta.unit === "LB";
   if (quantityLocked && quantity !== item.quantity) {
     return NextResponse.json(
       {
@@ -52,16 +60,37 @@ export async function PATCH(
     );
   }
 
+  if (body.quantity !== undefined && quantity > item.quantity && item.itemType === "RETAIL" && item.refId) {
+    const product = await prisma.retailProduct.findUnique({
+      where: { id: item.refId },
+      select: { trackInventory: true, inventory: true },
+    });
+    if (product?.trackInventory && quantity > product.inventory) {
+      return NextResponse.json({ error: `Only ${product.inventory} in stock` }, { status: 409 });
+    }
+  }
+
+  // Only the manual discount is set here. repriceOrder works out the line's
+  // whole discount (manual, then its share of any named discounts) and total.
   const lineCents = item.unitPriceCents * quantity;
-  const discountCents = Math.min(
+  const manualCents = Math.min(
     lineCents,
-    body.discountCents !== undefined ? Math.max(0, Math.floor(body.discountCents)) : item.discountCents,
+    body.discountCents !== undefined && Number.isFinite(body.discountCents)
+      ? Math.max(0, Math.floor(body.discountCents))
+      : manualDiscountCents(item),
   );
-  const totalCents = lineCents - discountCents;
 
   await prisma.posOrderItem.update({
     where: { id: itemId },
-    data: { quantity, discountCents, totalCents },
+    data: {
+      quantity,
+      discountCents: manualCents,
+      totalCents: lineCents - manualCents,
+      metadata: { ...meta, manualDiscountCents: manualCents },
+      ...(body.note !== undefined
+        ? { note: typeof body.note === "string" && body.note.trim() ? body.note.trim().slice(0, 500) : null }
+        : {}),
+    },
   });
 
   const { order: updatedOrder, taxWarning } = await repriceOrder(id);

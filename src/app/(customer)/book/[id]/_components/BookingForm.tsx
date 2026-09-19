@@ -7,7 +7,15 @@ import { Button } from "@/components/ui/button";
 
 type BookingError = { message: string; waiverVersionId?: string };
 
-type ErrorBody = { error?: string; waiverVersionId?: string };
+type ErrorBody = { error?: string; message?: string; waiverVersionId?: string };
+
+// What /api/bookings/checkout returns for `preview: true`.
+type Quote = {
+  listPriceCents: number;
+  discount: { code: string; name: string; amountCents: number } | null;
+  giftCard: { appliedCents: number; remainingAfterCents: number } | null;
+  totalCents: number;
+};
 
 // Maps the booking APIs' error codes to customer-facing copy.
 function describeError(data: ErrorBody): BookingError {
@@ -25,7 +33,8 @@ function describeError(data: ErrorBody): BookingError {
     case "SESSION_IN_PAST":
       return { message: "This session has already started and can no longer be booked." };
     default:
-      return { message: data.error ?? "Something went wrong. Please try again." };
+      // Promo code and gift card errors come with their own customer-facing message.
+      return { message: data.message ?? data.error ?? "Something went wrong. Please try again." };
   }
 }
 
@@ -47,11 +56,13 @@ type Props = {
   spotsRemaining: number;
 };
 
+// Whole dollars without the cents ($200), anything else in full ($29.99).
 function formatPrice(cents: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
   }).format(cents / 100);
 }
 
@@ -80,6 +91,12 @@ export function BookingForm({
   // Paid drop-ins are refused once a session is full (no paying to waitlist),
   // either because the page loaded full or the server said SESSION_FULL.
   const [sessionFull, setSessionFull] = useState(spotsRemaining <= 0);
+  // Promo code and gift card for a paid drop-in. `quote` is the server's
+  // pricing of what is typed; the server prices it again when booking.
+  const [promoCode, setPromoCode] = useState("");
+  const [giftCardCode, setGiftCardCode] = useState("");
+  const [quote, setQuote] = useState<Quote | null>(null);
+  const [codesOpen, setCodesOpen] = useState(false);
 
   const outOfTickets =
     hasMembership && !membershipUnlimited && (forceDropIn || (ticketsRemaining ?? 0) <= 0);
@@ -111,6 +128,35 @@ export function BookingForm({
     }
   }
 
+  const codes = {
+    promoCode: promoCode.trim() || undefined,
+    giftCardCode: giftCardCode.trim() || undefined,
+  };
+
+  async function handleApplyCodes() {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/bookings/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studioSessionId: sessionId, ...codes, preview: true }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as ErrorBody;
+        if (data.error === "SESSION_FULL") setSessionFull(true);
+        setQuote(null);
+        setError(describeError(data));
+        return;
+      }
+      setQuote((await res.json()) as Quote);
+    } catch {
+      setError({ message: "Something went wrong. Please try again." });
+    } finally {
+      setPending(false);
+    }
+  }
+
   async function handleDropIn() {
     setPending(true);
     setError(null);
@@ -118,7 +164,7 @@ export function BookingForm({
       const res = await fetch("/api/bookings/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studioSessionId: sessionId }),
+        body: JSON.stringify({ studioSessionId: sessionId, ...codes }),
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as ErrorBody;
@@ -126,7 +172,13 @@ export function BookingForm({
         setError(describeError(data));
         return;
       }
-      const { url } = (await res.json()) as { url: string };
+      // A gift card (or a 100% code) that covers everything books straight
+      // away; otherwise Stripe takes the card for what is left.
+      const { url, booked } = (await res.json()) as { url: string; booked?: boolean };
+      if (booked) {
+        router.push(url);
+        return;
+      }
       window.location.href = url;
     } catch {
       setError({ message: "Something went wrong. Please try again." });
@@ -235,11 +287,80 @@ export function BookingForm({
               </Link>
             </p>
           ) : (
-            <Button onClick={handleDropIn} disabled={pending} size="lg">
-              {pending
-                ? "Redirecting to payment…"
-                : `Pay and Book — ${formatPrice(dropInPriceCents)}`}
-            </Button>
+            <>
+              {!codesOpen ? (
+                <button
+                  type="button"
+                  onClick={() => setCodesOpen(true)}
+                  className="mb-4 block text-sm underline underline-offset-4"
+                >
+                  Have a promo code or gift card?
+                </button>
+              ) : (
+                <div className="mb-4 space-y-3 rounded-md border p-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="block text-sm">
+                      <span className="mb-1 block font-medium">Promo code</span>
+                      <input
+                        value={promoCode}
+                        onChange={(e) => { setPromoCode(e.target.value.toUpperCase()); setQuote(null); }}
+                        className="h-9 w-full rounded-md border bg-background px-3 font-mono text-sm uppercase"
+                        autoComplete="off"
+                      />
+                    </label>
+                    <label className="block text-sm">
+                      <span className="mb-1 block font-medium">Gift card code</span>
+                      <input
+                        value={giftCardCode}
+                        onChange={(e) => { setGiftCardCode(e.target.value.toUpperCase()); setQuote(null); }}
+                        className="h-9 w-full rounded-md border bg-background px-3 font-mono text-sm uppercase"
+                        autoComplete="off"
+                      />
+                    </label>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleApplyCodes}
+                    disabled={pending || (!codes.promoCode && !codes.giftCardCode)}
+                  >
+                    Apply
+                  </Button>
+                  {quote && (
+                    <dl className="space-y-1 border-t pt-3 text-sm">
+                      <div className="flex justify-between">
+                        <dt>Class</dt>
+                        <dd>{formatPrice(quote.listPriceCents)}</dd>
+                      </div>
+                      {quote.discount && (
+                        <div className="flex justify-between text-green-700">
+                          <dt>{quote.discount.code}</dt>
+                          <dd>−{formatPrice(quote.discount.amountCents)}</dd>
+                        </div>
+                      )}
+                      {quote.giftCard && (
+                        <div className="flex justify-between text-green-700">
+                          <dt>Gift card ({formatPrice(quote.giftCard.remainingAfterCents)} left after)</dt>
+                          <dd>−{formatPrice(quote.giftCard.appliedCents)}</dd>
+                        </div>
+                      )}
+                      <div className="flex justify-between font-semibold">
+                        <dt>To pay</dt>
+                        <dd>{formatPrice(quote.totalCents)}</dd>
+                      </div>
+                    </dl>
+                  )}
+                </div>
+              )}
+              <Button onClick={handleDropIn} disabled={pending} size="lg">
+                {pending
+                  ? "Working…"
+                  : quote && quote.totalCents === 0
+                    ? "Book now — nothing to pay"
+                    : `Pay and Book — ${formatPrice(quote ? quote.totalCents : dropInPriceCents)}`}
+              </Button>
+            </>
           )}
         </div>
       )}
