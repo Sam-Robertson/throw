@@ -117,7 +117,7 @@ export default async function StaffSessionPage({
 
       <Box sx={{ mb: 4 }}>
         <Typography variant="h2" sx={{ fontWeight: 700 }}>
-          {studioSession.sessionType.name}
+          {studioSession.title ?? studioSession.sessionType.name}
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
           {formatMountainTime(studioSession.startsAt, "datetime")}

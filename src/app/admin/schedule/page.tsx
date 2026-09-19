@@ -31,6 +31,7 @@ import AddIcon from '@mui/icons-material/Add';
 import { STUDIO_TIMEZONE } from '@/lib/timezone';
 import { layoutOverlappingEvents } from '@/lib/calendarLayout';
 import { getSessionTypeColor } from '@/lib/scheduleColors';
+import { resolveClassPriceCents } from '@/lib/sellable';
 import { ALL_LOCATIONS, useLocationFilter } from '../_components/LocationFilterContext';
 
 interface StudioSession {
@@ -40,7 +41,22 @@ interface StudioSession {
   capacity: number;
   isCancelled: boolean;
   seriesId: string | null;
-  sessionType: { id: string; name: string; durationMinutes: number; capacity: number };
+  // Per-session overrides: a workshop's topic or a private group's name, its
+  // own price, and whether a class ticket books it. null = the class type's.
+  title: string | null;
+  priceCentsOverride: number | null;
+  isTicketEligibleOverride: boolean | null;
+  /** Resolved by the API for this session's studio (src/lib/sellable.ts). */
+  priceCents: number;
+  isTicketEligible: boolean;
+  sessionType: {
+    id: string;
+    name: string;
+    durationMinutes: number;
+    capacity: number;
+    isTicketEligible: boolean;
+    archivedAt: string | null;
+  };
   instructor: { id: string; name: string | null } | null;
   location: { id: string; name: string } | null;
   _count: { bookings: number };
@@ -85,6 +101,13 @@ interface SessionTypeOption {
   capacity: number;
   isActive: boolean;
   isTemplate: boolean;
+  archivedAt: string | null;
+  isTicketEligible: boolean;
+  dropInPriceCents: number;
+  memberPriceCents: number | null;
+  locationPrices: { locationId: string; priceCents: number; memberPriceCents: number | null }[];
+  /** null = runs at every studio, so the session has to pick one. */
+  location: { id: string; name: string } | null;
 }
 
 interface UserOption {
@@ -94,6 +117,32 @@ interface UserOption {
 }
 
 const NONE = '__none__';
+
+// Ticket-eligibility override choices; 'default' stores null.
+type TicketChoice = 'default' | 'yes' | 'no';
+
+function ticketChoice(override: boolean | null): TicketChoice {
+  return override === null ? 'default' : override ? 'yes' : 'no';
+}
+
+function ticketOverride(choice: TicketChoice): boolean | null {
+  return choice === 'default' ? null : choice === 'yes';
+}
+
+function sessionName(session: StudioSession): string {
+  return session.title ?? session.sessionType.name;
+}
+
+function money(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+/** Cents from a dollar field; null when blank, NaN when it isn't a price. */
+function toCents(value: string): number | null {
+  if (value.trim() === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : NaN;
+}
 
 // Mirrors MAX_REPEAT_WEEKLY in /api/admin/studio-sessions, which enforces it.
 const MAX_REPEAT_WEEKLY = 12;
@@ -129,8 +178,10 @@ function sessionDayKey(session: StudioSession): string {
 }
 
 export default function SchedulePage() {
-  const { selectedLocationId } = useLocationFilter();
+  const { locations, selectedLocationId } = useLocationFilter();
   const [weekOffset, setWeekOffset] = useState(0);
+  // Upcoming sessions of archived class types are hidden unless asked for.
+  const [showArchived, setShowArchived] = useState(false);
   const [sessions, setSessions] = useState<StudioSession[]>([]);
   const [sessionTypes, setSessionTypes] = useState<SessionTypeOption[]>([]);
   const [instructors, setInstructors] = useState<UserOption[]>([]);
@@ -140,10 +191,14 @@ export default function SchedulePage() {
   const [showAllClassTypes, setShowAllClassTypes] = useState(false);
   const [addForm, setAddForm] = useState({
     sessionTypeId: '',
+    locationId: '',
     localDate: '',
     localTime: '09:00',
     instructorId: NONE,
     capacityOverride: '',
+    title: '',
+    priceOverride: '',
+    ticketChoice: 'default' as TicketChoice,
     repeatWeekly: false,
     repeatCount: DEFAULT_REPEAT_COUNT,
   });
@@ -157,7 +212,13 @@ export default function SchedulePage() {
     : sessionTypes.filter((st) => st.isTemplate);
 
   const [editSession, setEditSession] = useState<StudioSession | null>(null);
-  const [editForm, setEditForm] = useState({ instructorId: NONE, capacity: '' });
+  const [editForm, setEditForm] = useState({
+    instructorId: NONE,
+    capacity: '',
+    title: '',
+    priceOverride: '',
+    ticketChoice: 'default' as TicketChoice,
+  });
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
@@ -191,12 +252,13 @@ export default function SchedulePage() {
     const fromUTC = fromZonedTime(`${dayKey(weekDays[0])}T00:00:00`, STUDIO_TIMEZONE);
     const toUTC = fromZonedTime(`${dayKey(addDays(weekDays[0], 7))}T00:00:00`, STUDIO_TIMEZONE);
     const locationParam = selectedLocationId === ALL_LOCATIONS ? '' : `&locationId=${selectedLocationId}`;
-    fetch(`/api/admin/studio-sessions?from=${fromUTC.toISOString()}&to=${toUTC.toISOString()}${locationParam}`)
+    const archivedParam = showArchived ? '&includeArchived=1' : '';
+    fetch(`/api/admin/studio-sessions?from=${fromUTC.toISOString()}&to=${toUTC.toISOString()}${locationParam}${archivedParam}`)
       .then((r) => r.json())
       .then(setSessions)
       .finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekOffset, selectedLocationId]);
+  }, [weekOffset, selectedLocationId, showArchived]);
 
   useEffect(() => { fetchSessions(); }, [fetchSessions]);
 
@@ -207,7 +269,10 @@ export default function SchedulePage() {
         : `/api/admin/session-types?locationId=${selectedLocationId}`;
     fetch(url)
       .then((r) => r.json())
-      .then((data: SessionTypeOption[]) => setSessionTypes(data.filter((st) => st.isActive)));
+      // Archived class types can't be scheduled.
+      .then((data: SessionTypeOption[]) =>
+        setSessionTypes(data.filter((st) => st.isActive && st.archivedAt === null)),
+      );
     fetch('/api/admin/users').then((r) => r.json()).then(setInstructors);
   }, [selectedLocationId]);
 
@@ -217,10 +282,14 @@ export default function SchedulePage() {
     setShowAllClassTypes(false);
     setAddForm({
       sessionTypeId: pickableSessionTypes[0]?.id ?? sessionTypes[0]?.id ?? '',
+      locationId: selectedLocationId === ALL_LOCATIONS ? (locations[0]?.id ?? '') : selectedLocationId,
       localDate: defaultDate ?? dayKey(weekDays[0]),
       localTime: defaultTime ?? '09:00',
       instructorId: NONE,
       capacityOverride: '',
+      title: '',
+      priceOverride: '',
+      ticketChoice: 'default',
       repeatWeekly: false,
       repeatCount: DEFAULT_REPEAT_COUNT,
     });
@@ -231,7 +300,13 @@ export default function SchedulePage() {
 
   function openEdit(session: StudioSession) {
     setEditSession(session);
-    setEditForm({ instructorId: session.instructor?.id ?? NONE, capacity: String(session.capacity) });
+    setEditForm({
+      instructorId: session.instructor?.id ?? NONE,
+      capacity: String(session.capacity),
+      title: session.title ?? '',
+      priceOverride: session.priceCentsOverride === null ? '' : (session.priceCentsOverride / 100).toFixed(2),
+      ticketChoice: ticketChoice(session.isTicketEligibleOverride),
+    });
     setEditError(null);
     setSeriesDeleteError(null);
   }
@@ -240,7 +315,20 @@ export default function SchedulePage() {
   const repeatCountValid =
     Number.isInteger(repeatCountNumber) && repeatCountNumber >= 1 && repeatCountNumber <= MAX_REPEAT_WEEKLY;
 
+  // The class type being added, the studio the session lands in, and what the
+  // class type charges there — shown so staff know what an override replaces.
+  const addType = sessionTypes.find((st) => st.id === addForm.sessionTypeId) ?? null;
+  const addLocationId = addType?.location?.id ?? addForm.locationId;
+  const addTypePriceCents = addType
+    ? resolveClassPriceCents({ sessionType: addType, locationId: addLocationId || null })
+    : 0;
+
   async function handleAddSave() {
+    const priceCentsOverride = toCents(addForm.priceOverride);
+    if (Number.isNaN(priceCentsOverride)) {
+      setAddError('Price must be a dollar amount, or blank');
+      return;
+    }
     setAddSaving(true);
     setAddError(null);
     const res = await fetch('/api/admin/studio-sessions', {
@@ -248,6 +336,10 @@ export default function SchedulePage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         sessionTypeId: addForm.sessionTypeId,
+        locationId: addLocationId || undefined,
+        title: addForm.title.trim() || null,
+        priceCentsOverride,
+        isTicketEligibleOverride: ticketOverride(addForm.ticketChoice),
         localDate: addForm.localDate,
         localTime: addForm.localTime,
         instructorId: addForm.instructorId === NONE ? null : addForm.instructorId,
@@ -313,6 +405,11 @@ export default function SchedulePage() {
 
   async function handleEditSave() {
     if (!editSession) return;
+    const priceCentsOverride = toCents(editForm.priceOverride);
+    if (Number.isNaN(priceCentsOverride)) {
+      setEditError('Price must be a dollar amount, or blank');
+      return;
+    }
     setEditSaving(true);
     setEditError(null);
     const res = await fetch(`/api/admin/studio-sessions/${editSession.id}`, {
@@ -321,6 +418,9 @@ export default function SchedulePage() {
       body: JSON.stringify({
         instructorId: editForm.instructorId === NONE ? null : editForm.instructorId,
         capacity: Number(editForm.capacity),
+        title: editForm.title.trim() || null,
+        priceCentsOverride,
+        isTicketEligibleOverride: ticketOverride(editForm.ticketChoice),
       }),
     });
     if (!res.ok) {
@@ -373,9 +473,21 @@ export default function SchedulePage() {
             )}
           </Stack>
         </Box>
-        <Button variant="contained" onClick={() => openAdd()} startIcon={<AddIcon />}>
-          Add session
-        </Button>
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={showArchived}
+                onChange={(e) => setShowArchived(e.target.checked)}
+              />
+            }
+            label={<Typography variant="body2">Show archived class types</Typography>}
+          />
+          <Button variant="contained" onClick={() => openAdd()} startIcon={<AddIcon />}>
+            Add session
+          </Button>
+        </Stack>
       </Box>
 
       {/* Week time-grid */}
@@ -551,10 +663,12 @@ export default function SchedulePage() {
                         <Tooltip
                           key={session.id}
                           title={
-                            `${session.sessionType.name} · ` +
+                            `${sessionName(session)} · ` +
+                            (session.title ? `${session.sessionType.name} · ` : '') +
                             formatInTimeZone(new Date(session.startsAt), STUDIO_TIMEZONE, 'h:mm a') +
                             (session.instructor?.name ? ` · ${session.instructor.name}` : '') +
                             ` · ${session._count.bookings}/${session.capacity}` +
+                            (session.priceCents > 0 ? ` · ${money(session.priceCents)}` : '') +
                             (selectedLocationId === ALL_LOCATIONS && session.location?.name ? ` · ${session.location.name}` : '') +
                             (session.isCancelled ? ' · Cancelled' : '')
                           }
@@ -601,7 +715,7 @@ export default function SchedulePage() {
                                 textDecoration: session.isCancelled ? 'line-through' : 'none',
                               }}
                             >
-                              {session.sessionType.name}
+                              {sessionName(session)}
                             </Typography>
                             {!isTiny && (
                               <Typography
@@ -676,6 +790,29 @@ export default function SchedulePage() {
               label="Show all class types (including one-offs)"
               sx={{ mt: -1.5 }}
             />
+            {addType && !addType.location && (
+              <FormControl size="small" fullWidth>
+                <InputLabel>Studio</InputLabel>
+                <Select
+                  value={addForm.locationId}
+                  label="Studio"
+                  onChange={(e) => setAddForm((f) => ({ ...f, locationId: e.target.value }))}
+                >
+                  {locations.map((loc) => (
+                    <MenuItem key={loc.id} value={loc.id}>{loc.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+            <TextField
+              label="Title (optional)"
+              size="small"
+              placeholder={addType?.name}
+              helperText="Shown instead of the class type name: a workshop's topic, a private group's name."
+              slotProps={{ inputLabel: { shrink: true }, htmlInput: { maxLength: 120 } }}
+              value={addForm.title}
+              onChange={(e) => setAddForm((f) => ({ ...f, title: e.target.value }))}
+            />
             <Grid container spacing={2}>
               <Grid size={{ xs: 6 }}>
                 <TextField
@@ -717,6 +854,37 @@ export default function SchedulePage() {
               value={addForm.capacityOverride}
               onChange={(e) => setAddForm((f) => ({ ...f, capacityOverride: e.target.value }))}
             />
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 6 }}>
+                <TextField
+                  label="Price override ($)"
+                  type="number"
+                  size="small"
+                  fullWidth
+                  placeholder={addType ? money(addTypePriceCents) : undefined}
+                  helperText={addType ? `Blank = class type price, ${money(addTypePriceCents)}` : undefined}
+                  slotProps={{ htmlInput: { min: 0, step: 0.01 }, inputLabel: { shrink: true } }}
+                  value={addForm.priceOverride}
+                  onChange={(e) => setAddForm((f) => ({ ...f, priceOverride: e.target.value }))}
+                />
+              </Grid>
+              <Grid size={{ xs: 6 }}>
+                <FormControl size="small" fullWidth>
+                  <InputLabel>Class tickets</InputLabel>
+                  <Select
+                    value={addForm.ticketChoice}
+                    label="Class tickets"
+                    onChange={(e) => setAddForm((f) => ({ ...f, ticketChoice: e.target.value as TicketChoice }))}
+                  >
+                    <MenuItem value="default">
+                      Class type default ({addType?.isTicketEligible ? 'accepted' : 'not accepted'})
+                    </MenuItem>
+                    <MenuItem value="yes">Accepted</MenuItem>
+                    <MenuItem value="no">Not accepted</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
             <Box>
               <FormControlLabel
                 control={
@@ -781,9 +949,12 @@ export default function SchedulePage() {
       >
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {editSession?.sessionType.name}
+            {editSession && sessionName(editSession)}
             {editSession?.isCancelled && (
               <Chip label="Cancelled" size="small" color="error" />
+            )}
+            {editSession?.sessionType.archivedAt && (
+              <Chip label="Archived class type" size="small" variant="outlined" />
             )}
           </Box>
         </DialogTitle>
@@ -791,7 +962,9 @@ export default function SchedulePage() {
           {editSession && (
             <Stack spacing={2.5} sx={{ pt: 1 }}>
               <Typography variant="body2" color="text.secondary">
+                {editSession.title ? `${editSession.sessionType.name} · ` : ''}
                 {formatInTimeZone(new Date(editSession.startsAt), STUDIO_TIMEZONE, "EEE, MMM d 'at' h:mm a")} MT
+                {editSession.location?.name ? ` · ${editSession.location.name}` : ''}
               </Typography>
               {editError && <Alert severity="error">{editError}</Alert>}
               {!editSession.isCancelled && (
@@ -816,6 +989,46 @@ export default function SchedulePage() {
                     value={editForm.capacity}
                     onChange={(e) => setEditForm((f) => ({ ...f, capacity: e.target.value }))}
                   />
+                  <TextField
+                    label="Title (optional)"
+                    size="small"
+                    placeholder={editSession.sessionType.name}
+                    helperText="Shown instead of the class type name."
+                    slotProps={{ inputLabel: { shrink: true }, htmlInput: { maxLength: 120 } }}
+                    value={editForm.title}
+                    onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
+                  />
+                  <Grid container spacing={2}>
+                    <Grid size={{ xs: 6 }}>
+                      <TextField
+                        label="Price override ($)"
+                        type="number"
+                        size="small"
+                        fullWidth
+                        placeholder="Class type price"
+                        helperText={`Charges ${money(editSession.priceCents)} now`}
+                        slotProps={{ htmlInput: { min: 0, step: 0.01 }, inputLabel: { shrink: true } }}
+                        value={editForm.priceOverride}
+                        onChange={(e) => setEditForm((f) => ({ ...f, priceOverride: e.target.value }))}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 6 }}>
+                      <FormControl size="small" fullWidth>
+                        <InputLabel>Class tickets</InputLabel>
+                        <Select
+                          value={editForm.ticketChoice}
+                          label="Class tickets"
+                          onChange={(e) => setEditForm((f) => ({ ...f, ticketChoice: e.target.value as TicketChoice }))}
+                        >
+                          <MenuItem value="default">
+                            Class type default ({editSession.sessionType.isTicketEligible ? 'accepted' : 'not accepted'})
+                          </MenuItem>
+                          <MenuItem value="yes">Accepted</MenuItem>
+                          <MenuItem value="no">Not accepted</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                  </Grid>
                 </>
               )}
               <Typography variant="body2" color="text.secondary">

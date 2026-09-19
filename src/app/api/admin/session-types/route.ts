@@ -1,36 +1,20 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { forbiddenResponse, locationWhere, resolveLocationScope } from "@/lib/locationScope";
+import { forbiddenResponse, locationWhereOrUnassigned, resolveLocationScope } from "@/lib/locationScope";
 import { requireStaffScope } from "@/lib/staffScope";
-
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-");
-}
-
-const upcomingCount = {
-  _count: {
-    select: {
-      studioSessions: {
-        where: { startsAt: { gt: new Date() }, isCancelled: false },
-      },
-    },
-  },
-} as const;
+import { parseCatalogFields, parseLocationPrices, sessionTypeInclude, slugify } from "./fields";
 
 export async function GET(req: NextRequest) {
   const guard = await requireStaffScope(req.nextUrl.searchParams.get("locationId"));
   if (guard.error) return guard.error;
 
-  // Strict match on locationId, as before: class types with no studio only
-  // appear in the unrestricted (ADMIN, all-locations) view.
+  // Catalog class types belong to no studio (they are priced per studio
+  // instead), so they are visible from every studio's view. Archived types
+  // are included: the client decides which list to show.
   const sessionTypes = await prisma.sessionType.findMany({
-    where: locationWhere(guard.scope),
+    where: locationWhereOrUnassigned(guard.scope),
     orderBy: { name: "asc" },
-    include: { ...upcomingCount, location: { select: { id: true, name: true } } },
+    include: sessionTypeInclude(),
   });
 
   return NextResponse.json(sessionTypes);
@@ -40,31 +24,44 @@ export async function POST(req: NextRequest) {
   const guard = await requireStaffScope();
   if (guard.error) return guard.error;
 
-  const body = await req.json().catch(() => null);
+  const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body)
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
 
-  const { name, description, durationMinutes, capacity, dropInPriceCents, isBusyWindow, isTemplate, locationId } =
-    body as Record<string, unknown>;
+  const { name, description, durationMinutes, capacity, dropInPriceCents, isBusyWindow, isTemplate, locationId } = body;
 
-  if (!name || !durationMinutes || !capacity || dropInPriceCents === undefined || !locationId)
+  if (!name || !durationMinutes || !capacity || dropInPriceCents === undefined)
     return NextResponse.json(
       { error: "Missing required fields" },
       { status: 400 },
     );
+  if (!Number.isInteger(Number(dropInPriceCents)) || Number(dropInPriceCents) < 0)
+    return NextResponse.json({ error: "dropInPriceCents must be a whole number of cents" }, { status: 400 });
 
-  // STAFF may only create class types for a studio they're assigned to.
-  try {
-    resolveLocationScope(guard.session, String(locationId));
-  } catch (err) {
-    return forbiddenResponse(err);
+  // A class type tied to one studio may only be created by staff assigned to
+  // it. No locationId means it runs at every studio.
+  if (locationId) {
+    try {
+      resolveLocationScope(guard.session, String(locationId));
+    } catch (err) {
+      return forbiddenResponse(err);
+    }
   }
+
+  const catalog = parseCatalogFields(body);
+  if (!catalog.ok) return NextResponse.json({ error: catalog.error }, { status: 400 });
+  const prices = parseLocationPrices(body.locationPrices ?? []);
+  if (!prices.ok) return NextResponse.json({ error: prices.error }, { status: 400 });
 
   const slug = slugify(String(name));
   const slugExists = await prisma.sessionType.findUnique({ where: { slug } });
   if (slugExists)
     return NextResponse.json(
-      { error: "A class type with this name already exists" },
+      {
+        error: slugExists.archivedAt
+          ? "An archived class type already has this name — restore it instead"
+          : "A class type with this name already exists",
+      },
       { status: 409 },
     );
 
@@ -80,9 +77,11 @@ export async function POST(req: NextRequest) {
       // Creating a class type by hand through the admin UI IS the act of
       // defining a reusable template — see the schema comment on isTemplate.
       isTemplate: isTemplate === undefined ? true : Boolean(isTemplate),
-      locationId: String(locationId),
+      locationId: locationId ? String(locationId) : null,
+      ...catalog.value,
+      locationPrices: { create: prices.value },
     },
-    include: { ...upcomingCount, location: { select: { id: true, name: true } } },
+    include: sessionTypeInclude(),
   });
 
   return NextResponse.json(sessionType, { status: 201 });

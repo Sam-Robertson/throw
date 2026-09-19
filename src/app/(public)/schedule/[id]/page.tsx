@@ -17,6 +17,7 @@ async function getSession(id: string) {
           name: true,
           description: true,
           durationMinutes: true,
+          priceUnit: true,
         },
       },
       instructor: { select: { name: true } },
@@ -25,12 +26,14 @@ async function getSession(id: string) {
   });
 }
 
-function formatPrice(cents: number) {
-  return new Intl.NumberFormat("en-US", {
+// Whole dollars print as "$200", anything else keeps its cents ("$29.99").
+function formatPrice(cents: number, priceUnit: string) {
+  const amount = new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
   }).format(cents / 100);
+  return priceUnit === "PER_WHEEL" ? `${amount} per wheel` : amount;
 }
 
 export default async function SessionDetailPage({
@@ -53,6 +56,11 @@ export default async function SessionDetailPage({
   const isPast = session.endsAt < now;
   const spotsRemaining = session.capacity - session._count.bookings;
   const isFull = spotsRemaining <= 0;
+  // The session's own length, unless it is implausible (Momence imported some
+  // course rows spanning the whole course); then the class type's default.
+  const sessionMinutes = Math.round((session.endsAt.getTime() - session.startsAt.getTime()) / 60000);
+  const durationMinutes =
+    sessionMinutes > 0 && sessionMinutes <= 12 * 60 ? sessionMinutes : session.sessionType.durationMinutes;
 
   let userBooking: { status: string } | null = null;
   if (authSession?.user?.id) {
@@ -65,6 +73,14 @@ export default async function SessionDetailPage({
       select: { status: true },
     });
   }
+
+  // Same rule as the schedule list (PUBLICLY_LISTED_SESSION_TYPE): a private,
+  // internal or archived class type has no public page. Someone already booked
+  // on the session can still open it from their bookings.
+  const { sessionType } = session;
+  const isListed =
+    sessionType.isActive && sessionType.archivedAt === null && sessionType.isPublic && !sessionType.isBusyWindow;
+  if (!isListed && !userBooking) notFound();
 
   function cta() {
     if (session.isCancelled) {
@@ -115,7 +131,7 @@ export default async function SessionDetailPage({
 
       <div className="rounded-lg border bg-card p-8 shadow-sm">
         <div className="mb-6 flex items-start justify-between gap-4">
-          <h1 className="text-2xl font-bold">{session.sessionType.name}</h1>
+          <h1 className="text-2xl font-bold">{session.title ?? session.sessionType.name}</h1>
           {isFull && !isPast && !session.isCancelled && (
             <Badge variant="secondary">Full</Badge>
           )}
@@ -143,7 +159,7 @@ export default async function SessionDetailPage({
           <div>
             <dt className="font-medium">Duration</dt>
             <dd className="text-muted-foreground">
-              {session.sessionType.durationMinutes} min
+              {durationMinutes} min
             </dd>
           </div>
           {session.instructor?.name && (
@@ -159,9 +175,11 @@ export default async function SessionDetailPage({
             </dd>
           </div>
           <div>
-            <dt className="font-medium">Drop-in price</dt>
+            <dt className="font-medium">Price</dt>
             <dd className="text-muted-foreground">
-              {isSellable(session.sessionType, priceCents) ? formatPrice(priceCents) : "Members only"}
+              {isSellable(session.sessionType, priceCents)
+                ? formatPrice(priceCents, session.sessionType.priceUnit)
+                : "Members only"}
             </dd>
           </div>
         </dl>

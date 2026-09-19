@@ -4,6 +4,7 @@ import type { StudioSession } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { resolveLocationScope, scopeAllows } from "@/lib/locationScope";
+import { parseSessionOverrides, presentSession, sessionIncludes } from "../shared";
 
 type GuardResult =
   | { error: NextResponse; session: null }
@@ -23,13 +24,6 @@ async function requireStaff(): Promise<GuardResult> {
     };
   return { error: null, session };
 }
-
-const sessionIncludes = {
-  sessionType: { select: { id: true, name: true, durationMinutes: true, capacity: true } },
-  instructor: { select: { id: true, name: true } },
-  location: { select: { id: true, name: true } },
-  _count: { select: { bookings: true } },
-} as const;
 
 type LoadResult =
   | { error: NextResponse; existing: null }
@@ -75,6 +69,9 @@ export async function PATCH(
     unknown
   >;
 
+  const overrides = parseSessionOverrides(body as Record<string, unknown>);
+  if (!overrides.ok) return NextResponse.json({ error: overrides.error }, { status: 400 });
+
   // Cancel all confirmed bookings when a session is being cancelled
   if (isCancelled === true && !existing.isCancelled) {
     await prisma.booking.updateMany({
@@ -91,11 +88,12 @@ export async function PATCH(
       }),
       ...(capacity !== undefined && { capacity: Number(capacity) }),
       ...(isCancelled !== undefined && { isCancelled: Boolean(isCancelled) }),
+      ...overrides.value,
     },
     include: sessionIncludes,
   });
 
-  return NextResponse.json(updated);
+  return NextResponse.json(presentSession(updated));
 }
 
 /**

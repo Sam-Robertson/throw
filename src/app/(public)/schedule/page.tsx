@@ -41,7 +41,7 @@ async function getSessions(typeSlug?: string) {
     },
     include: {
       sessionType: {
-        select: { ...CLASS_PRICE_SELECT, name: true, slug: true, durationMinutes: true },
+        select: { ...CLASS_PRICE_SELECT, name: true, slug: true, priceUnit: true, durationMinutes: true },
       },
       instructor: { select: { name: true } },
       _count: { select: { bookings: { where: { status: 'CONFIRMED' } } } },
@@ -52,12 +52,14 @@ async function getSessions(typeSlug?: string) {
 
 type Session = Awaited<ReturnType<typeof getSessions>>[number];
 
-function formatPrice(cents: number) {
-  return new Intl.NumberFormat('en-US', {
+// Whole dollars print as "$200", anything else keeps its cents ("$29.99").
+function formatPrice(cents: number, priceUnit: string) {
+  const amount = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
-    maximumFractionDigits: 0,
+    minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
   }).format(cents / 100);
+  return priceUnit === 'PER_WHEEL' ? `${amount} per wheel` : amount;
 }
 
 function groupByDate(sessions: Session[]): Map<string, Session[]> {
@@ -79,13 +81,19 @@ function SessionCard({ session }: { session: Session }) {
   });
   const spotsRemaining = session.capacity - session._count.bookings;
   const isFull = spotsRemaining <= 0;
+  // The session knows its own length; the class type's duration is only the
+  // default. Momence imported some course rows spanning the whole course
+  // (weeks), so anything implausible falls back to the class type.
+  const sessionMinutes = Math.round((session.endsAt.getTime() - session.startsAt.getTime()) / 60000);
+  const durationMinutes =
+    sessionMinutes > 0 && sessionMinutes <= 12 * 60 ? sessionMinutes : session.sessionType.durationMinutes;
 
   return (
     <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <CardContent sx={{ flex: 1 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1, mb: 2 }}>
           <Typography variant="h6" sx={{ lineHeight: 1.3 }}>
-            {session.sessionType.name}
+            {session.title ?? session.sessionType.name}
           </Typography>
           {isFull && <Chip label="Full" size="small" />}
         </Box>
@@ -93,7 +101,7 @@ function SessionCard({ session }: { session: Session }) {
         <Stack spacing={0.5}>
           {[
             { label: 'Time', value: formatMountainTime(session.startsAt, 'time') },
-            { label: 'Duration', value: `${session.sessionType.durationMinutes} min` },
+            { label: 'Duration', value: `${durationMinutes} min` },
             ...(session.instructor?.name ? [{ label: 'Instructor', value: session.instructor.name }] : []),
             {
               label: 'Spots left',
@@ -101,9 +109,9 @@ function SessionCard({ session }: { session: Session }) {
               error: isFull,
             },
             {
-              label: 'Drop-in',
+              label: 'Price',
               value: isSellable(session.sessionType, priceCents)
-                ? formatPrice(priceCents)
+                ? formatPrice(priceCents, session.sessionType.priceUnit)
                 : 'Members only',
             },
           ].map(({ label, value, error }) => (

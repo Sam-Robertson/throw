@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { sendInngestEvent } from "@/lib/inngest";
 import { consumeTicket } from "@/lib/credits";
 import { findUnsignedWaiver } from "@/lib/waivers";
+import { CLASS_PRICE_SELECT, resolveClassPriceCents } from "@/lib/sellable";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -55,6 +56,8 @@ export async function GET(request: NextRequest) {
       include: {
         studioSession: {
           include: {
+            // Show `studioSession.title ?? sessionType.name`: a workshop or a
+            // private booking is named on the session, not the class type.
             sessionType: { select: { name: true } },
             location: { select: { name: true } },
             instructor: { select: { id: true, name: true } },
@@ -114,7 +117,7 @@ export async function POST(req: NextRequest) {
   const studioSession = await prisma.studioSession.findUnique({
     where: { id: studioSessionId },
     include: {
-      sessionType: { select: { dropInPriceCents: true } },
+      sessionType: { select: { ...CLASS_PRICE_SELECT, isTicketEligible: true } },
       _count: { select: { bookings: { where: { status: "CONFIRMED" } } } },
     },
   });
@@ -129,6 +132,14 @@ export async function POST(req: NextRequest) {
   }
   if (studioSession.startsAt <= new Date()) {
     return NextResponse.json({ error: "SESSION_IN_PAST" }, { status: 400 });
+  }
+  // Retired class types keep their sessions for history but take no bookings.
+  const { sessionType } = studioSession;
+  if (!sessionType.isActive || sessionType.archivedAt !== null) {
+    return NextResponse.json(
+      { error: "This class is no longer offered.", code: "CLASS_NOT_AVAILABLE" },
+      { status: 400 },
+    );
   }
 
   // Checked before the membership lookup so a missing waiver is reported even
@@ -159,6 +170,30 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // What this member would pay instead of a ticket, at this session's studio.
+  const dropInPriceCents = resolveClassPriceCents({
+    sessionType,
+    locationId: studioSession.locationId,
+    priceCentsOverride: studioSession.priceCentsOverride,
+    isMember: true,
+  });
+
+  // Not every class can be booked on a membership (a course, a private
+  // lesson, a workshop staff haven't opened to tickets). The session's own
+  // setting wins over the class type's. Checked before consumeTicket so no
+  // ticket is spent. `error` is shown to the customer as is.
+  const ticketEligible = studioSession.isTicketEligibleOverride ?? sessionType.isTicketEligible;
+  if (!ticketEligible) {
+    return NextResponse.json(
+      {
+        error: "This class can't be booked with a class ticket.",
+        code: "NOT_TICKET_ELIGIBLE",
+        dropInPriceCents,
+      },
+      { status: 403 },
+    );
+  }
+
   const confirmedCount = studioSession._count.bookings;
   const bookingStatus =
     confirmedCount >= studioSession.capacity ? "WAITLIST" : "CONFIRMED";
@@ -182,7 +217,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error: "NO_TICKETS_REMAINING",
-          dropInPriceCents: studioSession.sessionType.dropInPriceCents,
+          dropInPriceCents,
         },
         { status: 402 },
       );

@@ -1,7 +1,6 @@
 import { randomUUID } from "crypto";
 import { type NextRequest, NextResponse } from "next/server";
 import type { Session } from "next-auth";
-import type { Prisma } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { fromMountainTime, STUDIO_TIMEZONE } from "@/lib/timezone";
@@ -13,6 +12,12 @@ import {
 } from "@/lib/locationScope";
 import { startOfWeek, addDays } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
+import {
+  parseSessionOverrides,
+  presentSession,
+  sessionIncludes,
+  type SessionWithIncludes,
+} from "./shared";
 
 /** Most sessions a single "repeat weekly" create may produce. */
 const MAX_REPEAT_WEEKLY = 12;
@@ -37,15 +42,6 @@ async function requireStaff(): Promise<GuardResult> {
     };
   return { error: null, session };
 }
-
-const sessionIncludes = {
-  sessionType: { select: { id: true, name: true, durationMinutes: true, capacity: true } },
-  instructor: { select: { id: true, name: true } },
-  location: { select: { id: true, name: true } },
-  _count: { select: { bookings: true } },
-} as const;
-
-type SessionWithIncludes = Prisma.StudioSessionGetPayload<{ include: typeof sessionIncludes }>;
 
 /**
  * The Mountain calendar dates of `count` weekly occurrences starting on
@@ -89,16 +85,24 @@ export async function GET(req: NextRequest) {
     toDate = addDays(fromDate, 7);
   }
 
+  // Upcoming sessions of an archived class type (Momence's "Pay for Pottery
+  // Pieces" slots, mostly) are hidden unless asked for. Past ones always show:
+  // history stays on the class type it was booked under.
+  const includeArchived = searchParams.get("includeArchived") === "1";
+
   const sessions = await prisma.studioSession.findMany({
     where: {
       startsAt: { gte: fromDate, lt: toDate },
       ...locationWhere(scope),
+      ...(!includeArchived && {
+        OR: [{ startsAt: { lt: new Date() } }, { sessionType: { archivedAt: null } }],
+      }),
     },
     include: sessionIncludes,
     orderBy: { startsAt: "asc" },
   });
 
-  return NextResponse.json(sessions);
+  return NextResponse.json(sessions.map(presentSession));
 }
 
 export async function POST(req: NextRequest) {
@@ -109,7 +113,7 @@ export async function POST(req: NextRequest) {
   if (!body)
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
 
-  const { sessionTypeId, instructorId, localDate, localTime, capacityOverride, repeatWeekly } =
+  const { sessionTypeId, instructorId, localDate, localTime, capacityOverride, repeatWeekly, locationId } =
     body as Record<string, unknown>;
 
   if (!sessionTypeId || !localDate || !localTime)
@@ -146,13 +150,31 @@ export async function POST(req: NextRequest) {
   });
   if (!sessionType)
     return NextResponse.json({ error: "Session type not found" }, { status: 404 });
+  if (!sessionType.isActive || sessionType.archivedAt !== null)
+    return NextResponse.json(
+      { error: "This class type is archived — restore it before scheduling it" },
+      { status: 400 },
+    );
 
-  // New sessions take the class type's studio, so that's what must be in scope.
-  if (!scopeAllows(resolveLocationScope(guard.session), sessionType.locationId))
+  // A class type tied to one studio puts its sessions there. Catalog class
+  // types run at every studio, so the session has to say which one: the
+  // studio decides the price (src/lib/sellable.ts).
+  const sessionLocationId = sessionType.locationId ?? (locationId ? String(locationId) : null);
+  if (!sessionLocationId)
+    return NextResponse.json({ error: "Choose the studio this session is held at" }, { status: 400 });
+  if (!sessionType.locationId) {
+    const location = await prisma.location.findUnique({ where: { id: sessionLocationId }, select: { id: true } });
+    if (!location) return NextResponse.json({ error: "Studio not found" }, { status: 404 });
+  }
+
+  if (!scopeAllows(resolveLocationScope(guard.session), sessionLocationId))
     return NextResponse.json(
       { error: "You don't have access to that location" },
       { status: 403 },
     );
+
+  const overrides = parseSessionOverrides(body as Record<string, unknown>);
+  if (!overrides.ok) return NextResponse.json({ error: overrides.error }, { status: 400 });
 
   const capacity =
     capacityOverride !== undefined && capacityOverride !== null
@@ -168,15 +190,16 @@ export async function POST(req: NextRequest) {
   const baseData = {
     sessionTypeId: sessionType.id,
     instructorId: instructorId ? String(instructorId) : null,
-    locationId: sessionType.locationId,
+    locationId: sessionLocationId,
     capacity,
+    ...overrides.value,
   };
 
   if (repeatCount === null) {
     const startsAt = fromMountainTime(String(localDate), String(localTime));
 
     const duplicate = await prisma.studioSession.findFirst({
-      where: { sessionTypeId: sessionType.id, startsAt },
+      where: { sessionTypeId: sessionType.id, locationId: sessionLocationId, startsAt },
     });
     if (duplicate)
       return NextResponse.json(
@@ -189,7 +212,7 @@ export async function POST(req: NextRequest) {
       include: sessionIncludes,
     });
 
-    return NextResponse.json(session, { status: 201 });
+    return NextResponse.json(presentSession(session), { status: 201 });
   }
 
   // Repeat weekly: one session per week, same weekday and Mountain wall-clock
@@ -202,7 +225,7 @@ export async function POST(req: NextRequest) {
     const startsAt = fromMountainTime(date, String(localTime));
 
     const duplicate = await prisma.studioSession.findFirst({
-      where: { sessionTypeId: sessionType.id, startsAt },
+      where: { sessionTypeId: sessionType.id, locationId: sessionLocationId, startsAt },
       select: { id: true },
     });
     if (duplicate) {
@@ -237,5 +260,5 @@ export async function POST(req: NextRequest) {
       { status: 409 },
     );
 
-  return NextResponse.json({ created, skipped, seriesId }, { status: 201 });
+  return NextResponse.json({ created: created.map(presentSession), skipped, seriesId }, { status: 201 });
 }

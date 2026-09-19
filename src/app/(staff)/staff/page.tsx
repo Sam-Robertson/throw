@@ -58,6 +58,12 @@ export default async function StaffPage() {
       startsAt: { gte: todayStart, lte: todayEnd },
       isCancelled: false,
       ...locationWhere(scope),
+      // Slots of an archived class type (Momence's "Pay for Pottery Pieces")
+      // only matter to the front desk if someone is actually booked on them.
+      OR: [
+        { sessionType: { archivedAt: null } },
+        { bookings: { some: { status: { in: ["CONFIRMED", "WAITLIST"] } } } },
+      ],
     },
     include: {
       sessionType: { select: { name: true } },
@@ -70,7 +76,7 @@ export default async function StaffPage() {
   const sessionRows = todaySessions.map((s) => ({
     id: s.id,
     timeLabel: formatMountainTime(s.startsAt, "datetime"),
-    sessionTypeName: s.sessionType.name,
+    sessionTypeName: s.title ?? s.sessionType.name,
     instructorName: s.instructor?.name ?? s.instructor?.email ?? null,
     isMe: s.instructor?.id === userId,
     confirmedCount: s.bookings.filter((b) => b.status === "CONFIRMED").length,
