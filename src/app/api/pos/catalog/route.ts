@@ -4,6 +4,7 @@ import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { checkPermission } from "@/lib/permissions";
+import { SELLABLE_SESSION_TYPE } from "@/lib/sellable";
 import { STUDIO_TIMEZONE } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +30,8 @@ export async function GET(req: NextRequest) {
   const scope = locationScope(locationId);
 
   // Drop-ins book a specific session, so the tab lists real sessions at this
-  // studio, Mountain Time days, starting today.
+  // studio, Mountain Time days, starting today. Only sellable class types:
+  // free Momence leftovers and member-only classes are not POS items.
   const nowMT = toZonedTime(new Date(), STUDIO_TIMEZONE);
   const from = fromZonedTime(startOfDay(nowMT), STUDIO_TIMEZONE);
   const to = fromZonedTime(endOfDay(addDays(nowMT, DROP_IN_DAYS - 1)), STUDIO_TIMEZONE);
@@ -41,7 +43,7 @@ export async function GET(req: NextRequest) {
       orderBy: { name: "asc" },
     }),
     prisma.sessionType.findMany({
-      where: { isActive: true, ...scope },
+      where: { ...SELLABLE_SESSION_TYPE, ...scope },
       select: { id: true, name: true, dropInPriceCents: true },
       orderBy: { name: "asc" },
     }),
@@ -52,7 +54,12 @@ export async function GET(req: NextRequest) {
     }),
     locationId
       ? prisma.studioSession.findMany({
-          where: { locationId, isCancelled: false, startsAt: { gte: from, lte: to } },
+          where: {
+            locationId,
+            isCancelled: false,
+            startsAt: { gte: from, lte: to },
+            sessionType: SELLABLE_SESSION_TYPE,
+          },
           include: {
             sessionType: { select: { id: true, name: true, dropInPriceCents: true } },
             instructor: { select: { name: true } },

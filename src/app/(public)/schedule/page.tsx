@@ -13,9 +13,14 @@ import Chip from '@mui/material/Chip';
 import Stack from '@mui/material/Stack';
 import { md3 } from '@/lib/theme';
 
+// Filter pills only for class types that have something upcoming to show —
+// not every historical type that happens to still be active.
 async function getSessionTypes() {
   return prisma.sessionType.findMany({
-    where: { isActive: true },
+    where: {
+      isActive: true,
+      studioSessions: { some: { startsAt: { gte: new Date() }, isCancelled: false } },
+    },
     select: { id: true, name: true, slug: true },
     orderBy: { name: 'asc' },
   });
@@ -26,7 +31,7 @@ async function getSessions(typeSlug?: string) {
     where: {
       startsAt: { gte: new Date() },
       isCancelled: false,
-      ...(typeSlug ? { sessionType: { slug: typeSlug } } : {}),
+      sessionType: { isActive: true, ...(typeSlug ? { slug: typeSlug } : {}) },
     },
     include: {
       sessionType: {
@@ -84,7 +89,13 @@ function SessionCard({ session }: { session: Session }) {
               value: isFull ? '0' : String(spotsRemaining),
               error: isFull,
             },
-            { label: 'Drop-in', value: formatPrice(session.sessionType.dropInPriceCents) },
+            {
+              label: 'Drop-in',
+              value:
+                session.sessionType.dropInPriceCents > 0
+                  ? formatPrice(session.sessionType.dropInPriceCents)
+                  : 'Members only',
+            },
           ].map(({ label, value, error }) => (
             <Box key={label} sx={{ display: 'flex', gap: 1.5 }}>
               <Typography

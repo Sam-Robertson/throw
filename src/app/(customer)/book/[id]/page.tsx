@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { formatMountainTime } from "@/lib/timezone";
 import { getTicketBalance } from "@/lib/credits";
+import { isSellable } from "@/lib/sellable";
 import { findUnsignedWaiver, waiverSignUrl } from "@/lib/waivers";
 import { BookingForm } from "./_components/BookingForm";
 
@@ -16,6 +17,7 @@ async function getSession(id: string) {
           name: true,
           durationMinutes: true,
           dropInPriceCents: true,
+          isActive: true,
         },
       },
       instructor: { select: { name: true } },
@@ -166,6 +168,7 @@ export default async function BookPage({
           ticketBalance ? formatMountainTime(ticketBalance.periodEnd, "date") : null
         }
         dropInPriceCents={studioSession.sessionType.dropInPriceCents}
+        forSale={isSellable(studioSession.sessionType)}
         sessionName={studioSession.sessionType.name}
         sessionDate={formatMountainTime(studioSession.startsAt, "date")}
         sessionTime={formatMountainTime(studioSession.startsAt, "time")}

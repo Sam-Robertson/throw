@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { isSellable } from "@/lib/sellable";
 import { formatMountainTime } from "@/lib/timezone";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,7 @@ async function getSession(id: string) {
           description: true,
           durationMinutes: true,
           dropInPriceCents: true,
+          isActive: true,
         },
       },
       instructor: { select: { name: true } },
@@ -155,7 +157,9 @@ export default async function SessionDetailPage({
           <div>
             <dt className="font-medium">Drop-in price</dt>
             <dd className="text-muted-foreground">
-              {formatPrice(session.sessionType.dropInPriceCents)}
+              {isSellable(session.sessionType)
+                ? formatPrice(session.sessionType.dropInPriceCents)
+                : "Members only"}
             </dd>
           </div>
         </dl>

@@ -28,10 +28,9 @@ import {
   type PosOrder,
 } from './types';
 
-type View = 'methods' | 'cash' | 'terminal' | 'card' | 'giftcard' | 'comp' | 'success';
+type View = 'methods' | 'terminal' | 'card' | 'giftcard' | 'comp' | 'success';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
-const CASH_QUICK_CENTS = [2000, 5000, 10000]; // $20, $50, $100
 
 interface PaymentSheetProps {
   order: PosOrder | null;
@@ -53,7 +52,6 @@ export function PaymentSheet({
   const [view, setView] = useState<View>('methods');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastChangeCents, setLastChangeCents] = useState<number | null>(null);
 
   if (!order) return null;
 
@@ -62,7 +60,6 @@ export function PaymentSheet({
   function reset() {
     setView('methods');
     setError(null);
-    setLastChangeCents(null);
   }
 
   function handleOpenChange(next: boolean) {
@@ -70,9 +67,8 @@ export function PaymentSheet({
     onOpenChange(next);
   }
 
-  function handleOrderResult(updated: PosOrder, changeCents?: number) {
+  function handleOrderResult(updated: PosOrder) {
     onOrderUpdate(updated);
-    if (changeCents !== undefined) setLastChangeCents(changeCents);
     if (remainingBalanceCents(updated) <= 0) {
       setView('success');
     } else {
@@ -116,7 +112,6 @@ export function PaymentSheet({
             >
               Tap or insert card
             </Button>
-            <Button className="min-h-14" onClick={() => setView('cash')}>Cash</Button>
             <Button className="min-h-14" onClick={() => setView('giftcard')}>Gift Card</Button>
             {/* Manual entry stays available for phone orders and as a fallback
                 when the reader is offline. */}
@@ -129,18 +124,6 @@ export function PaymentSheet({
               </Button>
             )}
           </div>
-        )}
-
-        {view === 'cash' && (
-          <CashPane
-            orderId={order.id}
-            remaining={remaining}
-            busy={busy}
-            setBusy={setBusy}
-            setError={setError}
-            onBack={() => setView('methods')}
-            onResult={handleOrderResult}
-          />
         )}
 
         {view === 'terminal' && (
@@ -196,9 +179,6 @@ export function PaymentSheet({
         {view === 'success' && (
           <div className="flex flex-col items-center gap-4 py-4 text-center">
             <p className="text-lg font-semibold">Order #{order.orderNumber} paid</p>
-            {lastChangeCents !== null && lastChangeCents > 0 && (
-              <p className="text-3xl font-bold">Change due {formatMoney(lastChangeCents)}</p>
-            )}
             {giftCardCodesFromOrder(order).length > 0 && (
               <div className="w-full rounded-lg border-2 border-foreground p-4 text-left">
                 <p className="text-sm font-semibold">Gift card codes. Give these to the customer.</p>
@@ -253,83 +233,7 @@ interface PaneProps {
   setBusy: (b: boolean) => void;
   setError: (e: string | null) => void;
   onBack: () => void;
-  onResult: (order: PosOrder, changeCents?: number) => void;
-}
-
-function CashPane({
-  orderId,
-  remaining,
-  busy,
-  setBusy,
-  setError,
-  onBack,
-  onResult,
-}: PaneProps & { remaining: number }) {
-  const [tendered, setTendered] = useState('');
-
-  async function submit() {
-    const cashTenderedCents = Math.round(parseFloat(tendered || '0') * 100);
-    if (!cashTenderedCents || cashTenderedCents <= 0) return;
-    const amountCents = Math.min(cashTenderedCents, remaining);
-
-    setBusy(true);
-    setError(null);
-    const res = await fetch(`/api/pos/orders/${orderId}/payments/cash`, {
-      method: 'POST',
-      headers: JSON_HEADERS,
-      body: JSON.stringify({ amountCents, cashTenderedCents }),
-    });
-    if (res.ok) {
-      const data = (await res.json()) as { order: PosOrder; changeCents: number };
-      setTendered('');
-      onResult(data.order, data.changeCents);
-    } else {
-      const data = (await res.json().catch(() => ({}))) as ApiErrorBody;
-      setError(apiErrorMessage(data, 'Failed to record cash payment'));
-    }
-    setBusy(false);
-  }
-
-  return (
-    <div className="flex flex-col gap-3">
-      <Label className="text-sm font-medium">Cash tendered</Label>
-      <div className="flex gap-2">
-        {CASH_QUICK_CENTS.map((cents) => (
-          <Button
-            key={cents}
-            variant="outline"
-            className="min-h-11 flex-1"
-            onClick={() => setTendered((cents / 100).toFixed(2))}
-          >
-            {formatMoney(cents)}
-          </Button>
-        ))}
-        <Button
-          variant="outline"
-          className="min-h-11 flex-1"
-          onClick={() => setTendered((remaining / 100).toFixed(2))}
-        >
-          Exact
-        </Button>
-      </div>
-      <Input
-        inputMode="decimal"
-        placeholder="0.00"
-        value={tendered}
-        onChange={(e) => setTendered(e.target.value)}
-        className="min-h-11 text-base"
-        autoFocus
-      />
-      <div className="flex gap-2">
-        <Button variant="outline" className="min-h-11 flex-1" onClick={onBack} disabled={busy}>
-          Back
-        </Button>
-        <Button className="min-h-11 flex-1" onClick={submit} disabled={busy || !tendered}>
-          Confirm
-        </Button>
-      </div>
-    </div>
-  );
+  onResult: (order: PosOrder) => void;
 }
 
 function CardPane({

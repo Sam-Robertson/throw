@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
+import { isSellable } from "@/lib/sellable";
 import { stripe } from "@/lib/stripe";
 import { formatMountainTime } from "@/lib/timezone";
 import { findUnsignedWaiver } from "@/lib/waivers";
@@ -43,6 +44,11 @@ export async function POST(req: NextRequest) {
       { error: "Session is cancelled" },
       { status: 400 },
     );
+  }
+  // Paid checkout is only for class types that are actually for sale — never
+  // a $0 or retired type. Members book free classes through /api/bookings.
+  if (!isSellable(studioSession.sessionType)) {
+    return NextResponse.json({ error: "NOT_FOR_SALE" }, { status: 400 });
   }
   if (studioSession.startsAt <= new Date()) {
     return NextResponse.json({ error: "SESSION_IN_PAST" }, { status: 400 });

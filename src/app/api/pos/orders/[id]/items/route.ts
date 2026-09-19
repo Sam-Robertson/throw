@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { checkPermission } from "@/lib/permissions";
 import { dropInSessionId, repriceOrder } from "@/lib/pos";
+import { isSellable } from "@/lib/sellable";
 import { formatMountainTime } from "@/lib/timezone";
 import { taxCodeForPosItem } from "@/config/taxCodes";
 import { parseFiringMetadata, quoteFiring } from "@/config/firingPrices";
@@ -112,6 +113,12 @@ export async function POST(
       return NextResponse.json(
         { error: "SESSION_CANCELLED", message: "That session has been cancelled." },
         { status: 409 },
+      );
+    }
+    if (!isSellable(studioSession.sessionType)) {
+      return NextResponse.json(
+        { error: "NOT_FOR_SALE", message: `${studioSession.sessionType.name} isn't sold as a drop-in.` },
+        { status: 400 },
       );
     }
 

@@ -37,6 +37,8 @@ type Props = {
   ticketAllowance: number | null;
   ticketsResetDate: string | null;
   dropInPriceCents: number;
+  /** False for $0 or retired class types: no paid drop-in, members only. */
+  forSale: boolean;
   sessionName: string;
   sessionDate: string;
   sessionTime: string;
@@ -61,6 +63,7 @@ export function BookingForm({
   ticketAllowance,
   ticketsResetDate,
   dropInPriceCents,
+  forSale,
   sessionName,
   sessionDate,
   sessionTime,
@@ -198,6 +201,15 @@ export function BookingForm({
                 : "Confirm booking (included in your membership)"}
           </Button>
         </div>
+      ) : !forSale ? (
+        <p className="text-sm text-muted-foreground">
+          {hasMembership
+            ? "You've used all your class tickets this period, and this class isn't sold as a drop-in."
+            : "This class is for members and isn't sold as a drop-in."}{" "}
+          <Link href={hasMembership ? "/schedule" : "/membership"} className="underline underline-offset-4">
+            {hasMembership ? "See other classes" : "See memberships"}
+          </Link>
+        </p>
       ) : (
         <div>
           {outOfTickets && (

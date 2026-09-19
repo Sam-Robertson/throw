@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import NextLink from 'next/link';
 import { Button } from '@/components/ui/button';
+import { shortLocationName } from '@/lib/locationName';
 import {
   Sheet,
   SheetContent,
@@ -303,7 +304,7 @@ export function PosTerminal({
               className="min-h-11 rounded-md border border-input bg-background px-3 text-sm"
             >
               {locations.map((l) => (
-                <option key={l.id} value={l.id}>{l.name}</option>
+                <option key={l.id} value={l.id}>{shortLocationName(l.name, l.address)}</option>
               ))}
             </select>
           )}
@@ -339,10 +340,6 @@ export function PosTerminal({
 
           <Button variant="outline" className="min-h-11" asChild>
             <NextLink href="/admin/pos/orders">Order History</NextLink>
-          </Button>
-
-          <Button variant="outline" className="min-h-11" asChild>
-            <NextLink href="/admin/pos/drawer">Cash Drawer</NextLink>
           </Button>
         </div>
       </div>
