@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { checkPermission } from "@/lib/permissions";
 import { sendInngestEvent } from "@/lib/inngest";
-import { POS_ORDER_INCLUDE, reverseCompletionSideEffects } from "@/lib/pos";
+import { POS_ORDER_INCLUDE, courseBookingIds, reverseCompletionSideEffects } from "@/lib/pos";
 
 const GRACE_PERIOD_MS = 24 * 60 * 60 * 1000;
 
@@ -24,9 +24,14 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const body = (await req.json().catch(() => null)) as { reason?: string } | null;
-  if (!body?.reason?.trim()) {
-    return NextResponse.json({ error: "reason is required" }, { status: 400 });
+  // Every void says why: it is what the owner reads in the order history.
+  const body = (await req.json().catch(() => null)) as { reason?: unknown } | null;
+  const reason = typeof body?.reason === "string" ? body.reason.trim().slice(0, 500) : "";
+  if (!reason) {
+    return NextResponse.json(
+      { error: "REASON_REQUIRED", message: "Say why this order is being voided." },
+      { status: 400 },
+    );
   }
 
   const isAdmin = session.user.role === "ADMIN";
@@ -51,7 +56,7 @@ export async function POST(
     data: {
       status: "VOIDED",
       voidedAt: new Date(),
-      voidReason: body.reason.trim(),
+      voidReason: reason,
     },
   });
 
@@ -89,13 +94,19 @@ export async function POST(
 
   const updated = await prisma.posOrder.findUniqueOrThrow({ where: { id }, include: POS_ORDER_INCLUDE });
 
-  // A completed order may have booked drop-in seats; voiding the sale frees
-  // them. (Money is not refunded here — that's still a separate step.)
+  // A completed order may have booked class seats; voiding the sale frees
+  // them, including every later session a course line booked. (Money is not
+  // refunded here — that's still a separate step.)
   if (order.status === "COMPLETED") {
-    const itemIds = order.items.filter((i) => i.itemType === "DROP_IN").map((i) => i.id);
+    const dropIns = updated.items.filter((i) => i.itemType === "DROP_IN");
+    const itemIds = dropIns.map((i) => i.id);
+    const laterCourseBookingIds = dropIns.flatMap((i) => courseBookingIds(i.metadata));
     if (itemIds.length > 0) {
       const bookings = await prisma.booking.findMany({
-        where: { posOrderItemId: { in: itemIds }, status: { not: "CANCELLED" } },
+        where: {
+          OR: [{ posOrderItemId: { in: itemIds } }, { id: { in: laterCourseBookingIds } }],
+          status: { not: "CANCELLED" },
+        },
         select: { id: true, userId: true, studioSessionId: true },
       });
       for (const booking of bookings) {

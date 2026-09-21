@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { resend } from "@/lib/resend";
+import { isPlaceholderEmail } from "@/lib/walkinEmail";
 
 /**
  * Password setup / reset links.
@@ -187,6 +188,9 @@ export async function sendPasswordEmail({
   rawToken: string;
   mode: PasswordEmailMode;
 }): Promise<{ sent: boolean; error?: string }> {
+  // Phone-only customers made at the register: the address is a placeholder.
+  if (isPlaceholderEmail(to)) return { sent: false, error: "placeholder walk-in address" };
+
   if (!process.env.RESEND_API_KEY) {
     console.warn("[passwordSetup] RESEND_API_KEY is not set — password email not sent.");
     return { sent: false, error: "RESEND_API_KEY is not set" };

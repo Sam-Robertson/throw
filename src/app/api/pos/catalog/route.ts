@@ -11,8 +11,11 @@ import { PRODUCT_CATEGORIES, PRODUCT_CATEGORY_LABELS } from "@/config/taxCodes";
 
 export const dynamic = "force-dynamic";
 
-/** How far ahead the Drop-ins tab lists sessions (today plus the next 6 days). */
-const DROP_IN_DAYS = 7;
+/** How far ahead the Classes tab lists sessions (today plus the next 7 days). */
+const DROP_IN_DAYS = 8;
+
+/** Courses are sold ahead of time, so they are listed this far out. */
+const COURSE_HORIZON_DAYS = 120;
 
 function locationScope(locationId: string | null) {
   if (!locationId) return {};
@@ -31,7 +34,7 @@ export async function GET(req: NextRequest) {
 
   const scope = locationScope(locationId);
 
-  // Drop-ins book a specific session, so the tab lists real sessions at this
+  // A class sale books a specific session, so the tab lists real sessions at this
   // studio, Mountain Time days, starting today. Only sellable class types:
   // free Momence leftovers and member-only classes are not POS items.
   const nowMT = toZonedTime(new Date(), STUDIO_TIMEZONE);
@@ -39,7 +42,7 @@ export async function GET(req: NextRequest) {
   const to = fromZonedTime(endOfDay(addDays(nowMT, DROP_IN_DAYS - 1)), STUDIO_TIMEZONE);
 
   const now = new Date();
-  const [retailProducts, sessionTypes, membershipPlans, upcomingSessions, staffDiscounts, groupEvents, firing] = await Promise.all([
+  const [retailProducts, sessionTypes, membershipPlans, upcomingSessions, staffDiscounts, groupEvents, firing, courseSessions] = await Promise.all([
     // Sellable products only: active, not archived, and priced (OPEN catalog
     // items stay out of the register until the client gives a price).
     prisma.retailProduct.findMany({
@@ -48,7 +51,7 @@ export async function GET(req: NextRequest) {
     }),
     prisma.sessionType.findMany({
       where: { ...SELLABLE_SESSION_TYPE, ...scope },
-      select: { ...CLASS_PRICE_SELECT, name: true },
+      select: { ...CLASS_PRICE_SELECT, name: true, priceUnit: true },
       orderBy: { name: "asc" },
     }),
     prisma.membershipPlan.findMany({
@@ -102,7 +105,77 @@ export async function GET(req: NextRequest) {
         })
       : Promise.resolve([]),
     getFiringProducts(),
+    // Courses: every session that hasn't finished yet, grouped into one entry
+    // per course below. Selling one books the customer into all of them.
+    locationId
+      ? prisma.studioSession.findMany({
+          where: {
+            locationId,
+            isCancelled: false,
+            endsAt: { gt: now },
+            startsAt: { lte: addDays(now, COURSE_HORIZON_DAYS) },
+            sessionType: { ...SELLABLE_SESSION_TYPE, kind: "COURSE" },
+          },
+          include: {
+            sessionType: { select: { ...CLASS_PRICE_SELECT, name: true } },
+            instructor: { select: { name: true } },
+            _count: { select: { bookings: { where: { status: "CONFIRMED" } } } },
+          },
+          orderBy: { startsAt: "asc" },
+        })
+      : Promise.resolve([]),
   ]);
+
+  // One entry per course: sessions sharing a seriesId, or a lone session.
+  const courseGroups = new Map<string, typeof courseSessions>();
+  for (const s of courseSessions) {
+    const key = s.seriesId ?? s.id;
+    courseGroups.set(key, [...(courseGroups.get(key) ?? []), s]);
+  }
+  // When the course began and how long it is, counting sessions already held.
+  const seriesIds = [...new Set(courseSessions.flatMap((s) => (s.seriesId ? [s.seriesId] : [])))];
+  const seriesStats =
+    seriesIds.length > 0
+      ? await prisma.studioSession.groupBy({
+          by: ["seriesId"],
+          where: { seriesId: { in: seriesIds }, locationId, isCancelled: false },
+          _min: { startsAt: true },
+          _count: { _all: true },
+        })
+      : [];
+  const courses = [...courseGroups.entries()]
+    .map(([key, remaining]) => {
+      const [first] = remaining;
+      const stats = seriesStats.find((g) => g.seriesId === first.seriesId);
+      const startsAt = stats?._min.startsAt ?? first.startsAt;
+      return {
+        key,
+        seriesId: first.seriesId,
+        // The first session still to come; the sale is keyed on it.
+        sessionId: first.id,
+        sessionTypeId: first.sessionType.id,
+        name: first.title ?? first.sessionType.name,
+        priceCents: resolveClassPriceCents({
+          sessionType: first.sessionType,
+          locationId: first.locationId,
+          priceCentsOverride: first.priceCentsOverride,
+        }),
+        instructorName: first.instructor?.name ?? null,
+        startsAt,
+        started: startsAt < now,
+        totalSessions: stats?._count._all ?? remaining.length,
+        // A seat in the course needs a seat in every remaining session.
+        spotsLeft: Math.min(...remaining.map((s) => Math.max(0, s.capacity - s._count.bookings))),
+        sessions: remaining.map((s) => ({
+          id: s.id,
+          startsAt: s.startsAt,
+          endsAt: s.endsAt,
+          capacity: s.capacity,
+          confirmedCount: s._count.bookings,
+        })),
+      };
+    })
+    .filter((c) => c.priceCents > 0);
 
   const products = retailProducts.map((p) => ({
     id: p.id,
@@ -178,6 +251,7 @@ export async function GET(req: NextRequest) {
         id: s.id,
         name: s.name,
         dropInPriceCents: resolveClassPriceCents({ sessionType: s, locationId }),
+        priceUnit: s.priceUnit,
       }))
       .filter((s) => s.dropInPriceCents > 0),
     membershipPlans: membershipPlans.map((m) => ({
@@ -186,6 +260,7 @@ export async function GET(req: NextRequest) {
       priceInCents: m.price,
       billingIntervalDays: m.billingIntervalDays,
     })),
+    courses,
     upcomingSessions: upcomingSessions
       .map((s) => ({ ...s, priceCents: resolveClassPriceCents({ sessionType: s.sessionType, locationId: s.locationId, priceCentsOverride: s.priceCentsOverride }) }))
       // A session with no real price at this studio is not a POS item.

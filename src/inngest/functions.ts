@@ -2,8 +2,8 @@ import { formatInTimeZone } from "date-fns-tz";
 import { inngest, type BookingEventData, type MembershipEventData } from "@/lib/inngest";
 import { prisma } from "@/lib/prisma";
 import { interpolateTemplate, sendSms } from "@/lib/sms";
-import { resend } from "@/lib/resend";
-import { formatMoney, metadataObject } from "@/lib/pos";
+import { realEmail } from "@/lib/walkinEmail";
+import { RECEIPT_CHOSEN_EVENT, loadReceiptOrder, sendReceipt } from "./posReceipt";
 
 const STUDIO_TZ = "America/Denver";
 
@@ -238,94 +238,40 @@ export const scheduleBookingReminder = inngest.createFunction(
 
 // ── pos/order.completed ──────────────────────────────────────────────────────
 
+/** How long the register has to pick Email, Text or None before the automatic email goes. */
+const AUTO_RECEIPT_DELAY = "3m";
+
+/**
+ * The automatic receipt. Staff normally choose Email, Text or None on the
+ * register's success screen, which sends straight away and fires
+ * `pos/receipt.chosen`; that cancels this run, so nobody gets two receipts.
+ * If the register never says (tablet closed, tab crashed), the customer on
+ * file is emailed after a short wait. Only ever email, only ever to a real
+ * address: no customer, no email or a `@walkin.invalid` placeholder means no
+ * automatic receipt.
+ */
 export const sendPosReceipt = inngest.createFunction(
-  { id: "send-pos-receipt", triggers: [{ event: "pos/order.completed" }] },
+  {
+    id: "send-pos-receipt",
+    triggers: [{ event: "pos/order.completed" }],
+    cancelOn: [{ event: RECEIPT_CHOSEN_EVENT, if: "async.data.orderId == event.data.orderId" }],
+  },
   async ({ event, step }) => {
     const { orderId } = event.data as { orderId: string };
 
+    await step.sleep("wait-for-register-choice", AUTO_RECEIPT_DELAY);
+
     return step.run("send-receipt", async () => {
-      const order = await prisma.posOrder.findUnique({
-        where: { id: orderId },
-        include: {
-          items: { orderBy: { createdAt: "asc" } },
-          payments: { orderBy: { createdAt: "asc" } },
-          customer: { select: { id: true, name: true, email: true, phone: true } },
-          location: { select: { name: true, address: true } },
-        },
-      });
+      const order = await loadReceiptOrder(orderId);
       if (!order) return { skipped: true, reason: "order not found" };
-      if (!order.customer) return { skipped: true, reason: "no customer on order" };
-      if (!order.customer.email && !order.customer.phone) {
-        return { skipped: true, reason: "customer has neither email nor phone" };
+      if (order.status !== "COMPLETED") return { skipped: true, reason: "order is not completed" };
+      if (!realEmail(order.customer?.email)) {
+        return { skipped: true, reason: "no customer email on the order" };
       }
 
-      const dateStr = formatInTimeZone(
-        order.completedAt ?? order.createdAt,
-        STUDIO_TZ,
-        "MMMM d, yyyy h:mm a",
-      );
-      const paymentMethods = [...new Set(order.payments.map((p) => p.method))].join(", ");
-
-      // Receipts are transactional (the customer just completed a purchase),
-      // so no marketing consent check applies. Prefer email; SMS is the
-      // fallback only when there is no email on file.
-      if (order.customer.email) {
-        const lines = order.items
-          .map((i) => {
-            const line = `  ${i.quantity}x ${i.name} — ${formatMoney(i.totalCents)}`;
-            const raw = metadataObject(i.metadata).giftCardCodes;
-            const codes = Array.isArray(raw) ? raw.filter((c): c is string => typeof c === "string") : [];
-            return codes.length > 0
-              ? `${line}\n    Gift card code${codes.length > 1 ? "s" : ""}: ${codes.join(", ")}`
-              : line;
-          })
-          .join("\n");
-        const body = [
-          `Throw Art Studio — Receipt #${order.orderNumber}`,
-          order.location.name,
-          order.location.address ?? "",
-          dateStr,
-          "",
-          lines,
-          "",
-          `Subtotal: ${formatMoney(order.subtotalCents)}`,
-          order.discountCents > 0 ? `Discount: -${formatMoney(order.discountCents)}` : null,
-          order.taxCents > 0 ? `Tax: ${formatMoney(order.taxCents)}` : null,
-          order.tipCents > 0 ? `Tip: ${formatMoney(order.tipCents)}` : null,
-          `Total: ${formatMoney(order.totalCents)}`,
-          "",
-          `Paid via: ${paymentMethods || "—"}`,
-          "",
-          "Thank you!",
-        ]
-          .filter((line): line is string => line !== null)
-          .join("\n");
-
-        await resend.emails.send({
-          from: process.env.RESEND_FROM_EMAIL ?? "noreply@throw.studio",
-          to: order.customer.email,
-          subject: `Your receipt from ${order.location.name} — #${order.orderNumber}`,
-          text: body,
-        });
-        return { sent: "email" };
-      }
-
-      const giftCardCodes = order.items.flatMap((i) => {
-        const raw = metadataObject(i.metadata).giftCardCodes;
-        return Array.isArray(raw) ? raw.filter((c): c is string => typeof c === "string") : [];
-      });
-      await sendSms({
-        to: order.customer.phone!,
-        message:
-          `Throw Art Studio receipt #${order.orderNumber}. Total ${formatMoney(order.totalCents)}.` +
-          (giftCardCodes.length > 0
-            ? ` Gift card code${giftCardCodes.length > 1 ? "s" : ""}: ${giftCardCodes.join(", ")}.`
-            : "") +
-          " Thanks!",
-        userId: order.customer.id,
-        kind: "transactional",
-      });
-      return { sent: "sms" };
+      const result = await sendReceipt(order, "email");
+      if (!result.ok) return { skipped: true, reason: result.error };
+      return { sent: "email" };
     });
   },
 );

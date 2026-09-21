@@ -2,8 +2,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sendInngestEvent } from "@/lib/inngest";
 import { calculatePosTax, recordTaxTransaction } from "@/lib/stripeTax";
-import { parseFiringMetadata } from "@/config/firingPrices";
 import { findUnsignedWaiver } from "@/lib/waivers";
+import { formatMountainTime } from "@/lib/timezone";
 import {
   calculateDiscounts,
   checkDiscountUsable,
@@ -451,6 +451,27 @@ export function dropInSessionId(metadata: Prisma.JsonValue | null | undefined): 
   return typeof id === "string" && id ? id : null;
 }
 
+/**
+ * Every StudioSession a DROP_IN line books. A class is one session; a course
+ * line (sold once at the course price) carries all of its remaining sessions
+ * in metadata.courseSessionIds, the first of which is also studioSessionId.
+ */
+export function dropInSessionIds(metadata: Prisma.JsonValue | null | undefined): string[] {
+  const course = metadataObject(metadata).courseSessionIds;
+  if (Array.isArray(course)) {
+    const ids = course.filter((id): id is string => typeof id === "string" && id !== "");
+    if (ids.length > 0) return ids;
+  }
+  const single = dropInSessionId(metadata);
+  return single ? [single] : [];
+}
+
+/** Bookings a course line made beyond the first (which is tied by Booking.posOrderItemId). */
+export function courseBookingIds(metadata: Prisma.JsonValue | null | undefined): string[] {
+  const ids = metadataObject(metadata).courseBookingIds;
+  return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : [];
+}
+
 export interface PaymentBlock {
   status: 400 | 409;
   error: string;
@@ -514,52 +535,65 @@ export async function checkOrderPayable(orderId: string): Promise<PaymentBlock |
   if (dropIns.length === 0 || !order.customerId) return null;
 
   for (const item of dropIns) {
-    const studioSessionId = dropInSessionId(item.metadata);
-    if (!studioSessionId) {
+    const sessionIds = dropInSessionIds(item.metadata);
+    if (sessionIds.length === 0) {
       return {
         status: 400,
         error: "SESSION_REQUIRED",
-        message: `${item.name} isn't tied to a class session. Remove it and add it again from the Drop-ins tab.`,
+        message: `${item.name} isn't tied to a class session. Remove it and add it again from the Classes tab.`,
       };
     }
 
-    const session = await prisma.studioSession.findUnique({
-      where: { id: studioSessionId },
-      include: { _count: { select: { bookings: { where: { status: "CONFIRMED" } } } } },
-    });
-    if (!session || session.isCancelled) {
-      return {
-        status: 409,
-        error: "SESSION_CANCELLED",
-        message: `${item.name} has been cancelled. Remove it from the order.`,
-      };
-    }
+    // A course line books every remaining session, so each one is checked.
+    for (const studioSessionId of sessionIds) {
+      const session = await prisma.studioSession.findUnique({
+        where: { id: studioSessionId },
+        include: { _count: { select: { bookings: { where: { status: "CONFIRMED" } } } } },
+      });
+      if (!session || session.isCancelled) {
+        return {
+          status: 409,
+          error: "SESSION_CANCELLED",
+          message:
+            sessionIds.length > 1
+              ? `A session of ${item.name} has been cancelled. Remove it from the order and add the course again.`
+              : `${item.name} has been cancelled. Remove it from the order.`,
+        };
+      }
 
-    // Everyone needs a signed waiver for the studio they're booking at, POS
-    // included (Sam, 2026-09-12) — same rule as the online booking routes.
-    const unsignedWaiver = await findUnsignedWaiver(order.customerId, session.locationId);
-    if (unsignedWaiver) {
-      return {
-        status: 409,
-        error: "WAIVER_REQUIRED",
-        message: `This customer hasn't signed the ${unsignedWaiver.locationName} waiver. Have them sign it (they can sign in and go to /waiver) before taking payment.`,
-      };
-    }
+      // Everyone needs a signed waiver for the studio they're booking at, POS
+      // included (Sam, 2026-09-12) — same rule as the online booking routes.
+      const unsignedWaiver = await findUnsignedWaiver(order.customerId, session.locationId);
+      if (unsignedWaiver) {
+        return {
+          status: 409,
+          error: "WAIVER_REQUIRED",
+          message: `This customer hasn't signed the ${unsignedWaiver.locationName} waiver. Have them sign it (they can sign in and go to /waiver) before taking payment.`,
+        };
+      }
 
-    const existing = await prisma.booking.findFirst({
-      where: { userId: order.customerId, studioSessionId, status: { not: "CANCELLED" } },
-      select: { id: true },
-    });
-    if (existing) {
-      return {
-        status: 409,
-        error: "ALREADY_BOOKED",
-        message: `This customer is already booked into ${item.name}.`,
-      };
-    }
+      const existing = await prisma.booking.findFirst({
+        where: { userId: order.customerId, studioSessionId, status: { not: "CANCELLED" } },
+        select: { id: true },
+      });
+      if (existing) {
+        return {
+          status: 409,
+          error: "ALREADY_BOOKED",
+          message: `This customer is already booked into ${item.name}.`,
+        };
+      }
 
-    if (session._count.bookings >= session.capacity) {
-      return { status: 409, error: "SESSION_FULL", message: `${item.name} is full.` };
+      if (session._count.bookings >= session.capacity) {
+        return {
+          status: 409,
+          error: "SESSION_FULL",
+          message:
+            sessionIds.length > 1
+              ? `${item.name} is full on ${formatMountainTime(session.startsAt, "datetime")}.`
+              : `${item.name} is full.`,
+        };
+      }
     }
   }
 
@@ -604,72 +638,98 @@ function isUniqueViolation(err: unknown): boolean {
 }
 
 /**
- * One Booking per DROP_IN line (Booking.posOrderItemId is unique, so a retry is
- * a no-op). Runs after the money is taken, so it never throws: a session that
- * filled up since the payment check gets a WAITLIST booking and a note on the
- * order for staff, rather than a failed completion.
+ * One Booking per session a DROP_IN line books. Booking.posOrderItemId is
+ * unique, so the line's first session carries it (and the amount paid) and a
+ * retry is a no-op. A course line books every remaining session: the later
+ * bookings are $0 (the course was paid once, on the first) and their ids are
+ * kept on the line as metadata.courseBookingIds so a void can cancel them.
+ * Runs after the money is taken, so it never throws: a session that filled up
+ * since the payment check gets a WAITLIST booking and a note on the order for
+ * staff, rather than a failed completion.
  */
 async function createDropInBookings(order: OrderForCompletion): Promise<string[]> {
   const notes: string[] = [];
 
   for (const item of order.items.filter((i) => i.itemType === "DROP_IN")) {
-    const studioSessionId = dropInSessionId(item.metadata);
-    if (!studioSessionId || !order.customerId) {
+    const sessionIds = dropInSessionIds(item.metadata);
+    if (sessionIds.length === 0 || !order.customerId) {
       console.error(
-        `[pos] order ${order.id}: drop-in line ${item.id} has no ${studioSessionId ? "customer" : "session"}; no booking created`,
+        `[pos] order ${order.id}: drop-in line ${item.id} has no ${sessionIds.length > 0 ? "customer" : "session"}; no booking created`,
       );
-      notes.push(`No booking created for ${item.name} (missing ${studioSessionId ? "customer" : "session"}).`);
+      notes.push(`No booking created for ${item.name} (missing ${sessionIds.length > 0 ? "customer" : "session"}).`);
       continue;
     }
 
-    try {
-      const already = await prisma.booking.findUnique({ where: { posOrderItemId: item.id } });
-      if (already) continue;
+    const extraBookingIds = courseBookingIds(item.metadata);
+    for (const [index, studioSessionId] of sessionIds.entries()) {
+      const isFirst = index === 0;
+      try {
+        // The first session is guarded by the unique posOrderItemId; the rest
+        // by the customer already holding a booking in that session.
+        const already = isFirst
+          ? await prisma.booking.findUnique({ where: { posOrderItemId: item.id } })
+          : await prisma.booking.findFirst({
+              where: { userId: order.customerId, studioSessionId, status: { not: "CANCELLED" } },
+            });
+        if (already) continue;
 
-      const session = await prisma.studioSession.findUnique({
-        where: { id: studioSessionId },
-        include: { _count: { select: { bookings: { where: { status: "CONFIRMED" } } } } },
-      });
-      if (!session) {
-        notes.push(`No booking created for ${item.name}: the session no longer exists.`);
-        continue;
-      }
-
-      const status = session._count.bookings >= session.capacity ? "WAITLIST" : "CONFIRMED";
-      const booking = await prisma.booking.create({
-        data: {
-          userId: order.customerId,
-          studioSessionId,
-          status,
-          source: "DROP_IN",
-          amountPaidCents: item.totalCents,
-          posOrderItemId: item.id,
-        },
-      });
-
-      if (status === "CONFIRMED") {
-        await sendInngestEvent({
-          name: "booking/confirmed",
-          data: { bookingId: booking.id, userId: order.customerId, studioSessionId },
+        const session = await prisma.studioSession.findUnique({
+          where: { id: studioSessionId },
+          include: { _count: { select: { bookings: { where: { status: "CONFIRMED" } } } } },
         });
-      } else {
-        notes.push(`${item.name} was full at checkout; the customer is on the waitlist.`);
+        if (!session) {
+          notes.push(`No booking created for ${item.name}: the session no longer exists.`);
+          continue;
+        }
+
+        const status = session._count.bookings >= session.capacity ? "WAITLIST" : "CONFIRMED";
+        const booking = await prisma.booking.create({
+          data: {
+            userId: order.customerId,
+            studioSessionId,
+            status,
+            source: "DROP_IN",
+            amountPaidCents: isFirst ? item.totalCents : 0,
+            posOrderItemId: isFirst ? item.id : null,
+          },
+        });
+        if (!isFirst) extraBookingIds.push(booking.id);
+
+        if (status === "CONFIRMED") {
+          await sendInngestEvent({
+            name: "booking/confirmed",
+            data: { bookingId: booking.id, userId: order.customerId, studioSessionId },
+          });
+        } else {
+          notes.push(
+            sessionIds.length > 1
+              ? `${item.name} was full on ${formatMountainTime(session.startsAt, "datetime")} at checkout; the customer is on the waitlist for that session.`
+              : `${item.name} was full at checkout; the customer is on the waitlist.`,
+          );
+        }
+      } catch (err) {
+        if (isUniqueViolation(err)) continue; // a concurrent completion already booked it
+        console.error(`[pos] order ${order.id}: failed to book drop-in line ${item.id} into ${studioSessionId}:`, err);
+        notes.push(`Booking for ${item.name} failed; book the customer in manually.`);
       }
-    } catch (err) {
-      if (isUniqueViolation(err)) continue; // a concurrent completion already booked it
-      console.error(`[pos] order ${order.id}: failed to book drop-in line ${item.id}:`, err);
-      notes.push(`Booking for ${item.name} failed; book the customer in manually.`);
+    }
+
+    if (extraBookingIds.length > 0) {
+      await prisma.posOrderItem
+        .update({
+          where: { id: item.id },
+          data: { metadata: { ...metadataObject(item.metadata), courseBookingIds: extraBookingIds } },
+        })
+        .catch((err) => {
+          console.error(`[pos] order ${order.id}: failed to record course bookings on line ${item.id}:`, err);
+        });
     }
   }
 
   return notes;
 }
 
-/**
- * Writes firing charges back to the customer's INTAKE pieces the line was
- * attached to. When one line covers several Piece rows, weight and charge are
- * split evenly (remainder on the first) — the calculator weighs them together.
- */
+/** Writes firing charges back to the customer's INTAKE pieces the lines were attached to. */
 async function attachFiringCharges(order: OrderForCompletion): Promise<void> {
   if (!order.customerId) return;
 
@@ -691,38 +751,6 @@ async function attachFiringCharges(order: OrderForCompletion): Promise<void> {
       .catch((err) => {
         console.error(`[pos] order ${order.id}: failed to attach firing line ${item.id} to its piece:`, err);
       });
-  }
-
-  for (const item of order.items.filter((i) => i.itemType === "CUSTOM")) {
-    const firing = parseFiringMetadata(item.metadata);
-    if (!firing?.pieceIds?.length) continue;
-
-    try {
-      const pieces = await prisma.piece.findMany({
-        where: { id: { in: firing.pieceIds }, userId: order.customerId, status: "INTAKE" },
-        orderBy: { createdAt: "asc" },
-        select: { id: true },
-      });
-      if (pieces.length === 0) continue;
-
-      const n = pieces.length;
-      await prisma.$transaction(
-        pieces.map((piece, index) => {
-          const share = (total: number) =>
-            Math.floor(total / n) + (index === 0 ? total % n : 0);
-          return prisma.piece.update({
-            where: { id: piece.id },
-            data: {
-              weightOz: share(firing.weightOz),
-              chargedCents: share(item.totalCents),
-              posOrderItemId: item.id,
-            },
-          });
-        }),
-      );
-    } catch (err) {
-      console.error(`[pos] order ${order.id}: failed to attach firing line ${item.id} to pieces:`, err);
-    }
   }
 }
 

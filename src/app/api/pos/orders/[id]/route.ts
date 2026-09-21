@@ -65,6 +65,8 @@ export async function PATCH(
     tipCents?: number;
     walkInName?: string | null;
     walkInPhone?: string | null;
+    /** true parks the order for a customer who stepped away; false resumes it. */
+    parked?: boolean;
   } | null;
   if (!body) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
 
@@ -100,6 +102,10 @@ export async function PATCH(
   if (body.walkInPhone !== undefined) data.walkInPhone = body.walkInPhone?.trim() || null;
   if (body.note !== undefined) {
     data.note = body.note;
+  }
+  if (typeof body.parked === "boolean") {
+    // Re-parking keeps the original time, so the resume list doesn't reshuffle.
+    data.parkedAt = body.parked ? (order.parkedAt ?? new Date()) : null;
   }
 
   if (Object.keys(data).length > 0) {

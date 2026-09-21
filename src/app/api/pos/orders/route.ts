@@ -6,6 +6,9 @@ import { POS_ORDER_INCLUDE } from "@/lib/pos";
 import { forbiddenResponse, locationWhere, resolveLocationScope } from "@/lib/locationScope";
 import type { Prisma } from "@prisma/client";
 
+/** How long a staff member's own unparked open orders stay in the resume list. */
+const RESUME_WINDOW_MS = 12 * 60 * 60 * 1000;
+
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -59,30 +62,52 @@ export async function GET(req: NextRequest) {
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "25", 10) || 25));
 
-  const where: Prisma.PosOrderWhereInput = {
-    ...locationWhere(scope, "locationId"),
-    ...(status ? { status } : {}),
-    ...(staffId ? { staffId } : {}),
-    ...(from || to
-      ? {
-          createdAt: {
-            ...(from ? { gte: new Date(from) } : {}),
-            ...(to ? { lte: new Date(to) } : {}),
-          },
-        }
-      : {}),
-  };
+  // resumable=1 is the register's "Resume open order" list: open orders with
+  // something on them at this studio — every parked order (any staff member can
+  // pick one back up), plus this staff member's own orders from the last 12
+  // hours. Parked orders come first.
+  const resumable = searchParams.get("resumable") === "1";
+  const excludeId = searchParams.get("excludeId");
+
+  const where: Prisma.PosOrderWhereInput = resumable
+    ? {
+        ...locationWhere(scope, "locationId"),
+        status: "OPEN",
+        items: { some: {} },
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+        OR: [
+          { parkedAt: { not: null } },
+          { staffId: session.user.id, createdAt: { gte: new Date(Date.now() - RESUME_WINDOW_MS) } },
+        ],
+      }
+    : {
+        ...locationWhere(scope, "locationId"),
+        ...(status ? { status } : {}),
+        ...(staffId ? { staffId } : {}),
+        ...(from || to
+          ? {
+              createdAt: {
+                ...(from ? { gte: new Date(from) } : {}),
+                ...(to ? { lte: new Date(to) } : {}),
+              },
+            }
+          : {}),
+      };
 
   const [total, orders] = await Promise.all([
     prisma.posOrder.count({ where }),
     prisma.posOrder.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: resumable
+        ? [{ parkedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }]
+        : { createdAt: "desc" },
       skip: (page - 1) * limit,
       take: limit,
       include: {
         _count: { select: { items: true } },
+        items: { select: { quantity: true } },
         payments: { select: { method: true } },
+        customer: { select: { name: true, email: true } },
       },
     }),
   ]);
@@ -106,7 +131,12 @@ export async function GET(req: NextRequest) {
       voidReason: o.voidReason,
       createdAt: o.createdAt,
       updatedAt: o.updatedAt,
+      parkedAt: o.parkedAt,
+      walkInName: o.walkInName,
+      customerName: o.customer ? (o.customer.name ?? o.customer.email) : null,
       itemCount: o._count.items,
+      // Units rather than lines ("3 items" for a line of 3 pieces).
+      itemQuantity: o.items.reduce((sum, i) => sum + i.quantity, 0),
       paymentMethods: [...new Set(o.payments.map((p) => p.method))],
     })),
     page,

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -14,33 +13,24 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { formatMoney, isQuantityLocked, orderHasDropIn, type PosOrder } from './types';
-
-interface CustomerMatch {
-  id: string;
-  name: string | null;
-  email: string;
-}
-
-interface CustomerDetail {
-  id: string;
-  name: string | null;
-  email: string;
-  memberships: { status: string }[];
-}
-
-function membershipBadge(memberships: { status: string }[] | undefined) {
-  if (!memberships || memberships.length === 0) {
-    return { label: 'No membership', className: 'bg-muted text-muted-foreground' };
-  }
-  if (memberships.some((m) => m.status === 'ACTIVE')) {
-    return { label: 'Active member', className: 'bg-green-100 text-green-800 border-green-200' };
-  }
-  if (memberships.some((m) => m.status === 'PAUSED')) {
-    return { label: 'Paused member', className: 'bg-amber-100 text-amber-800 border-amber-200' };
-  }
-  return { label: 'No active membership', className: 'bg-muted text-muted-foreground' };
-}
+import { CustomAmountDialog } from './cart/CustomAmountDialog';
+import { CustomerPanel } from './cart/CustomerPanel';
+import { DiscountDialog } from './cart/DiscountDialog';
+import { describeDiscount } from './cart/discountLabels';
+import { LineItemRow } from './cart/LineItemRow';
+import { OrderSummary } from './cart/OrderSummary';
+import { ReaderStatusBar } from './cart/ReaderStatusBar';
+import { useReaderStatus } from './payment/useReaderStatus';
+import {
+  apiErrorMessage,
+  formatMoney,
+  orderHasDropIn,
+  remainingBalanceCents,
+  type ApiErrorBody,
+  type PosCatalog,
+  type PosOrder,
+  type PosOrderDiscount,
+} from './types';
 
 interface CartPanelProps {
   order: PosOrder | null;
@@ -52,13 +42,46 @@ interface CartPanelProps {
   onSetTip: (tipCents: number) => void;
   onVoid: (reason: string) => void;
   onCharge: () => void;
+  /** Short studio label shown beside Charge, so a sale never lands at the wrong studio. */
+  locationName?: string;
+  /** For the saved staff discounts and the group events they can be tied to. */
+  catalog?: PosCatalog | null;
+  /** Called with the order returned by any route this panel calls itself. */
+  onOrderUpdate?: (order: PosOrder) => void;
+  /** Sets the order aside for a customer who stepped away. Hidden when not given. */
+  onPark?: () => void;
 }
 
 const TIP_PRESETS = [100, 200, 500];
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
+const NOTICE_MS = 8000;
+
+type Notice = { kind: 'info' | 'warn' | 'error'; text: string };
+
+const NOTICE_STYLES: Record<Notice['kind'], string> = {
+  info: 'border-green-300 bg-green-50 text-green-900',
+  warn: 'border-amber-300 bg-amber-50 text-amber-900',
+  error: 'border-destructive/30 bg-destructive/10 text-destructive',
+};
+
+/** Why the order can't be charged yet, in words; null when it can. */
+function chargeBlockReason(order: PosOrder | null): string | null {
+  if (!order) return 'Starting an order…';
+  if (order.status === 'COMPLETED') return 'This order is paid';
+  if (order.status !== 'OPEN') return 'This order is closed';
+  if (order.items.length === 0) return 'Add an item to charge';
+  if (!order.customerId) {
+    // Drop-ins book a seat and class packs put credits on an account; the
+    // server refuses payment without a customer (CUSTOMER_REQUIRED).
+    if (orderHasDropIn(order)) return 'Attach a customer to sell a class';
+    if (order.items.some((i) => i.category === 'CLASS_PACK')) return 'Attach a customer to sell a class pack';
+  }
+  return null;
+}
 
 export function CartPanel({
-  order,
-  busy,
+  order: orderProp,
+  busy: busyProp,
   onUpdateItemQuantity,
   onRemoveItem,
   onSetItemDiscount,
@@ -66,80 +89,122 @@ export function CartPanel({
   onSetTip,
   onVoid,
   onCharge,
+  locationName,
+  catalog = null,
+  onOrderUpdate,
+  onPark,
 }: CartPanelProps) {
-  const [walkInConfirmed, setWalkInConfirmed] = useState(false);
-  const [customerQuery, setCustomerQuery] = useState('');
-  const [customerMatches, setCustomerMatches] = useState<CustomerMatch[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [customerDetail, setCustomerDetail] = useState<CustomerDetail | null>(null);
-  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Without onOrderUpdate the parent can't take the orders this panel fetches,
+  // so hold the latest one here until the parent's copy catches up.
+  const [override, setOverride] = useState<PosOrder | null>(null);
+  const order =
+    override && orderProp && override.id === orderProp.id && override.updatedAt >= orderProp.updatedAt
+      ? override
+      : orderProp;
 
-  const [discountItemId, setDiscountItemId] = useState<string | null>(null);
-  const [discountInput, setDiscountInput] = useState('');
+  const [working, setWorking] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [taxWarning, setTaxWarning] = useState<string | null>(null);
 
   const [tipPanelOpen, setTipPanelOpen] = useState(false);
   const [customTip, setCustomTip] = useState('');
-
+  const [discountOpen, setDiscountOpen] = useState(false);
+  const [customAmountOpen, setCustomAmountOpen] = useState(false);
   const [voidOpen, setVoidOpen] = useState(false);
   const [voidReason, setVoidReason] = useState('');
 
-  // Debounced customer typeahead search.
+  const reader = useReaderStatus(order?.locationId);
+
+  const orderId = order?.id ?? null;
+  const open = order?.status === 'OPEN';
+  const busy = busyProp || working || !open;
+
+  function applyOrder(updated: PosOrder) {
+    if (onOrderUpdate) onOrderUpdate(updated);
+    else setOverride(updated);
+  }
+
   useEffect(() => {
-    if (searchDebounce.current) clearTimeout(searchDebounce.current);
-    if (!customerQuery.trim()) {
-      setCustomerMatches([]);
-      return;
-    }
-    searchDebounce.current = setTimeout(async () => {
-      setSearching(true);
-      const res = await fetch(`/api/admin/customers?q=${encodeURIComponent(customerQuery.trim())}`);
-      if (res.ok) setCustomerMatches((await res.json()) as CustomerMatch[]);
-      setSearching(false);
-    }, 300);
-    return () => {
-      if (searchDebounce.current) clearTimeout(searchDebounce.current);
-    };
-  }, [customerQuery]);
+    setNotice(null);
+    setTaxWarning(null);
+    setTipPanelOpen(false);
+  }, [orderId]);
 
-  // Load membership detail once a customer is attached.
+  // Only item and customer changes recalculate tax, so keep the last warning
+  // until a response carries the field again.
   useEffect(() => {
-    if (!order?.customerId) {
-      setCustomerDetail(null);
-      return;
+    if (order && 'taxWarning' in order) setTaxWarning(order.taxWarning ?? null);
+  }, [order]);
+
+  useEffect(() => {
+    if (!notice || notice.kind === 'error') return;
+    const t = setTimeout(() => setNotice(null), NOTICE_MS);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  // Say so when a member discount arrives with the customer, so staff can
+  // explain the price change. Keyed by discount code: the rows themselves may
+  // be rebuilt on every reprice.
+  const seenAutomatic = useRef<{ orderId: string | null; keys: Set<string> }>({ orderId: null, keys: new Set() });
+  useEffect(() => {
+    if (!order) return;
+    const automatic = order.discounts.filter((d) => d.automatic);
+    const keys = new Set(automatic.map((d) => d.discountCodeId ?? d.name));
+    const seen = seenAutomatic.current;
+    if (seen.orderId === order.id) {
+      const fresh = automatic.filter((d) => !seen.keys.has(d.discountCodeId ?? d.name));
+      if (fresh.length > 0) {
+        setNotice({
+          kind: 'info',
+          text: fresh
+            .map(
+              (d) =>
+                `${d.name} applied${d.discountCode ? ` · ${describeDiscount(d.discountCode)}` : ''}. It comes with their membership.`,
+            )
+            .join(' '),
+        });
+      }
     }
-    let cancelled = false;
-    fetch(`/api/admin/customers/${order.customerId}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: CustomerDetail | null) => {
-        if (!cancelled) setCustomerDetail(data);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [order?.customerId]);
+    seenAutomatic.current = { orderId: order.id, keys };
+  }, [order]);
 
-  function selectCustomer(customer: CustomerMatch) {
-    setCustomerQuery('');
-    setCustomerMatches([]);
-    onAttachCustomer(customer.id);
+  /** Calls an order route that answers with the order; shows `message ?? error` when it doesn't. */
+  async function callOrderRoute(path: string, init: RequestInit, fallback: string): Promise<PosOrder | null> {
+    setWorking(true);
+    const res = await fetch(path, init).catch(() => null);
+    setWorking(false);
+    if (!res) {
+      setNotice({ kind: 'error', text: 'Could not reach the server. Check the connection and try again.' });
+      return null;
+    }
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as ApiErrorBody;
+      setNotice({ kind: 'error', text: apiErrorMessage(data, fallback) });
+      return null;
+    }
+    const updated = (await res.json()) as PosOrder;
+    applyOrder(updated);
+    return updated;
   }
 
-  function detachCustomer() {
-    setWalkInConfirmed(false);
-    onAttachCustomer(null);
+  async function setItemNote(itemId: string, note: string | null) {
+    if (!order) return;
+    setNotice(null);
+    await callOrderRoute(
+      `/api/pos/orders/${order.id}/items/${itemId}`,
+      { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify({ note }) },
+      'Could not save the note',
+    );
   }
 
-  function openDiscountEditor(itemId: string, currentDiscountCents: number) {
-    setDiscountItemId(itemId);
-    setDiscountInput(currentDiscountCents ? (currentDiscountCents / 100).toFixed(2) : '');
-  }
-
-  function submitDiscount() {
-    if (!discountItemId) return;
-    const dollars = parseFloat(discountInput);
-    const cents = Number.isFinite(dollars) && dollars > 0 ? Math.round(dollars * 100) : 0;
-    onSetItemDiscount(discountItemId, cents);
-    setDiscountItemId(null);
+  async function removeDiscount(discount: PosOrderDiscount) {
+    if (!order) return;
+    setNotice(null);
+    await callOrderRoute(
+      `/api/pos/orders/${order.id}/discounts/${discount.id}`,
+      { method: 'DELETE' },
+      'Could not remove the discount',
+    );
   }
 
   function submitCustomTip() {
@@ -159,208 +224,68 @@ export function CartPanel({
   }
 
   const items = order?.items ?? [];
-  const cartEmpty = items.length === 0;
-  // Drop-ins book a seat for the order's customer; the server refuses payment
-  // without one (CUSTOMER_REQUIRED), so block it here with the reason.
-  const needsCustomer = orderHasDropIn(order) && !order?.customerId;
+  const blockReason = chargeBlockReason(order);
+  const remaining = order ? remainingBalanceCents(order) : 0;
+  const paidCents = order ? order.totalCents - remaining : 0;
 
   return (
-    <div className="flex flex-col gap-5">
-      {/* Customer section */}
-      <div className="rounded-lg border bg-card p-4">
-        <h3 className="mb-3 text-sm font-semibold">Customer</h3>
-
-        {order?.customerId && order.customer ? (
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="font-medium">{order.customer.name ?? order.customer.email}</p>
-              <p className="text-sm text-muted-foreground">{order.customer.email}</p>
-              <Badge className={`mt-1.5 ${membershipBadge(customerDetail?.memberships).className}`}>
-                {membershipBadge(customerDetail?.memberships).label}
-              </Badge>
-            </div>
-            <Button
-              variant="outline"
-              size="icon"
-              className="min-h-11 min-w-11 shrink-0"
-              onClick={detachCustomer}
-              disabled={busy}
-              aria-label="Detach customer"
-            >
-              ×
-            </Button>
-          </div>
-        ) : walkInConfirmed ? (
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">Walk-in customer, no account</p>
-            <Button
-              variant="outline"
-              className="min-h-11"
-              onClick={() => setWalkInConfirmed(false)}
-              disabled={busy}
-            >
-              Change
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <Input
-              placeholder="Search customers by name or email…"
-              value={customerQuery}
-              onChange={(e) => setCustomerQuery(e.target.value)}
-              className="min-h-11 text-base"
-            />
-            {searching && <p className="text-sm text-muted-foreground">Searching…</p>}
-            {customerMatches.length > 0 && (
-              <div className="divide-y rounded-md border">
-                {customerMatches.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => selectCustomer(c)}
-                    className="flex min-h-11 w-full flex-col items-start justify-center px-3 py-2 text-left hover:bg-muted"
-                  >
-                    <span className="font-medium">{c.name ?? c.email}</span>
-                    <span className="text-sm text-muted-foreground">{c.email}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            <Button
-              variant="secondary"
-              className="min-h-11 w-full"
-              onClick={() => setWalkInConfirmed(true)}
-              disabled={busy}
-            >
-              Walk-in, no account
-            </Button>
-          </div>
-        )}
-      </div>
+    <div className="flex min-w-0 flex-col gap-4">
+      <CustomerPanel
+        order={order}
+        catalog={catalog}
+        busy={busy}
+        onAttachCustomer={onAttachCustomer}
+        onOrderUpdate={applyOrder}
+      />
 
       {/* Line items */}
       <div className="max-h-[45vh] overflow-y-auto rounded-lg border bg-card">
-        {cartEmpty ? (
+        {!order?.customerId && items.length > 0 && (
+          <p className="border-b px-3 py-1.5 text-sm">
+            <span className="font-semibold">Walk-in</span>
+            {order?.walkInName ? <span className="text-muted-foreground"> · {order.walkInName}</span> : null}
+          </p>
+        )}
+        {items.length === 0 ? (
           <p className="p-4 text-sm text-muted-foreground">No items in this order yet.</p>
         ) : (
           <div className="divide-y">
             {items.map((item) => (
-              <div key={item.id} className="flex items-center gap-3 p-3">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{item.name}</p>
-                  <p className="text-sm text-muted-foreground">{formatMoney(item.unitPriceCents)} each</p>
-                </div>
-
-                {/* Quantity stepper (not for drop-ins or clay & firing lines) */}
-                <div className={isQuantityLocked(item) ? 'hidden' : 'flex items-center gap-1.5'}>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="min-h-11 min-w-11"
-                    onClick={() =>
-                      item.quantity <= 1
-                        ? onRemoveItem(item.id)
-                        : onUpdateItemQuantity(item.id, item.quantity - 1)
-                    }
-                    disabled={busy}
-                    aria-label={`Decrease quantity of ${item.name}`}
-                  >
-                    −
-                  </Button>
-                  <span className="w-6 text-center font-medium">{item.quantity}</span>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="min-h-11 min-w-11"
-                    onClick={() => onUpdateItemQuantity(item.id, item.quantity + 1)}
-                    disabled={busy}
-                    aria-label={`Increase quantity of ${item.name}`}
-                  >
-                    +
-                  </Button>
-                </div>
-
-                {/* Line total — tap to edit discount */}
-                {discountItemId === item.id ? (
-                  <div className="flex items-center gap-1.5">
-                    <Input
-                      autoFocus
-                      inputMode="decimal"
-                      value={discountInput}
-                      onChange={(e) => setDiscountInput(e.target.value)}
-                      placeholder="0.00"
-                      className="min-h-11 w-20 text-base"
-                    />
-                    <Button size="sm" className="min-h-11" onClick={submitDiscount}>
-                      Save
-                    </Button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => openDiscountEditor(item.id, item.discountCents)}
-                    className="min-h-11 min-w-20 rounded-md px-2 text-right font-semibold hover:bg-muted"
-                    title="Tap to add a discount"
-                  >
-                    {formatMoney(item.totalCents)}
-                    {item.discountCents > 0 && (
-                      <span className="block text-xs font-normal text-green-700">
-                        −{formatMoney(item.discountCents)}
-                      </span>
-                    )}
-                  </button>
-                )}
-
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="min-h-11 min-w-11 shrink-0 text-destructive"
-                  onClick={() => onRemoveItem(item.id)}
-                  disabled={busy}
-                  aria-label={`Remove ${item.name}`}
-                >
-                  ×
-                </Button>
-              </div>
+              <LineItemRow
+                key={item.id}
+                item={item}
+                busy={busy}
+                onUpdateQuantity={onUpdateItemQuantity}
+                onRemove={onRemoveItem}
+                onSetDiscount={onSetItemDiscount}
+                onSetNote={setItemNote}
+              />
             ))}
           </div>
         )}
       </div>
 
-      {/* Totals */}
-      <div className="rounded-lg border bg-card p-4">
-        <div className="space-y-1.5 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Subtotal</span>
-            <span>{formatMoney(order?.subtotalCents ?? 0)}</span>
-          </div>
-          {(order?.discountCents ?? 0) > 0 && (
-            <div className="flex justify-between text-green-700">
-              <span>Discount</span>
-              <span>−{formatMoney(order!.discountCents)}</span>
-            </div>
-          )}
-          {(order?.taxCents ?? 0) > 0 && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Tax</span>
-              <span>{formatMoney(order!.taxCents)}</span>
-            </div>
-          )}
-          {(order?.tipCents ?? 0) > 0 && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Tip</span>
-              <span>{formatMoney(order!.tipCents)}</span>
-            </div>
-          )}
-        </div>
-        <div className="mt-3 flex items-center justify-between border-t pt-3">
-          <span className="text-lg font-semibold">Total</span>
-          <span className="text-2xl font-bold">{formatMoney(order?.totalCents ?? 0)}</span>
-        </div>
-      </div>
+      <OrderSummary order={order} busy={busy} taxWarning={taxWarning} onRemoveDiscount={removeDiscount} />
 
       {/* Actions */}
       <div className="space-y-2">
+        {notice && (
+          <div
+            className={`flex items-start justify-between gap-2 rounded-md border p-3 text-sm ${NOTICE_STYLES[notice.kind]}`}
+            role={notice.kind === 'error' ? 'alert' : 'status'}
+          >
+            <span>{notice.text}</span>
+            <button
+              type="button"
+              onClick={() => setNotice(null)}
+              className="-m-2 min-h-11 min-w-11 shrink-0"
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         {tipPanelOpen && (
           <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-3">
             {TIP_PRESETS.map((cents) => (
@@ -376,7 +301,7 @@ export function CartPanel({
                 {formatMoney(cents)}
               </Button>
             ))}
-            <div className="flex flex-1 items-center gap-1.5">
+            <div className="flex min-w-40 flex-1 items-center gap-1.5">
               <Input
                 inputMode="decimal"
                 placeholder="Custom $"
@@ -391,15 +316,44 @@ export function CartPanel({
           </div>
         )}
 
-        <div className="flex gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <Button
             variant="outline"
-            className="min-h-11 flex-1"
+            className="min-h-11 whitespace-normal px-2"
             onClick={() => setTipPanelOpen((v) => !v)}
             disabled={busy || !order}
           >
             Add tip
           </Button>
+          <Button
+            variant="outline"
+            className="min-h-11 whitespace-normal px-2"
+            onClick={() => setDiscountOpen(true)}
+            disabled={busy || !order}
+          >
+            Discount
+          </Button>
+          <Button
+            variant="outline"
+            className="min-h-11 whitespace-normal px-2 leading-tight"
+            onClick={() => setCustomAmountOpen(true)}
+            disabled={busy || !order}
+          >
+            Custom amount
+          </Button>
+        </div>
+
+        <div className="flex gap-2">
+          {onPark && (
+            <Button
+              variant="outline"
+              className="min-h-11 flex-1"
+              onClick={onPark}
+              disabled={busy || !order || items.length === 0}
+            >
+              Park order
+            </Button>
+          )}
           <Button
             variant="outline"
             className="min-h-11 flex-1 text-destructive"
@@ -409,20 +363,62 @@ export function CartPanel({
             Void order
           </Button>
         </div>
+      </div>
 
-        {needsCustomer && (
-          <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-            This order books a class seat. Attach the customer above before charging.
+      {/* Reader status and Charge stay in view however long the order gets. */}
+      <div className="sticky bottom-0 z-10 -mx-1 space-y-2 bg-background px-1 pb-1 pt-2">
+        <ReaderStatusBar status={reader} />
+
+        {paidCents > 0 && open && (
+          <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+            Paid so far {formatMoney(paidCents)} · <span className="font-semibold">Remaining {formatMoney(remaining)}</span>
           </p>
         )}
-        <Button
-          className="min-h-14 w-full text-lg font-semibold"
-          onClick={onCharge}
-          disabled={busy || cartEmpty || needsCustomer}
-        >
-          Charge {formatMoney(order?.totalCents ?? 0)}
-        </Button>
+
+        <div className="flex items-stretch gap-2">
+          {locationName && (
+            <div className="flex max-w-[40%] shrink-0 flex-col justify-center rounded-md border-2 border-foreground/80 px-3 py-1">
+              <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Studio</span>
+              <span className="break-words text-lg font-bold leading-tight">{locationName}</span>
+            </div>
+          )}
+          <Button
+            className="h-auto min-h-14 flex-1 whitespace-normal text-lg font-semibold leading-tight"
+            onClick={onCharge}
+            disabled={busyProp || working || blockReason !== null}
+          >
+            {blockReason ??
+              (remaining === 0
+                ? 'Complete order · nothing to pay'
+                : `Charge ${formatMoney(remaining)}`)}
+          </Button>
+        </div>
       </div>
+
+      {order && (
+        <>
+          <DiscountDialog
+            open={discountOpen}
+            onOpenChange={setDiscountOpen}
+            order={order}
+            catalog={catalog}
+            onApplied={(updated, discountWarning) => {
+              applyOrder(updated);
+              setNotice(
+                discountWarning
+                  ? { kind: 'warn', text: `${discountWarning} It takes effect when a qualifying item is added.` }
+                  : { kind: 'info', text: 'Discount applied.' },
+              );
+            }}
+          />
+          <CustomAmountDialog
+            open={customAmountOpen}
+            onOpenChange={setCustomAmountOpen}
+            orderId={order.id}
+            onAdded={applyOrder}
+          />
+        </>
+      )}
 
       <AlertDialog open={voidOpen} onOpenChange={setVoidOpen}>
         <AlertDialogContent>

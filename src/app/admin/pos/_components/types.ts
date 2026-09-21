@@ -166,6 +166,7 @@ export interface CustomerSummary {
     quantity: number;
     studioSessionId: string;
     name: string;
+    sessionTypeId?: string;
     kind: string;
     startsAt: string;
     endsAt: string;
@@ -178,6 +179,8 @@ export interface SessionTypeCatalogItem {
   id: string;
   name: string;
   dropInPriceCents: number;
+  /** "PER_WHEEL" | "PER_PERSON" | "FLAT": what a booking's quantity counts. */
+  priceUnit?: string;
 }
 
 export interface MembershipPlanCatalogItem {
@@ -203,6 +206,29 @@ export interface UpcomingSessionCatalogItem {
   seriesId: string | null;
 }
 
+/**
+ * A course, sold once at the course price. The sale books the customer into
+ * every session in `sessions` (the ones that haven't finished yet).
+ */
+export interface CourseCatalogItem {
+  /** seriesId, or the session id for a course session with no series. */
+  key: string;
+  seriesId: string | null;
+  /** First session still to come; what the sale is keyed on. */
+  sessionId: string;
+  sessionTypeId: string;
+  name: string;
+  priceCents: number;
+  instructorName: string | null;
+  /** When the course began, which may be in the past. */
+  startsAt: string;
+  started: boolean;
+  totalSessions: number;
+  /** Seats free in every remaining session. */
+  spotsLeft: number;
+  sessions: { id: string; startsAt: string; endsAt: string; capacity: number; confirmedCount: number }[];
+}
+
 export interface PosCatalog {
   retailProducts: RetailProductCatalogItem[];
   sessionTypes: SessionTypeCatalogItem[];
@@ -213,6 +239,8 @@ export interface PosCatalog {
   staffDiscounts: StaffDiscount[];
   groupEventSessions: { id: string; name: string; startsAt: string }[];
   firingRates: FiringRates | null;
+  /** One entry per course at this studio with sessions still to come. */
+  courses?: CourseCatalogItem[];
 }
 
 export interface Location {
@@ -254,9 +282,18 @@ export function dropInSessionIdOf(item: PosOrderItem): string | null {
   return typeof id === 'string' ? id : null;
 }
 
-/** Drop-ins (one seat) and clay & firing lines (priced for a weight) can't change quantity. */
+/** Drop-ins (one seat) and by-weight, clay & firing lines (priced for a weight) can't change quantity. */
 export function isQuantityLocked(item: PosOrderItem): boolean {
-  return item.itemType === 'DROP_IN' || metadataRecord(item).kind === 'FIRING';
+  const m = metadataRecord(item);
+  return (
+    item.itemType === 'DROP_IN' || m.kind === 'FIRING' || m.kind === 'MEMBER_FIRING' || m.unit === 'LB'
+  );
+}
+
+/** The hand-entered dollar discount on a line (named discounts are shared out on top of it). */
+export function manualDiscountCentsOf(item: PosOrderItem): number {
+  const cents = metadataRecord(item).manualDiscountCents;
+  return typeof cents === 'number' && cents > 0 ? cents : 0;
 }
 
 export function orderHasDropIn(order: Pick<PosOrder, 'items'> | null): boolean {

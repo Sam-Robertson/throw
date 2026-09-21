@@ -10,6 +10,10 @@ import {
   repriceOrder,
 } from "@/lib/pos";
 import { formatMountainTime } from "@/lib/timezone";
+import {
+  LARGE_DISCOUNT_NOTE_MESSAGE,
+  isLargeDiscount,
+} from "@/app/admin/pos/_components/cart/discountPolicy";
 
 /**
  * Puts a named discount on an open order: staff-applied discounts by
@@ -84,6 +88,13 @@ export async function POST(
       { error: "ALREADY_APPLIED", message: "That discount is already on this order." },
       { status: 409 },
     );
+  }
+
+  // Policy: a large staff-applied discount needs the reason written down, even
+  // when the discount itself doesn't ask for a note (same thresholds the
+  // register's discount picker uses).
+  if (discount.appliesVia === "STAFF" && isLargeDiscount(discount) && !body.note?.trim()) {
+    return NextResponse.json({ error: "NOTE_REQUIRED", message: LARGE_DISCOUNT_NOTE_MESSAGE }, { status: 400 });
   }
 
   // "Only on orders tied to a group event": staff pick the event, and it is

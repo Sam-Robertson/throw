@@ -17,6 +17,7 @@
 // up where it stopped.
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { WALKIN_EMAIL_DOMAIN } from "@/lib/walkinEmail";
 import { PASSWORD_TOKEN_TTL_MS, issuePasswordEmail, passwordTokenIdentifier } from "@/lib/email/passwordSetup";
 
 const MAX_PER_SECOND = 10;
@@ -76,6 +77,9 @@ async function main() {
   const where: Prisma.UserWhereInput = {
     role: "CUSTOMER",
     hashedPassword: null,
+    // Phone-only customers made at the register have a placeholder address
+    // that can't receive mail (src/lib/walkinEmail.ts).
+    NOT: { email: { endsWith: `@${WALKIN_EMAIL_DOMAIN}`, mode: "insensitive" } },
     ...(options.locationId
       ? {
           OR: [

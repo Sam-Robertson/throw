@@ -3,7 +3,6 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { checkPermission } from "@/lib/permissions";
 import { MEMBER_FIRING_KIND, manualDiscountCents, metadataObject, repriceOrder } from "@/lib/pos";
-import { parseFiringMetadata } from "@/config/firingPrices";
 
 export async function PATCH(
   req: NextRequest,
@@ -47,7 +46,8 @@ export async function PATCH(
   const meta = metadataObject(item.metadata);
   const quantityLocked =
     item.itemType === "DROP_IN" ||
-    parseFiringMetadata(item.metadata) !== null ||
+    // "FIRING" is the old Clay & firing tab's custom line; open ones may still exist.
+    meta.kind === "FIRING" ||
     meta.kind === MEMBER_FIRING_KIND ||
     meta.unit === "LB";
   if (quantityLocked && quantity !== item.quantity) {
