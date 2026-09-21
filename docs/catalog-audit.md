@@ -321,3 +321,90 @@ Private, archived and internal session pages return 404 unless the viewer is boo
 "unconfirmed" marker, archive and restore instead of delete, stable slugs. The schedule
 takes a per-session title, price override and class-ticket override; archived types
 can't be scheduled.
+
+---
+
+## Prompt 5 results — products, firing, discounts, gift cards
+
+Products, piece charges, firing, discounts and gift cards (2026-09-19). No schema changes.
+
+### Data
+`scripts/sync-products.ts` (`npm run sync:products`, dry run by default, `-- --apply` to write, idempotent,
+never deletes; pass `DATABASE_URL` explicitly). Matches products on `slug` and discounts on `code`.
+
+| Category | Rows |
+|---|---|
+| PIECES | `piece-1lb` $9.99, `piece-1-5lb` $12.99, `piece-2lb` $14.99, `add-handle` $1.50, `glazed-by-us` $7.99, `extra-clay` $3.00/lb. OPEN: `piece-over-2lb` |
+| FIRING (members only) | `glaze-firing` $1.00/lb min $1.00, `glaze-firing-oversize` $1.75/lb min $1.00, `bisque-firing` $0.00 |
+| CLAY | `clay-b-mix` $1.00/lb, `clay-recycled` $0.50/lb. OPEN: `clay-speckled-buff`, `clay-charcoal`, `clay-{b-mix,speckled-buff,charcoal}-bag-{10,25}lb`, `clay-sample-pack` |
+| CLASS_PACK | `class-pack-5` $150 (5 credits), `class-pack-10` $270, `class-pack-15` $360 |
+| SHIPPING | `shipping-1-2-pieces` $25, `shipping-3-4-pieces` $45. OPEN: `shipping-5-plus-pieces` |
+
+OPEN rows are inactive, `isPriced=false`, $0; admin shows them as "Not priced — inactive" and refuses to
+activate them. All catalog products have `trackInventory=false` and `locationId` null.
+
+Discounts: STAFF10, COMMIT3, COMMIT12 (automatic), GROUPEXTRAS20, GETOUTPASS, FREEWHEEL, KICKSTART50, GRAND30.
+FREEWHEEL / KICKSTART50 look up class types `clay-together` / `pottery-kickstart` and GRAND30 the Lehi studio;
+when missing they are created INACTIVE and unlinked with a warning, and a later run links and activates them.
+**Run order: `sync-class-types.ts` first, then `sync-products.ts`.** Promo codes (appliesVia CODE) are
+client-managed after creation: the script only repairs their link and reports drift.
+
+### Tax codes (`src/config/taxCodes.ts`)
+Product `taxCode`, else category default: RETAIL / PIECES / FIRING / CLAY `txcd_99999999`, SHIPPING
+`txcd_92010001`, CLASS_PACK not taxed. `taxCodeForPosItem(itemType, product?)` is category-aware.
+Tax is still Stripe Tax only, now on post-discount line totals.
+
+### Libraries
+- `src/lib/firing.ts` — `quoteMemberFiring(pieces, rates)`: weight to 0.1 lb (input finer than 0.1 lb rounds
+  half up, 1.25 → 1.3), rate × weight rounded to the cent, then the per-piece minimum. Integer tenths and
+  cents only. Rates come from the two firing product rows. `priceByWeight` prices clay the same way.
+- `src/lib/discounts.ts` — pure engine. Order: manual line discount → automatic → percent → fixed; each works on
+  what is left of a line; `maxUnits` discounts the dearest units first; RETAIL scope never touches pieces,
+  firing, clay, packs, shipping, custom lines or gift cards; gift card and membership lines are never
+  discounted. `checkDiscountUsable` holds the rules shared by the POS and online checkout.
+- `src/lib/giftCardCode.ts` — one alphabet/generator for POS and admin; lookup ignores dashes and spaces
+  (closes the two-alphabets item in section 7).
+- `src/lib/bookingCheckout.ts` — promo code + gift card pricing and recording for online class checkout.
+- `npm test` (vitest): 49 tests.
+
+### POS server (`src/lib/pos.ts`, `src/app/api/pos/**`)
+The full contract the POS UI is built against is in `docs/pos-api.md`.
+- `repriceOrder`: attaches/detaches the automatic member discount from the customer's active commitment
+  (`CommitmentTerm.months`, else `MembershipPlan.commitmentMonths`; longest qualifying wins), runs the engine,
+  writes line `discountCents`/`totalCents` and `PosOrderDiscount.amountCents`, then Stripe Tax. The manual
+  per-line discount lives in `PosOrderItem.metadata.manualDiscountCents`.
+- New routes: `POST/DELETE …/orders/[id]/discounts[/discountId]`, `POST …/orders/[id]/firing`,
+  `POST …/orders/[id]/payments/account-credit`, `GET /api/pos/customers/[id]/summary?locationId=`.
+- Add item: stores `category`, honours `trackInventory`, by-weight products (`weightLb`, minimum, quantity
+  locked), refuses `membersOnly` products unless the customer is an active member or an enrolled course
+  student, refuses unpriced products, requires a customer for class packs. Line `note` on create and PATCH.
+- Catalog adds `products`, `productGroups`, `staffDiscounts`, `groupEventSessions`, `firingRates`.
+- Completion: stock only for tracked products, `ClassCreditLedger` PURCHASE rows for class packs,
+  `DiscountRedemption` rows and `usedCount`. Void gives back gift card and account credit tenders (payments
+  marked REFUNDED), takes class pack credits back and releases discount uses.
+- Gift cards work as a POS tender; the decrement is now atomic.
+
+### Admin
+Products (category, unit, price, priced, minimum, members only, stock tracking, class credits, tax code, sort
+order, read-only slug, archive/restore, grouped by category). Discounts now read and write the `DiscountCode`
+table, not Stripe coupons (all fields, used count, archive/restore). Gift cards: custom amount, no expiry,
+deactivate instead of delete. Stripe promotion codes remain only for the Lehi preorder widget.
+
+### Online
+`/api/bookings/checkout` accepts `promoCode`, `giftCardCode` and `preview`. A gift card that covers the price
+books without Stripe; otherwise Stripe charges the remainder (never under $0.50) and the webhook deducts the
+gift card and redeems the code only after payment succeeds. The webhook booking branch is now idempotent on
+the payment intent.
+
+### Still open
+- Class pack credits are granted and shown but nothing spends them yet (`/api/bookings` and a POS class-credit
+  tender).
+- Group event linkage is stored in the discount's note (no column); group events are recognised as
+  `priceUnit=FLAT`, `isPublic=false`.
+- `src/config/firingPrices.ts` and the legacy `kind:"FIRING"` custom line are deprecated, kept only until the
+  POS FiringPanel is replaced.
+- POS receipts/emails do not show named discounts or line notes yet.
+- Client questions unchanged: piece over 2 lb, Speckled Buff / Charcoal / bag / sample pack prices, shipping
+  5+, GRAND30 end date and scope. Assumptions to confirm: "enrolled student" = a confirmed course booking in
+  the last 90 days or upcoming; "once per year" = rolling 365 days; bags exist for B-Mix, Speckled Buff and
+  Charcoal (not recycled clay).
