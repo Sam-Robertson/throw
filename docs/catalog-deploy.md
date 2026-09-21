@@ -28,6 +28,9 @@ cd ~/Desktop/throw          # .env points at production
 npm run catalog:sync-class-types              # read the plan
 npm run catalog:sync-class-types -- --apply
 
+npm run catalog:backfill-series               # read the plan
+npm run catalog:backfill-series -- --apply
+
 npm run sync:products                         # read the plan
 npm run sync:products -- --apply
 
@@ -38,6 +41,10 @@ npm run sync:plans -- --apply
 Expected:
 - Class types: 52 active → 17 active, 44 archived, 653 upcoming sessions moved onto the
   canonical types. Past sessions, bookings and orders are not touched. Nothing deleted.
+- Series: upcoming course sessions grouped into cohorts so a course sells as one line
+  (Lehi Kickstart Mondays, After-School Wednesdays). It also lists two Momence "container"
+  rows (Oct 5 → Oct 26 and Oct 7 → Nov 11) that are not real classes: cancel those two in
+  Admin › Schedule so they stop appearing as bookable.
 - Products and discounts: 35 rows created. No warnings if the class types ran first
   (FREEWHEEL, KICKSTART50 and GRAND30 link to Clay Together, Kickstart and Lehi).
 - Plans: 19 rows created (6 standard, 3 founding, 3 legacy, 3 terms, guest pass, cap
