@@ -43,3 +43,6 @@ prisma/*.db-journal
 
 # pulled Google Sheets data (contains customer PII, never commit)
 /sheets-export/
+
+# pre-sync database snapshots
+backups/

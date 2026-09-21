@@ -408,3 +408,127 @@ the payment intent.
   5+, GRAND30 end date and scope. Assumptions to confirm: "enrolled student" = a confirmed course booking in
   the last 90 days or upcoming; "once per year" = rolling 365 days; bags exist for B-Mix, Speckled Buff and
   Charcoal (not recycled clay).
+
+---
+
+## Prompt 6 results — catalog side
+
+Built 2026-09-21 against a local database only. tsc, vitest (49) and eslint clean.
+
+**Location.** The register is bound to one studio. `src/app/admin/pos/page.tsx` loads the active studios the user may sell at (admins: all; staff: their `StaffRoleAssignment` studios, the same rule `checkPermission("canUsePos", locationId)` enforces on every route) and the header lists them by `shortLocationName`, never "All", independent of the admin sidebar switcher. The last studio is remembered per device (`localStorage` `throw.pos.locationId`). Catalog and order creation always send the bound `locationId`. Changing studio with items on the order parks that order at the old studio and opens a new one; an inline notice says so. The short studio name is passed to the order panel.
+
+**Tabs** (`_components/catalog/**`, `CatalogPanel.tsx` is the shell): Pieces & Firing (default), Classes, Retail, Memberships, Gift Card, Custom.
+- *Pieces & Firing*: quick-add buttons for PIECES/EACH products with an on-order count (taps are queued in `PosTerminal`, so fast repeat taps all land); by-weight rows for Extra clay and CLAY using `priceByWeight`; member firing calculator using `quoteMemberFiring` with `catalog.firingRates`, one piece at a time with an over 12 in switch and "minimum applied", submitted to `POST …/firing`; Bisque firing button. Member firing is on only when the summary says `canUseMemberFiring`, and the tab says why when it is off. The customer's bookings today show at the top ("Clay Together…, 7:00 PM, 2 wheels").
+- *Classes*: sessions today first then the next 7 days, grouped by day, with spots left and the real price, full ones disabled, search box. Courses are their own group, one entry per course.
+- *Retail*: tile grid before any search (RETAIL, then Class packs and Shipping); "No retail products yet" with a link to Studio Set-up › Products when there are none; "No products match" only for an empty search; stock only when tracked.
+- *Memberships*: lookup only (plan, status, tickets, class pack credits, account credit). Nothing here sells a subscription.
+- *Custom*: description required client side and server side (400 `NAME_REQUIRED`).
+- Keyboard: search focuses when its tab opens, Enter adds the top result, Escape clears.
+
+**Courses, server side.** `GET /api/pos/catalog` adds `courses[]` (`key, seriesId, sessionId, sessionTypeId, name, priceCents, instructorName, startsAt, started, totalSessions, spotsLeft, sessions[]`; COURSE-kind, sellable, sessions not yet finished, 120 days ahead) and `sessionTypes[].priceUnit`; the class window is now today + 7 days. `POST …/items` DROP_IN accepts `metadata.seriesId` or any course session id and creates ONE line at the course price with `metadata.courseSessionIds` (first id is also `studioSessionId`); capacity, already-booked and already-in-order are checked for every session (`COURSE_NOT_FOUND` 404 when none remain). `checkOrderPayable` checks every session. On completion `createDropInBookings` books every session: the first booking carries `posOrderItemId` and `amountPaidCents` (the column is unique), the rest are $0 and their ids are stored in `metadata.courseBookingIds`; a session that filled up falls back to WAITLIST with an order note. Void cancels all of them.
+
+**Header.** "Order #N" is plain text. Park order = `PATCH /api/pos/orders/[id] { parked: true }` (sets `parkedAt`) then a fresh order; resuming sends `{ parked: false }` and parks whatever was on the register. `GET /api/pos/orders?resumable=1&locationId=&excludeId=` returns OPEN orders with items at the studio — every parked order (any staff), plus the caller's own from the last 12 hours — parked first, with `parkedAt, walkInName, customerName, itemQuantity`. The button shows the count. No cash tender, no cash drawer link.
+
+**Void.** Reason required server side (400 `REASON_REQUIRED`, trimmed, 500 chars). The order panel asks for it; `PosTerminal` has a fallback dialog if `onVoid` is called without one.
+
+**Removed.** `src/config/firingPrices.ts`, `FiringPanel.tsx`, the `metadata.kind === "FIRING"` CUSTOM branch in the items route and the legacy piece-split loop in `attachFiringCharges`. Old lines still display (name is stored) and stay quantity-locked.
+
+**Open points.**
+- A course sale emits `booking/confirmed` once per session, so the customer gets one confirmation per session; collapse in the inngest handler if that is too noisy.
+- Online checkout (`/api/bookings/checkout`) still books a single session of a course; only the POS books the series.
+- Each page load / studio change still creates an empty OPEN order (hidden from the resume list, but they accumulate).
+- `docs/pos-api.md` was updated with the additions above (courses, `parked`, `resumable`, `REASON_REQUIRED`, `NAME_REQUIRED`, legacy FIRING removed).
+
+---
+
+## Prompt 6 results — order and payment side
+
+Built 2026-09-21 against `docs/pos-api.md`. No schema change, no cash tender. Card reader, Gift card, Account credit, Enter card and Comp are the tenders.
+
+### Order panel (`CartPanel.tsx`, `cart/*`)
+- Lines use a two-row layout that fits the iPad order column.
+  - Plus and minus, hidden on quantity-locked lines. `isQuantityLocked` now also covers `unit: "LB"` and `kind: "MEMBER_FIRING"`.
+  - Remove.
+  - A per-line note via `PATCH …/items/[itemId] { note }`.
+  - Tap the line total for the manual dollar discount.
+- The summary shows:
+  - Subtotal.
+  - Each named discount on its own line, as "name · N% off scope".
+  - Automatic discounts marked "Automatic. Comes with the customer's membership." with no ×.
+  - "Line discounts" for the manual remainder.
+  - Tax, always, with the `taxWarning` hint.
+  - Tip and Total.
+- Discount button.
+  - Offers saved staff discounts from `catalog.staffDiscounts`, or a promo code.
+  - Collects a note, a group event from `catalog.groupEventSessions`, and warns when a customer is required but missing.
+  - Shows `discountWarning` and every error `message`.
+- Large-discount policy.
+  - `cart/discountPolicy.ts` exports `DISCOUNT_NOTE_POLICY = { percentAtOrAbove: 50, fixedCentsAtOrAbove: 2000 }`, re-exported from `DiscountDialog.tsx`.
+  - `POST …/discounts` enforces it for `appliesVia: "STAFF"` discounts and returns 400 `NOTE_REQUIRED`.
+- Custom amount takes an amount and a required description, and adds a CUSTOM line.
+- A disabled Charge says why:
+  - "Add an item to charge".
+  - "Attach a customer to sell a class".
+  - "Attach a customer to sell a class pack".
+- The studio name sits in a bordered box beside Charge. Reader status and Charge are sticky at the bottom of the panel.
+- New props: `locationName`, `catalog`, `onOrderUpdate`, `onPark`. All are optional, and without `onOrderUpdate` the panel keeps the fetched order locally.
+
+### Payment (`PaymentSheet.tsx`, `TerminalPane.tsx`, `payment/*`)
+- Card reader is the default and largest tender.
+- Gift card:
+  - `GET /api/pos/gift-cards/lookup?code=` (new) shows balance now, what goes on this order and balance after.
+  - Partial redemption returns to the tenders with what is left to pay.
+  - The attached customer's cards are one-tap choices.
+- Account credit appears only when the customer has credit, and shows available and credit after.
+- Enter card and admin-only Comp remain.
+- `POST …/payments/no-charge` (new) completes an order with nothing to pay ($0 bisque firing, fully discounted). It runs the same prechecks and completion and creates no payment row.
+- Reader status is always visible in the order panel.
+  - `payment/useReaderStatus.ts` holds one module-level store per studio, polling every 30 seconds and on focus.
+  - The chosen reader is remembered in `localStorage["pos.reader.<locationId>"]`.
+  - With no reader online, the Card reader tender is disabled with the reason and Reconnect, and the fallback tenders become primary.
+- Tapping Card reader sends straight to the chosen reader.
+  - The waiting state is a wide sheet with a large amount and a full-width "Cancel payment" on the existing terminal-cancel route.
+  - The sheet cannot be dismissed while waiting.
+  - The old Cancel button was permanently disabled while waiting. That is fixed.
+- Success screen: Email, Text and None, prefilled from the customer (walk-ins can type), "Send now", Print, and a big New order.
+
+### Receipts
+- `POST /api/pos/orders/[id]/receipt { channel: "email"|"sms"|"none", to? }`.
+  - Sends directly through Resend or `sendSms`, so staff see failures.
+  - Skips suppressed addresses and numbers with 409 `SUPPRESSED`, and never emails `@walkin.invalid`.
+  - With no body it is the "resend" action: email the customer on file, else text.
+- No double sends.
+  - Every call fires `pos/receipt.chosen`.
+  - The `pos/order.completed` Inngest function now waits 3 minutes and has `cancelOn` for that event.
+  - It only ever emails a real customer address. The SMS fallback was removed.
+- On the success screen Email is preselected when the customer has an address, and whatever is selected but unsent goes out on New order. None cancels the automatic email.
+- Receipts list line notes, each named discount, other discounts, tax (always), tip, total and each tender (`src/inngest/posReceipt.ts`).
+- Walk-in SMS receipts log `SmsLog.userId = "pos-order:<id>"`.
+
+### Customer panel (`cart/CustomerPanel.tsx`)
+- Walk-in, Find customer and New customer is a segmented control.
+  - Walk-in is the selected default for every new order.
+  - Optional walk-in name and phone are saved with `PATCH /api/pos/orders/[id]`.
+  - A "Walk-in" label shows above the order lines.
+- `POST /api/pos/customers` (new, `canUsePos`):
+  - Name required, plus an email or a phone.
+  - 409 `CUSTOMER_EXISTS` returns the existing customer, and the UI offers to attach them.
+  - Phone-only customers get `walkin-<random>@walkin.invalid` (`src/lib/walkinEmail.ts`).
+  - Those addresses are skipped by receipts, waiver links, `sendPasswordEmail` and `scripts/send-password-setup.ts`.
+- With a customer attached, the panel shows plan and status, tickets, class pack credits, account credit, gift card balance, today's bookings ("Clay Together, 7:00 PM, 2 wheels") and a waiver badge. It reloads when the customer changes or the order completes.
+- Missing waiver: a warning with "Send waiver link", backed by `POST /api/pos/customers/[id]/send-waiver { locationId, channel? }`.
+  - Texts when there is a phone, else emails, and checks the suppression list.
+  - Returns 409 `WAIVER_ON_FILE` when the waiver is already signed.
+  - Returns 409 `NO_LOGIN_EMAIL` for phone-only customers, because `/waiver` needs a sign-in.
+- The automatic member discount shows as a named summary line, plus a one-line notice when it appears.
+
+### Verified
+- `tsc`, `npm test` (49 passing) and eslint are clean.
+- Every new or changed route was exercised with curl against a local database, with no `.env`.
+- The order, tender, success and New order flow was driven in a browser at iPad landscape width.
+- Not runtime-tested: a live reader (online, waiting, Cancel), since no Stripe Terminal was available locally.
+
+### Follow-ups
+- A no-login, tokenised waiver signing link, so phone-only walk-ins can sign from a text.
+- Customer search by phone in `/api/admin/customers?q=`.
+- Resolved during integration: the duplicate Park order button and tax banner were removed, and the unused `payments/cash` route was deleted.

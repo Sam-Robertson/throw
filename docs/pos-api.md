@@ -37,6 +37,9 @@ Existing keys `sessionTypes`, `membershipPlans` and `upcomingSessions` are uncha
 - **`staffDiscounts[]`:** STAFF-applicable, active, in date, for this studio. Each is `{ id, code, name, description, type, value, scope, sessionTypeId, sessionTypeName, productSlug, maxUnits, maxUsesPerCustomerPerYear, requiresNote, requiresGroupEvent, requiresCustomer }`.
 - **`groupEventSessions[]`:** `{ id, name, startsAt }`. These are group-event sessions at this studio from 6 days ago through the class-list horizon, for `requiresGroupEvent` discounts.
 - **`firingRates`:** `{ standardCentsPerLb, oversizeCentsPerLb, minChargeCents, standardProductId, oversizeProductId } | null`. It is null when the firing products are missing or inactive. The UI can import the pure `quoteMemberFiring` from `@/lib/firing` for a live preview with these rates.
+- **`upcomingSessions`** (Prompt 6): the window is now today plus the next 7 Mountain Time days (was 6). Each row has `kind` ("EVENT" | "COURSE") and `seriesId`. The Classes tab lists the EVENT rows by day and leaves COURSE rows to `courses`.
+- **`sessionTypes[].priceUnit`** (Prompt 6): `"PER_WHEEL" | "PER_PERSON" | "FLAT"`, so the UI can say "2 wheels" for a booking's quantity.
+- **`courses[]`** (Prompt 6): one entry per course at this studio. A course is the COURSE-kind, sellable sessions sharing a `seriesId` (a course session with no `seriesId` is its own entry), counting only sessions that have not finished, up to 120 days ahead, with a real price. Each is `{ key (seriesId or the session id), seriesId|null, sessionId (first session still to come), sessionTypeId, name, priceCents, instructorName, startsAt (when the course began, may be past), started, totalSessions, spotsLeft (the smallest across the remaining sessions), sessions: [{ id, startsAt, endsAt, capacity, confirmedCount }] }`.
 
 ### POST `/api/pos/orders/[id]/items` (changed)
 - **Body:** `{ itemType, refId?, name?, quantity?, unitPriceCents?, weightLb?, note?, metadata? }`. Returns 201 with the order plus `taxWarning`.
@@ -55,7 +58,14 @@ Existing keys `sessionTypes`, `membershipPlans` and `upcomingSessions` are uncha
   - 400 `INVALID_WEIGHT`.
   - 409 `Only N in stock`.
 - **GIFT_CARD:** any positive `unitPriceCents`, so custom amounts work. Never discounted, never taxed.
-- **DROP_IN, MEMBERSHIP, CUSTOM and legacy `metadata.kind:"FIRING"` custom lines:** unchanged.
+- **DROP_IN** (Prompt 6): `metadata: { studioSessionId?, seriesId? }`, one of them required (400 `SESSION_REQUIRED`).
+  - A class (EVENT kind) is one seat in one session, as before.
+  - A course: send `seriesId`, or the id of any session whose class type is COURSE kind. ONE line is created at the course price, named e.g. "Pottery Kickstart: 4 Week Course, 3 sessions from Sep 22, 2026 6:00 PM". Its metadata is `{ studioSessionId (the first remaining session), startsAt, seriesId, courseSessionIds: [every remaining session, in date order] }`.
+  - Every session is checked: 404 `COURSE_NOT_FOUND` (no sessions left at this studio), 400 `WRONG_LOCATION`, 409 `SESSION_CANCELLED`, 400 `NOT_FOR_SALE`, 409 `ALREADY_IN_ORDER` (any of its sessions is already on the order), 409 `SESSION_FULL` (names the date for a course), 409 `ALREADY_BOOKED`.
+  - On completion the customer is booked into every session in `courseSessionIds`. The first booking carries `posOrderItemId` and `amountPaidCents` (`Booking.posOrderItemId` is unique); the others are $0 and their ids are written to the line as `metadata.courseBookingIds`. A session that filled up since the payment check gets a WAITLIST booking and a note on the order. `checkOrderPayable` checks every session too.
+- **CUSTOM** (Prompt 6): `name` is required and must not be blank: 400 `NAME_REQUIRED`. It is trimmed and capped at 200 characters.
+- **MEMBERSHIP:** unchanged.
+- **Removed** (Prompt 6): the legacy `metadata.kind:"FIRING"` custom line and `src/config/firingPrices.ts`. Such a payload is now an ordinary CUSTOM add. Old lines keep their stored name and stay quantity-locked.
 
 ### PATCH `/api/pos/orders/[id]/items/[itemId]` (changed)
 - **Body:** `{ quantity?, discountCents?, note? }`.
@@ -93,6 +103,7 @@ DELETE is unchanged and reprices.
   - 409 `PAYMENT_STARTED` when the order has a PENDING or SUCCEEDED payment.
   - 400 `GROUP_EVENT_NOT_FOUND`. The session must be a group event at this studio that started within 7 days ago. "Group event" means a class type with `priceUnit` FLAT, `isPublic` false and `isBusyWindow` false.
   - 400 `CUSTOMER_REQUIRED`, `NOTE_REQUIRED` or `GROUP_EVENT_REQUIRED`.
+  - 400 `NOTE_REQUIRED` also for a large staff-applied discount (Prompt 6): `appliesVia: "STAFF"` and percent at or above 50, or fixed at or above 2000 cents, with a blank `note`, whatever the discount's own `requiresNote` says. The thresholds are `DISCOUNT_NOTE_POLICY` in `src/app/admin/pos/_components/cart/discountPolicy.ts`, the same object the register's discount picker reads. Promo codes typed by staff (`appliesVia: "CODE"`) are not covered.
   - 409 `DISCOUNT_INACTIVE`, `DISCOUNT_NOT_STARTED`, `DISCOUNT_EXPIRED`, `DISCOUNT_USED_UP`, `DISCOUNT_WRONG_LOCATION` or `DISCOUNT_CUSTOMER_LIMIT`.
 - The group event is recorded at the start of the discount's `note` as `Group event: <name>, <date> [<sessionId>] — <staff note>`.
 
@@ -105,11 +116,18 @@ DELETE is unchanged and reprices.
   - 409 `PAYMENT_STARTED`.
 
 ### PATCH `/api/pos/orders/[id]` (changed)
-- **Body:** `{ customerId?, note?, tipCents?, walkInName?, walkInPhone? }`.
+- **Body:** `{ customerId?, note?, tipCents?, walkInName?, walkInPhone?, parked? }`.
+- **`parked: boolean`** (Prompt 6): `true` sets `parkedAt` (kept if already parked), `false` clears it. The register parks an order and starts a fresh one; resuming sends `false`.
 - **Customer change:** reprices the order. Automatic member discounts attach or detach, and the response now includes `taxWarning`.
 - **Errors:**
   - 404 Customer not found.
   - 409 `CUSTOMER_LOCKED`. It now triggers when the order has a drop-in, a class pack or any discount and also a PENDING or SUCCEEDED payment.
+
+### GET `/api/pos/orders?resumable=1&locationId=&excludeId=` (new mode, Prompt 6)
+The register's "Resume open order" list. Without `resumable=1` the route behaves as before (`status`, `staffId`, `from`, `to`, `page`, `limit`).
+- **Returns** OPEN orders with at least one item at the studio: every parked order (any staff member can pick one up), plus the caller's own unparked orders from the last 12 hours. `excludeId` leaves out the order on screen. Parked first (newest park first), then newest created. `limit` and `page` apply.
+- **Row shape:** the usual list row plus `parkedAt`, `walkInName`, `customerName` (name, else email, else null), `itemCount` (lines) and `itemQuantity` (units). These fields are on every list response, not only this mode.
+- 403 when a staff member asks for a studio they are not assigned to.
 
 ### Payment precheck (`checkOrderPayable`, every tender route)
 Adds these blocks:
@@ -131,13 +149,63 @@ Adds these blocks:
 ### POST `…/payments/gift-card`
 Same contract as before. Lookup is now dash- and space-insensitive and the decrement is atomic. There is a new 409 for when the balance changed mid-request.
 
+### GET `/api/pos/gift-cards/lookup?code=` (new, Prompt 6)
+Read-only balance check, so the register can show a card's balance before and after redeeming. Needs `canUsePos`. The code is matched the same way the tender route matches it (`findGiftCardByCode`: case, dashes and spaces don't matter).
+- **Response:** 200 `{ id, code, balanceCents, initialCents, isActive, expiresAt, usable, reason }`. `code` is in display form (`ABCD-EFGH-JKMN`) and can be sent straight to `…/payments/gift-card`. `usable` is false, with a staff-facing `reason`, when the card is inactive, expired or empty; that is still a 200.
+- **Errors:**
+  - 400 `code is required`.
+  - 404 `GIFT_CARD_NOT_FOUND`.
+
+### POST `/api/pos/orders/[id]/payments/no-charge` (new, Prompt 6)
+Completes an order that has items but nothing left to pay: a $0 line (bisque firing), or discounts and earlier tenders that cover everything. No body. It creates no PosPayment and runs the same precheck and completion as any tender.
+- **Response:** 200 `{ order }`, now COMPLETED.
+- **Errors:**
+  - 400 `EMPTY_ORDER`.
+  - 409 `BALANCE_DUE` when there is still something to pay.
+  - Every precheck error.
+
 ### DELETE `…/payments/[paymentId]` (changed)
 Removing a SUCCEEDED ACCOUNT_CREDIT payment returns the credit to the `externalRef` user. It now responds with the full order shape, discounts included.
 
 ### POST `/api/pos/orders/[id]/void` (changed)
+- **Body:** `{ reason }`, required and not blank: 400 `REASON_REQUIRED`. Trimmed, capped at 500 characters, stored as `voidReason`.
+- For completed orders every booking a class line made is cancelled, including a course line's later sessions (`metadata.courseBookingIds`).
 - SUCCEEDED GIFT_CARD and ACCOUNT_CREDIT payments are restored and marked `REFUNDED`. Card payments are still not refunded here.
 - For completed orders, class pack credits are taken back (a `VOID` ledger row, never below zero) and the discounts' `usedCount` is released.
 - Redemption rows stay as history, and redemptions of voided orders are not counted toward limits.
+
+### POST `/api/pos/orders/[id]/receipt` (changed, Prompt 6)
+- **Body:** `{ channel: "email" | "sms" | "none", to?: string }`. `to` overrides the contact on file (a walk-in typing an email or a mobile number). Without `to`, email goes to the customer's address and a text goes to the customer's phone, else the order's `walkInPhone`. With no body at all (the order history "Resend receipt" action) it emails the customer on file, or texts them when they have a phone and no real email.
+- **Behaviour:** sends straight from the route through Resend or `sendSms`, so the register sees whether it worked. Receipts are transactional: marketing consent is not checked, the suppression list is. Placeholder `@walkin.invalid` addresses are never emailed. Every call, `none` included, fires the `pos/receipt.chosen` Inngest event, which cancels the automatic receipt (see Completion side effects).
+- **Response:** 200 `{ ok: true, sent: "email"|"sms"|"none", to: string|null }`.
+- **Errors:**
+  - 404 Not found. 409 `Only completed orders have a receipt`.
+  - 400 `INVALID_CHANNEL`.
+  - 400 `NO_EMAIL` (none given or on file, malformed, or a placeholder) or `NO_PHONE`.
+  - 409 `SUPPRESSED`: the address bounced or unsubscribed, or the number replied STOP.
+  - 502 `SEND_FAILED`.
+- **What a receipt lists** (`src/inngest/posReceipt.ts`): each line at list price with its note and any gift card codes, each named discount with its amount, other (manual line) discounts, tax (always), tip, total and each tender. The text message version carries the totals and named discounts only.
+
+### POST `/api/pos/customers` (new, Prompt 6)
+Creates a customer from the register. Needs `canUsePos` (at `locationId` when given).
+- **Body:** `{ name, email?, phone?, locationId? }`. `name` is required, plus an email or a phone.
+- **No email:** the account gets a placeholder `walkin-<random>@walkin.invalid` (`src/lib/walkinEmail.ts`). That domain can never receive mail, and receipts, waiver links, `sendPasswordEmail` and `scripts/send-password-setup.ts` all skip it. The register hides these addresses.
+- **Response:** 201 `{ id, name, email, phone }`. The register then attaches the customer with `PATCH /api/pos/orders/[id] { customerId }`. The phone is stored normalised (`+1…`).
+- **Errors:**
+  - 400 `NAME_REQUIRED`, `CONTACT_REQUIRED`, `INVALID_EMAIL` or `INVALID_PHONE`.
+  - 409 `CUSTOMER_EXISTS`, with `customer: { id, name, email, phone }` so the register can offer to attach them instead. Matched by email (any case); by phone only when no email was given.
+
+### POST `/api/pos/customers/[id]/send-waiver` (new, Prompt 6)
+Texts or emails the customer the link to sign this studio's waiver (`waiverSignUrl`, returning to `/account`).
+- **Body:** `{ locationId, channel?: "sms" | "email" }`. Without `channel` it texts when there is a phone on file, else emails. Transactional: only the suppression list is checked.
+- **Response:** 200 `{ ok: true, channel, to }`.
+- **Errors:**
+  - 400 `locationId is required`. 404 Customer not found.
+  - 409 `WAIVER_ON_FILE`.
+  - 409 `NO_LOGIN_EMAIL`: a placeholder-email customer can't sign in to `/waiver`, so they sign on the studio tablet instead.
+  - 400 `NO_PHONE` when `channel` is `sms` and there is no phone.
+  - 409 `SUPPRESSED`.
+  - 502 `SEND_FAILED`.
 
 ### GET `/api/pos/customers/[id]/summary?locationId=` (new)
 `locationId` is required. 400 without it, 404 Customer not found.
@@ -157,6 +225,7 @@ Removing a SUCCEEDED ACCOUNT_CREDIT payment returns the credit to the `externalR
 - Stock is decremented only for `trackInventory` products.
 - One `ClassCreditLedger` PURCHASE row per class pack line: `delta = classCredits × quantity`, with `posOrderItemId` set.
 - For each named discount with `amountCents > 0`: one `DiscountRedemption` (`posOrderId`, `userId`, `amountCents`, `note`) plus `usedCount + 1`.
+- The automatic receipt (Prompt 6): the `pos/order.completed` Inngest function waits 3 minutes, then emails the receipt to the customer's real address. It never texts, and does nothing for walk-ins or placeholder emails. A `pos/receipt.chosen` event for the same `orderId` (sent by the receipt route when staff pick Email, Text or None) cancels it, so nobody gets two receipts.
 
 ### Discount engine rules (`src/lib/discounts.ts`), for UI copy
 - **Order of application:** manual line discount first, then automatic, then percent, then fixed. Ties go by time applied, then id.
