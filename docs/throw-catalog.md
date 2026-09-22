@@ -17,6 +17,30 @@ All money is USD. Anything that can differ between studios is per location.
 
 ---
 
+> **Scope change, 2026-09-21 (Sam).** The catalog is ONLY what throwartstudio.com
+> sells. The sync scripts now create exactly the rows in section 0 and archive
+> everything else this build had added (member classes, workshops, private
+> lessons, firing and clay products, shipping, staff discounts, founding and
+> legacy plans, commitment terms, guest pass, freeze policy). Sections 1–9 below
+> are kept as the record of what the build prompts asked for; where they go
+> beyond section 0 they are NOT loaded into the database.
+
+## 0. What is live (matches the website)
+
+| Kind | Row | Price |
+|---|---|---|
+| Class | Clay Together: Pottery Wheel Experience (date night and bachelorette are landing pages on it) | Provo $29.99 · Lehi $35.00 per wheel |
+| Class | Pottery Kickstart: 4 Week Course | $200 per wheel |
+| Class | Group Event / Private Booking (the "Group Pottery Class" page; private, booked by staff) | $375 flat |
+| Class | Kids Summer Camp | $199 |
+| Class | After-School Pottery Course (Lehi) | $257 |
+| Class | Homeschool Pottery Course (Lehi) | $257 |
+| Internal | Busy Window (schedule block, never sellable) | — |
+| Product | 1 lb / 1.5 lb / 2 lb finished piece | $9.99 / $12.99 / $14.99 |
+| Product | 5 / 10 / 15 class pack (credits never expire, individual use) | $150 / $270 / $360 |
+| Plan | Basic / Pro / Expert, Provo and Lehi (8 / 10 / 12 tickets; no / half / full shelf) | $70 / $110 / $120 a month |
+| Code | GRAND30, 30% off Lehi classes (end date not on the site) | — |
+
 ## 1. Locations
 
 | Location | Name in the app | Short label | Status |

@@ -532,3 +532,15 @@ Built 2026-09-21 against `docs/pos-api.md`. No schema change, no cash tender. Ca
 - A no-login, tokenised waiver signing link, so phone-only walk-ins can sign from a text.
 - Customer search by phone in `/api/admin/customers?q=`.
 - Resolved during integration: the duplicate Park order button and tax banner were removed, and the unused `payments/cash` route was deleted.
+
+
+---
+
+## 2026-09-21 scope change — website only
+
+Sam: "the prompts to sync things have way too many class types, products, etc. We
+need to just put in what is on the front end of the website." The three sync scripts
+were cut to `docs/throw-catalog.md` section 0 and now archive the rest, including the
+rows the first class-types run created on production. Verified on a local copy in the
+same state as production (second runs report no changes). The code for firing, discounts,
+commitment terms, founding caps and so on stays in place but has no active data.

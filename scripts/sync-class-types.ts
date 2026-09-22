@@ -5,8 +5,11 @@
 // After merge-session-types.ts there were still 52 class types, all active, 45
 // of them $0: one type per studio for the same class, dated cohorts, private
 // parties, piece pick-up slots, one-off events and three demo rows from the
-// seed. The catalog has 7 class types, 2 Lehi youth courses and 7 member
-// classes; an internal "Busy Window" block stays but is never sellable.
+// seed. The catalog is exactly what throwartstudio.com sells: Clay Together,
+// Pottery Kickstart, Group Event, Kids Summer Camp and the two Lehi youth
+// courses. Member-only classes, workshops and private lessons are not on the
+// site and are archived (Sam, 2026-09-21). An internal "Busy Window" block
+// stays but is never sellable.
 //
 // Canonical class types are studio-independent rows (locationId null) matched
 // on a stable slug. What differs between studios is a SessionTypeLocationPrice
@@ -18,8 +21,7 @@
 // What it does:
 //   1. CATALOG — creates or updates the canonical class types and their
 //                per-studio prices.
-//   2. KEEP    — member classes stay active, members only, ticket eligible, $0.
-//                Busy Window stays active but private.
+//   2. KEEP    — Busy Window stays active but private.
 //   3. MERGE   — for each stale duplicate, moves only its UPCOMING sessions
 //                (startsAt >= now, not cancelled) to the canonical type, then
 //                archives it. Past sessions are never repointed, so past
@@ -130,19 +132,6 @@ const CATALOG: CanonicalType[] = [
   },
   {
     ...BASE,
-    slug: "guided-pottery-time",
-    name: "Guided Pottery Time",
-    kind: "EVENT",
-    priceUnit: "PER_PERSON",
-    durationMinutes: null,
-    // Costs one class ticket; never sold as a drop-in.
-    dropInPriceCents: 0,
-    isTicketEligible: true,
-    membersOnly: true,
-    inheritFrom: ["guided-pottery-time-members"],
-  },
-  {
-    ...BASE,
     slug: "kids-summer-camp",
     name: "Kids Summer Camp",
     kind: "COURSE",
@@ -166,35 +155,6 @@ const CATALOG: CanonicalType[] = [
     isTicketEligible: false,
     isPublic: false,
     inheritFrom: ["group-pottery-wheel-event", "group-pottery-wheel-experience"],
-  },
-  {
-    ...BASE,
-    slug: "workshop",
-    name: "Workshop",
-    kind: "EVENT",
-    priceUnit: "PER_PERSON",
-    // "Per session" in the catalog: each session carries its own times.
-    durationMinutes: null,
-    // Priced per session through StudioSession.priceCentsOverride. At $0 an
-    // unpriced workshop is simply not for sale.
-    dropInPriceCents: 0,
-    // Ticket eligibility is decided per session (isTicketEligibleOverride).
-    isTicketEligible: false,
-    tags: ["workshop"],
-    inheritFrom: ["general-workshop"],
-  },
-  {
-    ...BASE,
-    slug: "private-lesson",
-    name: "Private Lesson",
-    kind: "EVENT",
-    priceUnit: "PER_PERSON",
-    durationMinutes: null,
-    dropInPriceCents: 5500,
-    memberPriceCents: 4300,
-    isTicketEligible: false,
-    isPublic: false,
-    inheritFrom: ["private-lesson-tutoring"],
   },
   // Live on the Lehi site at $257. Whether they take class tickets is OPEN, so
   // they don't. Priced at Lehi only: at $0 they are not for sale in Provo.
@@ -228,22 +188,6 @@ const CATALOG: CanonicalType[] = [
   },
 ];
 
-// Member classes: free on purpose, booked with a class ticket.
-const MEMBER_SLUGS = new Set([
-  "pottery-101-clay-prep-centering",
-  "pottery-101-pulling-shaping",
-  "pottery-101-trimming-add-ons",
-  "pottery-101-glazing-finishing",
-  "member-orientation",
-  "member-event",
-  "open-studio-members-only-multi-venue",
-]);
-const MEMBER_PATTERNS = [
-  /^Pottery 101\b/i,
-  /^Member Orientation$/i,
-  /^Member Event!?$/i,
-  /^Open Studio \(Members Only\)/i,
-];
 
 type StaleRule = {
   /** Canonical slug upcoming sessions move to; null = archive outright. */
@@ -279,6 +223,27 @@ const STALE_RULES: StaleRule[] = [
       "open-studio",
       "wheel-throwing-101",
       "hand-building-workshop",
+      // Not sold on the website (Sam, 2026-09-21): member-only classes,
+      // workshops and private lessons, including the canonical rows an
+      // earlier run of this script created for them.
+      "pottery-101-clay-prep-centering",
+      "pottery-101-pulling-shaping",
+      "pottery-101-trimming-add-ons",
+      "pottery-101-glazing-finishing",
+      "member-orientation",
+      "member-event",
+      "open-studio-members-only-multi-venue",
+      "guided-pottery-time",
+      "guided-pottery-time-members",
+      "workshop",
+      "general-workshop",
+      "build-your-berry-bowl-hand-building",
+      "build-your-berry-bowl-wheel-throwing-class",
+      "making-bottles-with-trey",
+      "throwing-bigger-with-owner-johnpaul-ryan",
+      "private-lesson",
+      "private-lesson-tutoring",
+      "private-class-with-lexi",
     ],
     patterns: [
       /^90 Min\b/i,
@@ -293,9 +258,17 @@ const STALE_RULES: StaleRule[] = [
       /^Spooky Clay/i,
       /^Valentine/i,
       /Mom Reset/i,
+      /^Pottery 101\b/i,
+      /^Member Orientation$/i,
+      /^Member Event!?$/i,
+      /^Open Studio \(Members Only\)/i,
+      /^Guided Pottery Time\b/i,
+      /workshop/i,
+      /^Private (?:Lesson|Class)\b/i,
+      /Tutoring/i,
     ],
     keepTitle: false,
-    why: "not a class type",
+    why: "not sold on the website",
   },
   {
     target: "clay-together",
@@ -330,13 +303,6 @@ const STALE_RULES: StaleRule[] = [
     why: "4-week course duplicate",
   },
   {
-    target: "guided-pottery-time",
-    slugs: ["guided-pottery-time-members"],
-    patterns: [/^Guided Pottery Time\b/i],
-    keepTitle: false,
-    why: "renamed",
-  },
-  {
     target: "group-event",
     slugs: [
       "bree-goates-kid-s-birthday-parties",
@@ -360,13 +326,6 @@ const STALE_RULES: StaleRule[] = [
     why: "a private booking, not a class type",
   },
   {
-    target: "private-lesson",
-    slugs: ["private-lesson-tutoring", "private-class-with-lexi"],
-    patterns: [/^Private (?:Lesson|Class)\b/i, /Tutoring/i],
-    keepTitle: true,
-    why: "private lesson",
-  },
-  {
     target: "kids-summer-camp",
     slugs: ["summer-kids-camp"],
     patterns: [/Summer (?:Kids )?Camp/i, /^Kids Summer Camp\b/i],
@@ -387,21 +346,6 @@ const STALE_RULES: StaleRule[] = [
     keepTitle: false,
     why: "dated cohort of the Lehi homeschool course",
   },
-  {
-    target: "workshop",
-    slugs: [
-      "general-workshop",
-      // Workshop topics the earlier merge missed because their names don't
-      // say "workshop".
-      "build-your-berry-bowl-hand-building",
-      "build-your-berry-bowl-wheel-throwing-class",
-      "making-bottles-with-trey",
-      "throwing-bigger-with-owner-johnpaul-ryan",
-    ],
-    patterns: [/workshop/i],
-    keepTitle: true,
-    why: "a workshop topic, not a class type",
-  },
 ];
 
 function money(cents: number) {
@@ -417,10 +361,6 @@ function matchStaleRule(t: SessionType): StaleRule | undefined {
     STALE_RULES.find((r) => r.slugs.includes(t.slug)) ??
     STALE_RULES.find((r) => r.patterns.some((p) => p.test(t.name)))
   );
-}
-
-function isMemberClass(t: SessionType) {
-  return MEMBER_SLUGS.has(t.slug) || MEMBER_PATTERNS.some((p) => p.test(t.name));
 }
 
 /** Host and database only — never the credentials. */
@@ -595,24 +535,6 @@ async function main() {
         keepWrites.push({ id: t.id, data: { isPublic: false } });
         lines.KEEP.push(`UPDATE   "${t.name}": internal block, isPublic true -> false`);
       } else lines.KEEP.push(`OK       "${t.name}" (internal block, private, never sellable)`);
-      continue;
-    }
-
-    if (isMemberClass(t)) {
-      keptActive.push(t);
-      const data: Prisma.SessionTypeUncheckedUpdateInput = {};
-      const diffs: string[] = [];
-      if (!t.membersOnly) { data.membersOnly = true; diffs.push("membersOnly -> true"); }
-      if (!t.isTicketEligible) { data.isTicketEligible = true; diffs.push("isTicketEligible -> true"); }
-      if (t.dropInPriceCents !== 0) { data.dropInPriceCents = 0; diffs.push(`price ${money(t.dropInPriceCents)} -> $0.00`); }
-      if (!t.isActive) { data.isActive = true; diffs.push("reactivated"); }
-      if (t.archivedAt !== null) { data.archivedAt = null; diffs.push("restored from the archive"); }
-      if (diffs.length === 0) lines.KEEP.push(`OK       "${t.name}" (members only, 1 ticket)`);
-      else {
-        changes++;
-        keepWrites.push({ id: t.id, data });
-        lines.KEEP.push(`UPDATE   "${t.name}": ${diffs.join(", ")}`);
-      }
       continue;
     }
 
