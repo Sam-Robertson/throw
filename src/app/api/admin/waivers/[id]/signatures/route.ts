@@ -17,9 +17,20 @@ export async function GET(
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
   const limit = Math.min(200, Math.max(1, parseInt(searchParams.get("limit") ?? "50", 10)));
   const skip = (page - 1) * limit;
+  const q = searchParams.get("q")?.trim() ?? "";
 
   const signatures = await prisma.waiverSignature.findMany({
-    where: { waiverVersionId: id },
+    where: {
+      waiverVersionId: id,
+      ...(q && {
+        user: {
+          OR: [
+            { name: { contains: q, mode: "insensitive" } },
+            { email: { contains: q, mode: "insensitive" } },
+          ],
+        },
+      }),
+    },
     orderBy: { signedAt: "desc" },
     skip,
     take: limit,

@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { RichText } from "@/components/shared/RichText";
 import { RichTextEditor } from "@/components/shared/RichTextEditor";
+import { Input } from "@/components/ui/input";
+import { shortLocationName } from "@/lib/locationName";
 import { isRichTextEmpty, richTextToPlain } from "@/lib/richText";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,6 +43,30 @@ interface WaiverVersion {
 interface Location {
   id: string;
   name: string;
+  address: string | null;
+}
+
+/** One customer from the signer lookup, with every waiver they have signed. */
+interface SignerResult {
+  id: string;
+  name: string | null;
+  email: string;
+  phone: string | null;
+  signatures: {
+    id: string;
+    signedAt: string;
+    typedName: string | null;
+    source: string;
+    signatureImageData: string | null;
+    version: number;
+    isCurrent: boolean;
+    locationId: string;
+    locationName: string;
+  }[];
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
 interface WaiverSignature {
@@ -70,6 +97,17 @@ export default function AdminWaiversPage() {
 
   // Expanded signature image dialog
   const [expandedSig, setExpandedSig] = useState<string | null>(null);
+
+  // Full text of one version
+  const [viewVersion, setViewVersion] = useState<WaiverVersion | null>(null);
+
+  // Signer lookup across every version
+  const [lookup, setLookup] = useState("");
+  const [lookupResults, setLookupResults] = useState<SignerResult[] | null>(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
+
+  // Search inside one version's signature list
+  const [sigSearch, setSigSearch] = useState("");
 
   async function load() {
     const [versionsRes, locationsRes] = await Promise.all([
@@ -115,15 +153,52 @@ export default function AdminWaiversPage() {
     }
   }
 
-  async function openSignatures(version: WaiverVersion) {
-    setSelectedVersion(version);
-    setSigsOpen(true);
+  async function loadSignatures(version: WaiverVersion, q: string) {
     setSigsLoading(true);
-    setSignatures([]);
-    const res = await fetch(`/api/admin/waivers/${version.id}/signatures`);
+    const params = new URLSearchParams({ limit: "200" });
+    if (q.trim()) params.set("q", q.trim());
+    const res = await fetch(`/api/admin/waivers/${version.id}/signatures?${params}`);
     if (res.ok) setSignatures(await res.json());
     setSigsLoading(false);
   }
+
+  async function openSignatures(version: WaiverVersion) {
+    setSelectedVersion(version);
+    setSigsOpen(true);
+    setSignatures([]);
+    setSigSearch("");
+    await loadSignatures(version, "");
+  }
+
+  // Search a version's signers as the desk types (debounced).
+  useEffect(() => {
+    if (!sigsOpen || !selectedVersion) return;
+    const t = setTimeout(() => loadSignatures(selectedVersion, sigSearch), 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sigSearch]);
+
+  // Look a customer up by name or email across every version.
+  useEffect(() => {
+    const q = lookup.trim();
+    if (q.length < 2) {
+      setLookupResults(null);
+      return;
+    }
+    setLookupLoading(true);
+    const t = setTimeout(async () => {
+      const res = await fetch(`/api/admin/waivers/lookup?q=${encodeURIComponent(q)}`);
+      setLookupResults(res.ok ? await res.json() : []);
+      setLookupLoading(false);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [lookup]);
+
+  const locationLabel = (id: string | null) => {
+    const loc = locations.find((l) => l.id === id);
+    return loc ? shortLocationName(loc.name, loc.address) : "All studios";
+  };
+  const currentVersions = versions.filter((v) => v.isActive);
 
   if (loading) {
     return (
@@ -141,10 +216,140 @@ export default function AdminWaiversPage() {
           <Button onClick={openNew}>New Version</Button>
         </div>
 
+        {/* Who has signed? */}
+        <section className="mb-8 rounded-lg border p-4">
+          <h2 className="text-lg font-medium">Has someone signed?</h2>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Search by name or email. Shows every waiver the customer has signed and whether it is
+            the one currently in force at that studio.
+          </p>
+          <Input
+            placeholder="Customer name or email…"
+            value={lookup}
+            onChange={(e) => setLookup(e.target.value)}
+            className="max-w-md"
+          />
+          {lookup.trim().length >= 2 && (
+            <div className="mt-4">
+              {lookupLoading && lookupResults === null ? (
+                <p className="text-sm text-muted-foreground">Searching…</p>
+              ) : lookupResults && lookupResults.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No customers match.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Customer</TableHead>
+                      <TableHead>Waiver</TableHead>
+                      <TableHead>Signed</TableHead>
+                      <TableHead>Signature</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(lookupResults ?? []).map((u) => (
+                      <TableRow key={u.id}>
+                        <TableCell className="align-top">
+                          <p className="font-medium">{u.name ?? "—"}</p>
+                          <p className="text-xs text-muted-foreground">{u.email}</p>
+                          {u.phone && <p className="text-xs text-muted-foreground">{u.phone}</p>}
+                        </TableCell>
+                        {u.signatures.length === 0 ? (
+                          <TableCell colSpan={3} className="align-top">
+                            <Badge variant="destructive">Not signed</Badge>
+                          </TableCell>
+                        ) : (
+                          <>
+                            <TableCell className="align-top text-sm">
+                              {u.signatures.map((sig) => (
+                                <div key={sig.id} className="flex items-center gap-2 py-0.5">
+                                  <span>
+                                    {locationLabel(sig.locationId)} v{sig.version}
+                                  </span>
+                                  <Badge variant={sig.isCurrent ? "default" : "secondary"}>
+                                    {sig.isCurrent ? "Current" : "Old version"}
+                                  </Badge>
+                                </div>
+                              ))}
+                            </TableCell>
+                            <TableCell className="align-top text-sm text-muted-foreground">
+                              {u.signatures.map((sig) => (
+                                <div key={sig.id} className="py-0.5">
+                                  {formatDate(sig.signedAt)}
+                                  {sig.source === "momence" && " (imported)"}
+                                </div>
+                              ))}
+                            </TableCell>
+                            <TableCell className="align-top">
+                              {u.signatures.map((sig) => (
+                                <div key={sig.id} className="py-0.5">
+                                  {sig.signatureImageData ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setExpandedSig(sig.signatureImageData)}
+                                      className="block"
+                                    >
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img
+                                        src={sig.signatureImageData}
+                                        alt="Signature"
+                                        style={{ height: 28 }}
+                                        className="rounded border bg-white object-contain"
+                                      />
+                                    </button>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">
+                                      {sig.typedName ? `Typed: ${sig.typedName}` : "No image"}
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </TableCell>
+                          </>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* The waiver customers sign today, per studio */}
+        <section className="mb-8">
+          <h2 className="mb-3 text-lg font-medium">Current waiver</h2>
+          {currentVersions.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No active waiver. Publish one below.</p>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {currentVersions.map((v) => (
+                <div key={v.id} className="rounded-lg border p-4">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <div>
+                      <p className="font-medium">{locationLabel(v.locationId)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        v{v.version} · published {formatDate(v.publishedAt)} · {v._count.signatures} signed
+                      </p>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => setViewVersion(v)}>
+                      Read full text
+                    </Button>
+                  </div>
+                  <div className="max-h-48 overflow-hidden text-sm text-muted-foreground [mask-image:linear-gradient(to_bottom,black_70%,transparent)]">
+                    <RichText value={v.content} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <h2 className="mb-3 text-lg font-medium">All versions</h2>
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Version</TableHead>
+              <TableHead>Studio</TableHead>
               <TableHead>Published</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Preview</TableHead>
@@ -156,13 +361,8 @@ export default function AdminWaiversPage() {
             {versions.map((v) => (
               <TableRow key={v.id}>
                 <TableCell className="font-medium">v{v.version}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {new Date(v.publishedAt).toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                  })}
-                </TableCell>
+                <TableCell className="text-sm">{locationLabel(v.locationId)}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{formatDate(v.publishedAt)}</TableCell>
                 <TableCell>
                   <Badge variant={v.isActive ? "default" : "secondary"}>
                     {v.isActive ? "Active" : "Inactive"}
@@ -177,6 +377,9 @@ export default function AdminWaiversPage() {
                 <TableCell className="text-right">{v._count.signatures}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setViewVersion(v)}>
+                      Read
+                    </Button>
                     <Button
                       size="sm"
                       variant="outline"
@@ -201,7 +404,7 @@ export default function AdminWaiversPage() {
             {versions.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={7}
                   className="py-8 text-center text-muted-foreground"
                 >
                   No waiver versions published yet.
@@ -285,13 +488,19 @@ export default function AdminWaiversPage() {
               </DialogTitle>
             </DialogHeader>
 
+            <Input
+              placeholder="Search signers by name or email…"
+              value={sigSearch}
+              onChange={(e) => setSigSearch(e.target.value)}
+            />
+
             {sigsLoading ? (
               <p className="py-8 text-center text-sm text-muted-foreground">
                 Loading…
               </p>
             ) : signatures.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">
-                No signatures yet.
+                {sigSearch.trim() ? "No signers match." : "No signatures yet."}
               </p>
             ) : (
               <div className="max-h-[60vh] overflow-y-auto">
@@ -340,13 +549,7 @@ export default function AdminWaiversPage() {
                             </span>
                           )}
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {new Date(sig.signedAt).toLocaleDateString("en-US", {
-                            year: "numeric",
-                            month: "short",
-                            day: "numeric",
-                          })}
-                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{formatDate(sig.signedAt)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -356,6 +559,28 @@ export default function AdminWaiversPage() {
 
             <DialogFooter>
               <Button variant="outline" onClick={() => setSigsOpen(false)}>
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Full text of one version */}
+        <Dialog open={!!viewVersion} onOpenChange={() => setViewVersion(null)}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>
+                {viewVersion && `${locationLabel(viewVersion.locationId)} waiver v${viewVersion.version}`}
+                {viewVersion?.isActive && <Badge className="ml-2">Current</Badge>}
+              </DialogTitle>
+            </DialogHeader>
+            {viewVersion && (
+              <div className="max-h-[65vh] overflow-y-auto rounded-lg border bg-white p-6">
+                <RichText value={viewVersion.content} />
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setViewVersion(null)}>
                 Close
               </Button>
             </DialogFooter>
