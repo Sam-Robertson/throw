@@ -57,6 +57,23 @@ export async function GET(
         },
         orderBy: { createdAt: "desc" },
       },
+      pieces: {
+        select: {
+          id: true,
+          status: true,
+          pieceCount: true,
+          groupName: true,
+          description: true,
+          bagged: true,
+          readyNotifiedAt: true,
+          pickedUpAt: true,
+          createdAt: true,
+          location: { select: { name: true } },
+          studioSession: { select: { startsAt: true, sessionType: { select: { name: true } } } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      },
     },
   });
 

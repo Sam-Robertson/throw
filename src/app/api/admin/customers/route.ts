@@ -14,18 +14,21 @@ export async function GET(request: NextRequest) {
   const q = searchParams.get("q")?.trim() ?? "";
 
   // Typeahead mode (no page param): return simple array for TaskForm/etc.
+  // Matches name, email, or phone (by digits, so "801 555" finds +18015550010).
   if (!searchParams.has("page")) {
     if (!q) return NextResponse.json([]);
+    const qDigits = q.replace(/\D/g, "");
     const customers = await prisma.user.findMany({
       where: {
         role: "CUSTOMER",
         OR: [
           { name: { contains: q, mode: "insensitive" } },
           { email: { contains: q, mode: "insensitive" } },
+          ...(qDigits.length >= 4 ? [{ phone: { contains: qDigits } }] : []),
         ],
         AND: [scopeWhere],
       },
-      select: { id: true, name: true, email: true },
+      select: { id: true, name: true, email: true, phone: true },
       take: 10,
       orderBy: { name: "asc" },
     });

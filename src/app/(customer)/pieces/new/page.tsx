@@ -33,20 +33,24 @@ export default async function NewPiecePage({
         startsAt: true,
         sessionType: { select: { name: true } },
         location: { select: { name: true } },
+        instructor: { select: { name: true } },
       },
     },
   } as const;
 
-  const bookings = await prisma.booking.findMany({
-    where: {
-      userId,
-      status: { not: "CANCELLED" },
-      studioSession: { startsAt: { gte: subDays(now, SESSION_LOOKBACK_DAYS), lte: now } },
-    },
-    include: bookingInclude,
-    orderBy: { studioSession: { startsAt: "desc" } },
-    take: 20,
-  });
+  const [user, bookings] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { phone: true } }),
+    prisma.booking.findMany({
+      where: {
+        userId,
+        status: { not: "CANCELLED" },
+        studioSession: { startsAt: { gte: subDays(now, SESSION_LOOKBACK_DAYS), lte: now } },
+      },
+      include: bookingInclude,
+      orderBy: { studioSession: { startsAt: "desc" } },
+      take: 20,
+    }),
+  ]);
 
   // A linked session older than the lookback window is still valid if it's theirs.
   if (requestedSessionId && !bookings.some((b) => b.studioSessionId === requestedSessionId)) {
@@ -67,6 +71,7 @@ export default async function NewPiecePage({
       label: `${b.studioSession.sessionType.name} — ${formatMountainTime(b.studioSession.startsAt, "datetime")}${
         b.studioSession.location ? ` · ${b.studioSession.location.name}` : ""
       }`,
+      instructorName: b.studioSession.instructor?.name ?? null,
     });
   }
 
@@ -85,7 +90,12 @@ export default async function NewPiecePage({
       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 4 }}>
         Tell us what you made so we can track it through drying and firing.
       </Typography>
-      <PieceForm userId={userId} sessions={sessions} defaultSessionId={defaultSessionId} />
+      <PieceForm
+        userId={userId}
+        sessions={sessions}
+        defaultSessionId={defaultSessionId}
+        defaultPhone={user?.phone ?? ""}
+      />
     </Container>
   );
 }

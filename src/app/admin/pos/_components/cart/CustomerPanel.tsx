@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -321,6 +322,13 @@ export function CustomerPanel({ order, catalog, busy, onAttachCustomer, onOrderU
                 {waiverNotice.text}
               </p>
             )}
+
+            <Link
+              href={`/admin/pieces/new?customerId=${encodeURIComponent(order.customerId)}`}
+              className="mt-3 flex min-h-11 w-full items-center justify-center rounded-md border bg-background px-3 text-sm font-medium hover:bg-muted"
+            >
+              Log pieces
+            </Link>
           </>
         )}
       </div>

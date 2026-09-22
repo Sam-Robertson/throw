@@ -18,6 +18,9 @@ import {
  * accepts up to MAX_PIECE_PHOTOS URLs under the caller's own prefix.
  */
 
+/** `pieces/<userId>/…` for any user id — staff uploading on a customer's behalf. */
+const STAFF_UPLOAD_PATH = /^pieces\/[A-Za-z0-9_-]+\/.+/;
+
 function uploadsConfigured(): boolean {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
 }
@@ -65,9 +68,14 @@ export async function POST(request: Request) {
       onBeforeGenerateToken: async (pathname) => {
         const session = await auth();
         if (!session) throw new Error("Unauthorized");
-        if (!pathname.startsWith(piecePhotoPrefix(session.user.id))) {
-          throw new Error("Invalid upload path");
-        }
+        // Customers upload under their own prefix only. Staff logging pieces
+        // at the desk upload under the *customer's* prefix, so the photos
+        // pass the ownership check when the Piece is created.
+        const isStaff = session.user.role === "ADMIN" || session.user.role === "STAFF";
+        const allowed = isStaff
+          ? STAFF_UPLOAD_PATH.test(pathname)
+          : pathname.startsWith(piecePhotoPrefix(session.user.id));
+        if (!allowed) throw new Error("Invalid upload path");
         return {
           allowedContentTypes: ALLOWED_PHOTO_TYPES,
           maximumSizeInBytes: MAX_PHOTO_BYTES,

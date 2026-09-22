@@ -15,8 +15,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { formatMountainTime } from "@/lib/timezone";
+import { PIECE_STATUS_LABELS } from "@/app/api/pieces/_shared";
 
-type Tab = "bookings" | "membership" | "waivers" | "tasks";
+type Tab = "bookings" | "membership" | "waivers" | "tasks" | "pieces";
 
 type BookingStatus = "CONFIRMED" | "WAITLIST" | "CANCELLED" | "NO_SHOW";
 type BookingSource = "MEMBERSHIP_CREDIT" | "MEMBER_FREE" | "DROP_IN" | "COMP";
@@ -89,6 +90,20 @@ interface Task {
   assignedTo: { name: string | null; email: string } | null;
 }
 
+interface CustomerPiece {
+  id: string;
+  status: keyof typeof PIECE_STATUS_LABELS;
+  pieceCount: number;
+  groupName: string | null;
+  description: string;
+  bagged: boolean;
+  readyNotifiedAt: string | null;
+  pickedUpAt: string | null;
+  createdAt: string;
+  location: { name: string };
+  studioSession: { startsAt: string; sessionType: { name: string } } | null;
+}
+
 interface Customer {
   id: string;
   name: string | null;
@@ -102,6 +117,7 @@ interface Customer {
   bookings: Booking[];
   waiverSignatures: WaiverSignature[];
   linkedTasks: Task[];
+  pieces: CustomerPiece[];
   ticketBalance: TicketBalance | null;
   creditLedger: CreditLedgerEntry[];
 }
@@ -310,7 +326,7 @@ export default function AdminCustomerProfilePage() {
 
       {/* Tabs */}
       <div className="mb-6 flex gap-1 border-b">
-        {(["bookings", "membership", "waivers", "tasks"] as Tab[]).map((t) => (
+        {(["bookings", "membership", "waivers", "tasks", "pieces"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -667,6 +683,63 @@ export default function AdminCustomerProfilePage() {
                       className="text-xs"
                     >
                       {t.status}
+                    </Badge>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Pieces tab */}
+      {tab === "pieces" && (
+        <div>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              {customer.pieces.length} {customer.pieces.length === 1 ? "entry" : "entries"}
+            </p>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" asChild>
+                <Link href={`/admin/pieces?userId=${encodeURIComponent(customer.id)}`}>Open in kiln queue</Link>
+              </Button>
+              <Button size="sm" asChild>
+                <Link href={`/admin/pieces/new?customerId=${encodeURIComponent(customer.id)}`}>Log pieces</Link>
+              </Button>
+            </div>
+          </div>
+          {customer.pieces.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No pieces logged.</p>
+          ) : (
+            <div className="divide-y rounded-lg border">
+              {customer.pieces.map((p) => (
+                <Link
+                  key={p.id}
+                  href={`/admin/pieces?userId=${encodeURIComponent(customer.id)}`}
+                  className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-muted/30"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium">
+                      {p.pieceCount} {p.pieceCount === 1 ? "piece" : "pieces"}
+                      {p.groupName ? ` · ${p.groupName}` : ""}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">{p.description}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {p.studioSession
+                        ? `${p.studioSession.sessionType.name}, ${formatMountainTime(new Date(p.studioSession.startsAt), "date")}`
+                        : `Logged ${formatMountainTime(new Date(p.createdAt), "date")}`}
+                      {` · ${p.location.name}`}
+                      {p.readyNotifiedAt ? ` · Texted ${formatMountainTime(new Date(p.readyNotifiedAt), "date")}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {p.bagged && (
+                      <Badge variant="outline" className="text-xs">
+                        Bagged
+                      </Badge>
+                    )}
+                    <Badge variant={p.status === "READY" ? "default" : "secondary"} className="text-xs">
+                      {PIECE_STATUS_LABELS[p.status]}
                     </Badge>
                   </div>
                 </Link>

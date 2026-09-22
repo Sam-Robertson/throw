@@ -1,7 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { MAX_PIECE_PHOTOS, isOwnPiecePhotoUrl } from "./_shared";
+import { normalizePhone } from "@/lib/consent";
+import { parsePieceFields } from "./_shared";
 
 // GET /api/pieces — the signed-in customer's own pieces, newest first.
 export async function GET() {
@@ -20,62 +21,30 @@ export async function GET() {
   return NextResponse.json(pieces);
 }
 
-interface PieceInput {
-  studioSessionId: string | null;
-  groupName: string | null;
-  pieceCount: number;
-  description: string;
-  photoUrls: string[];
-  sharePermission: boolean;
-}
-
-function parseInput(raw: unknown, userId: string): PieceInput | string {
-  if (!raw || typeof raw !== "object") return "Invalid request body";
-  const b = raw as Record<string, unknown>;
-
-  const studioSessionId =
-    typeof b.studioSessionId === "string" && b.studioSessionId.trim() ? b.studioSessionId.trim() : null;
-
-  const groupName =
-    typeof b.groupName === "string" && b.groupName.trim() ? b.groupName.trim().slice(0, 120) : null;
-
-  const pieceCount = typeof b.pieceCount === "number" ? b.pieceCount : Number(b.pieceCount);
-  if (!Number.isInteger(pieceCount) || pieceCount < 1 || pieceCount > 100) {
-    return "Piece count must be a whole number between 1 and 100";
-  }
-
-  const description = typeof b.description === "string" ? b.description.trim() : "";
-  if (!description) return "Please describe your pieces";
-  if (description.length > 2000) return "Description is too long (2,000 characters max)";
-
-  const photoUrls = Array.isArray(b.photoUrls) ? b.photoUrls : [];
-  if (photoUrls.length > MAX_PIECE_PHOTOS) return `Up to ${MAX_PIECE_PHOTOS} photos per entry`;
-  if (!photoUrls.every((u): u is string => typeof u === "string" && isOwnPiecePhotoUrl(u, userId))) {
-    return "One of the photos isn't a valid upload";
-  }
-
-  const sharePermission = b.sharePermission === true;
-
-  return { studioSessionId, groupName, pieceCount, description, photoUrls, sharePermission };
-}
-
 // POST /api/pieces — log pieces made in a session (status INTAKE).
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = session.user.id;
 
-  const parsed = parseInput(await req.json().catch(() => null), userId);
-  if (typeof parsed === "string") return NextResponse.json({ error: parsed }, { status: 400 });
+  const raw = await req.json().catch(() => null);
+  if (!raw || typeof raw !== "object") return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  const b = raw as Record<string, unknown>;
+
+  const fields = parsePieceFields(b, userId);
+  if (typeof fields === "string") return NextResponse.json({ error: fields }, { status: 400 });
+
+  const requestedSessionId =
+    typeof b.studioSessionId === "string" && b.studioSessionId.trim() ? b.studioSessionId.trim() : null;
 
   let studioSessionId: string | null = null;
   let locationId: string | null = null;
 
-  if (parsed.studioSessionId) {
+  if (requestedSessionId) {
     // Any non-cancelled booking counts — a mistaken no-show mark shouldn't stop
     // someone logging what they made.
     const booking = await prisma.booking.findFirst({
-      where: { userId, studioSessionId: parsed.studioSessionId, status: { not: "CANCELLED" } },
+      where: { userId, studioSessionId: requestedSessionId, status: { not: "CANCELLED" } },
       select: { studioSessionId: true, studioSession: { select: { locationId: true } } },
     });
     if (!booking) {
@@ -115,16 +84,31 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, phone: true } });
+  const rawPhone = fields.contactPhone ?? user?.phone ?? null;
+  const contactPhone = rawPhone && rawPhone.replace(/\D/g, "").length >= 10 ? normalizePhone(rawPhone) : null;
+  if (fields.textOptIn && !contactPhone) {
+    return NextResponse.json({ error: "Add a phone number so we can text you when they're ready" }, { status: 400 });
+  }
+  // First phone number we've had for this account: keep it on the profile.
+  if (contactPhone && !user?.phone) {
+    await prisma.user.update({ where: { id: userId }, data: { phone: contactPhone } });
+  }
+
   const piece = await prisma.piece.create({
     data: {
       userId,
       studioSessionId,
       locationId,
-      groupName: parsed.groupName,
-      pieceCount: parsed.pieceCount,
-      description: parsed.description,
-      photoUrls: parsed.photoUrls,
-      sharePermission: parsed.sharePermission,
+      groupName: fields.groupName,
+      pieceCount: fields.pieceCount,
+      description: fields.description,
+      photoUrls: fields.photoUrls,
+      sharePermission: fields.sharePermission,
+      textOptIn: fields.textOptIn,
+      contactName: user?.name ?? null,
+      contactPhone,
+      instructorName: fields.instructorName,
       status: "INTAKE",
     },
   });

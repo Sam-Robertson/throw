@@ -544,3 +544,30 @@ were cut to `docs/throw-catalog.md` section 0 and now archive the rest, includin
 rows the first class-types run created on production. Verified on a local copy in the
 same state as production (second runs report no changes). The code for firing, discounts,
 commitment terms, founding caps and so on stays in place but has no active data.
+
+---
+
+## Pieces: desk intake and ready texts (2026-09-22)
+
+The old Google Form (name, group name written on every piece, phone to text, count, photo,
+description, text consent, share-photos permission, plus staff-only "Bagged" and "NOTES")
+now lives in the app: customers log at `/pieces/new` (prompted by text/email after a session
+once Inngest keys are set) and staff log at `/admin/pieces/new` ("Log pieces at the desk",
+also reachable from the POS customer panel and a customer's profile). Desk intake takes an
+existing customer (search by name, email or phone) or a walk-in by name + phone, who gets a
+phone-only account exactly as the register creates. Every piece stores `contactName` /
+`contactPhone`, so the text goes to the number the customer wrote down.
+
+`/admin/pieces` is the kiln queue: everything not yet picked up, grouped by stage and oldest
+first, with per-stage counts as filter chips; rows show photos, tap-to-call phone, group,
+count, description, session and instructor, days since logged, an inline staff note, a
+"Bagged" checkbox and the status select. Bulk "Mark selected as …" / "Mark bagged" applies
+one change to a kiln load (`POST /api/admin/pieces/bulk`) and reports how many were texted.
+
+**Ready texts and the consent rule.** When a piece becomes READY the customer is texted once
+("Hi <name>, your pottery from Throw <Studio> is ready for pickup! … Reply STOP to opt out.")
+if they turned on "Text me when they're ready" (`textOptIn`) and there is a phone. This is
+transactional, so marketing opt-in does not apply; the suppression list does. With no phone
+but a real email the note goes by email (needs `RESEND_API_KEY`). `readyNotifiedAt` prevents
+a second send; staff can Resend. Marking PICKED_UP stamps `pickedUpAt`. Customers see a
+status stepper and "Ready for pickup at <studio>" on `/pieces`.

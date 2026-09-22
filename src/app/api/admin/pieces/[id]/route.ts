@@ -1,28 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server";
-import type { Session } from "next-auth";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { forbiddenResponse, resolveLocationScope, scopeAllows, type LocationScope } from "@/lib/locationScope";
-import { isPieceStatus } from "@/app/api/pieces/_shared";
+import { applyPieceUpdate } from "@/lib/pieceNotify";
+import { parsePieceUpdate, requireStaff } from "../_shared";
 
-type GuardResult = { error: NextResponse; session: null } | { error: null; session: Session };
-
-async function requireStaff(): Promise<GuardResult> {
-  const session = await auth();
-  if (!session)
-    return {
-      error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
-      session: null,
-    };
-  if (session.user.role !== "ADMIN" && session.user.role !== "STAFF")
-    return {
-      error: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
-      session: null,
-    };
-  return { error: null, session };
-}
-
-// PATCH /api/admin/pieces/[id] — change status only. No notifications yet.
+// PATCH /api/admin/pieces/[id]?resend=1 — status, bagged and/or staff note.
+// Moving to READY texts the customer (see src/lib/pieceNotify.ts); `resend=1`
+// sends the ready text again for a piece that is already READY, with or
+// without other changes in the body.
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -31,10 +16,13 @@ export async function PATCH(
   if (guard.error) return guard.error;
 
   const { id } = await params;
-  const body = (await req.json().catch(() => null)) as { status?: unknown } | null;
-  if (!body || !isPieceStatus(body.status)) {
-    return NextResponse.json({ error: "A valid status is required" }, { status: 400 });
+  const resend = new URL(req.url).searchParams.get("resend") === "1";
+  const body = (await req.json().catch(() => null)) ?? {};
+  const parsed = parsePieceUpdate(body);
+  if (typeof parsed === "string" && !(resend && parsed === "Nothing to update")) {
+    return NextResponse.json({ error: parsed }, { status: 400 });
   }
+  const update = typeof parsed === "string" ? {} : parsed;
 
   const piece = await prisma.piece.findUnique({ where: { id }, select: { locationId: true } });
   if (!piece) return NextResponse.json({ error: "Piece not found" }, { status: 404 });
@@ -49,11 +37,6 @@ export async function PATCH(
     return NextResponse.json({ error: "You don't have access to that location" }, { status: 403 });
   }
 
-  const updated = await prisma.piece.update({
-    where: { id },
-    data: { status: body.status },
-    select: { id: true, status: true, updatedAt: true },
-  });
-
-  return NextResponse.json(updated);
+  const result = await applyPieceUpdate(id, update, { resend });
+  return NextResponse.json(result);
 }

@@ -168,6 +168,7 @@ model User {
   openedCashDrawers    PosCashDrawer[]       @relation("PosCashDrawerOpenedBy")
   closedCashDrawers    PosCashDrawer[]       @relation("PosCashDrawerClosedBy")
   pieces               Piece[]
+  loggedPieces         Piece[]               @relation("PieceLoggedBy")
   classCreditLedger    ClassCreditLedger[]
   discountRedemptions  DiscountRedemption[]
 }
@@ -1150,12 +1151,27 @@ model Piece {
   weightOz        Int?
   chargedCents    Int?
   posOrderItemId  String?
+  // Who to text when the pieces are ready — what the customer wrote on the
+  // form, which may differ from the account's name/phone. E.164.
+  contactName     String?
+  contactPhone    String?
+  // "Text me when my pottery is ready" — consent for the ready-for-pickup text.
+  textOptIn       Boolean     @default(false)
+  instructorName  String?
+  // Front-desk only.
+  staffNote       String?
+  bagged          Boolean     @default(false)
+  readyNotifiedAt DateTime?
+  pickedUpAt      DateTime?
+  // Staff user who logged it at the desk; null when the customer logged it.
+  loggedById      String?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
   user          User           @relation(fields: [userId], references: [id])
   studioSession StudioSession? @relation(fields: [studioSessionId], references: [id])
   location      Location       @relation(fields: [locationId], references: [id])
+  loggedBy      User?          @relation("PieceLoggedBy", fields: [loggedById], references: [id])
 
   @@index([locationId, status])
   @@index([userId])
