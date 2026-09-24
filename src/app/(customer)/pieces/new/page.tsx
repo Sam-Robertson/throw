@@ -6,6 +6,7 @@ import Typography from "@mui/material/Typography";
 import { prisma } from "@/lib/prisma";
 import { formatMountainTime } from "@/lib/timezone";
 import { PieceForm, type SessionOption } from "./_components/PieceForm";
+import { BackLink } from "@/components/shared/BackLink";
 
 // How far back the session picker looks.
 const SESSION_LOOKBACK_DAYS = 60;
@@ -96,6 +97,7 @@ export default async function NewPiecePage({
 
   return (
     <Container maxWidth="sm" sx={{ py: 5, px: { xs: 3, md: 4 } }}>
+      <BackLink href="/pieces">My pieces</BackLink>
       <Typography variant="h2" sx={{ fontWeight: 700 }}>
         Log your pieces
       </Typography>

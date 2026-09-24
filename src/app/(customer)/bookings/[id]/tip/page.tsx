@@ -4,6 +4,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { formatMountainTime } from "@/lib/timezone";
 import { TipForm } from "./_components/TipForm";
+import { BackLink } from "@/components/shared/BackLink";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -46,12 +47,7 @@ export default async function TipPage({ params }: Props) {
   if (!instructor) {
     return (
       <main className="mx-auto max-w-md p-8">
-        <Link
-          href="/bookings"
-          className="mb-6 block text-sm text-muted-foreground underline underline-offset-4"
-        >
-          ← Back to bookings
-        </Link>
+        <BackLink href="/bookings">Bookings</BackLink>
         <p className="text-sm text-muted-foreground">
           No instructor was assigned to this session. Tips are only available when
           an instructor is on file.
@@ -68,12 +64,7 @@ export default async function TipPage({ params }: Props) {
   if (existingTip) {
     return (
       <main className="mx-auto max-w-md p-8">
-        <Link
-          href="/bookings"
-          className="mb-6 block text-sm text-muted-foreground underline underline-offset-4"
-        >
-          ← Back to bookings
-        </Link>
+        <BackLink href="/bookings">Bookings</BackLink>
         <div className="rounded-lg border bg-card p-6 text-center">
           <p className="text-2xl">💚</p>
           <p className="mt-2 font-semibold">You already left a tip for this class</p>
@@ -95,12 +86,7 @@ export default async function TipPage({ params }: Props) {
 
   return (
     <main className="mx-auto max-w-md p-8">
-      <Link
-        href="/bookings"
-        className="mb-6 block text-sm text-muted-foreground underline underline-offset-4"
-      >
-        ← Back to bookings
-      </Link>
+      <BackLink href="/bookings">Bookings</BackLink>
       <TipForm
         bookingId={bookingId}
         instructorName={instructor.name ?? "your instructor"}

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -7,6 +6,7 @@ import { billingPeriodLabel } from "@/lib/billingInterval";
 import { checkPlanPurchasable } from "@/lib/membershipCatalog";
 import { findUnsignedWaiver, waiverSignUrl } from "@/lib/waivers";
 import { SubscribeForm } from "./_components/SubscribeForm";
+import { BackLink } from "@/components/shared/BackLink";
 
 export const dynamic = "force-dynamic";
 
@@ -54,12 +54,7 @@ export default async function SubscribePage({
 
   return (
     <main className="mx-auto max-w-md px-4 py-16">
-      <Link
-        href="/membership"
-        className="mb-8 inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
-      >
-        ← Back to Memberships
-      </Link>
+      <BackLink href="/membership">Memberships</BackLink>
       <h1 className="mb-6 text-2xl font-bold">Start Membership</h1>
       <Card className="mb-6">
         <CardHeader>

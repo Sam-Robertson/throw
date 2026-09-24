@@ -1,11 +1,9 @@
 import { auth } from "@/auth";
 import { redirect, notFound } from "next/navigation";
-import NextLink from "next/link";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
 import Container from "@mui/material/Container";
 import Divider from "@mui/material/Divider";
-import Link from "@mui/material/Link";
 import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
@@ -15,6 +13,7 @@ import { checkPermission } from "@/lib/permissions";
 import { resolveLocationScope, scopeAllows } from "@/lib/locationScope";
 import { formatMountainTime } from "@/lib/timezone";
 import { RosterClient, type RosterRow } from "./_components/RosterClient";
+import { BackLink } from "@/components/shared/BackLink";
 
 export default async function StaffSessionPage({
   params,
@@ -106,15 +105,7 @@ export default async function StaffSessionPage({
 
   return (
     <Container maxWidth="md" sx={{ py: 5, px: { xs: 3, md: 4 } }}>
-      <Link
-        component={NextLink}
-        href="/staff"
-        underline="always"
-        variant="body2"
-        sx={{ display: "inline-block", mb: 3 }}
-      >
-        &larr; Back to dashboard
-      </Link>
+      <BackLink href="/staff">Dashboard</BackLink>
 
       <Box sx={{ mb: 4 }}>
         <Typography variant="h2" sx={{ fontWeight: 700 }}>

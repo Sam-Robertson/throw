@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { formatMoney, type PosOrder } from '../../_components/types';
+import { BackLink } from "@/components/shared/BackLink";
 
 interface StaffMember {
   id: string;
@@ -161,6 +162,7 @@ export function OrderHistoryClient({ isAdmin }: { isAdmin: boolean }) {
   return (
     <main className="flex flex-col gap-6 p-8">
       <div>
+        <BackLink href="/admin/pos">Point of sale</BackLink>
         <h1 className="text-2xl font-semibold">Order History</h1>
         <p className="text-sm text-muted-foreground">Point of sale transactions</p>
       </div>

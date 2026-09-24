@@ -24,6 +24,7 @@ import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
+import { BackLink } from "@/components/shared/BackLink";
 
 interface StaffUser {
   id: string;
@@ -148,6 +149,7 @@ export default function PayRatesPage() {
 
   return (
     <Box sx={{ p: { xs: 3, md: 4 } }}>
+      <BackLink href="/admin/studio-setup/instructors">Instructors</BackLink>
       <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Box>
           <Typography variant="h2" sx={{ fontWeight: 700 }}>Pay Rates</Typography>

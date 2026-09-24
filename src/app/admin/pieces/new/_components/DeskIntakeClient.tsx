@@ -23,6 +23,7 @@ import { formatMountainTime } from "@/lib/timezone";
 import { realEmail } from "@/lib/walkinEmail";
 import { ALL_LOCATIONS, useLocationFilter } from "@/app/admin/_components/LocationFilterContext";
 import { TEXT_CONSENT_WORDING, pieceCountLabel } from "@/app/api/pieces/_shared";
+import { BackLink } from "@/components/shared/BackLink";
 
 interface CustomerMatch {
   id: string;
@@ -279,6 +280,7 @@ export function DeskIntakeClient() {
 
   return (
     <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 720 }}>
+      <BackLink href="/admin/pieces">Pieces</BackLink>
       <Typography variant="h2" sx={{ fontWeight: 700 }}>
         Log pieces at the desk
       </Typography>

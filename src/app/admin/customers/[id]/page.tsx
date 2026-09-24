@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatMountainTime } from "@/lib/timezone";
 import { PIECE_STATUS_LABELS } from "@/app/api/pieces/_shared";
+import { BackLink } from "@/components/shared/BackLink";
 
 type Tab = "bookings" | "membership" | "waivers" | "tasks" | "pieces";
 
@@ -295,12 +296,7 @@ export default function AdminCustomerProfilePage() {
   return (
     <div className="p-6">
       {/* Back link */}
-      <Link
-        href="/admin/customers"
-        className="mb-4 block text-sm text-muted-foreground underline underline-offset-4"
-      >
-        ← Customers
-      </Link>
+      <BackLink href="/admin/customers">Customers</BackLink>
 
       {/* Header */}
       <div className="mb-6 flex items-start justify-between gap-4">

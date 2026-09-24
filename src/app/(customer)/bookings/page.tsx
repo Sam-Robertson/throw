@@ -14,8 +14,8 @@ import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import Stack from '@mui/material/Stack';
 import Alert from '@mui/material/Alert';
-import Link from '@mui/material/Link';
 import { formatMountainTime } from '@/lib/timezone';
+import { BackLink } from "@/components/shared/BackLink";
 
 type TabValue = 'upcoming' | 'past' | 'cancelled';
 type BookingStatus = 'CONFIRMED' | 'WAITLIST' | 'CANCELLED' | 'NO_SHOW';
@@ -111,9 +111,7 @@ function BookingsInner() {
       )}
 
       <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 3 }}>
-        <Link component={NextLink} href="/dashboard" underline="always" variant="body2" color="text.secondary">
-          ← Dashboard
-        </Link>
+        <BackLink href="/dashboard" className="mb-0">Dashboard</BackLink>
         <Typography variant="h2" sx={{ fontWeight: 700 }}>My Bookings</Typography>
       </Box>
 

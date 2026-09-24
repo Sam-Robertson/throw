@@ -6,6 +6,7 @@ import { CLASS_PRICE_SELECT, isSellable, resolveClassPriceCents } from "@/lib/se
 import { formatMountainTime } from "@/lib/timezone";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { BackLink } from "@/components/shared/BackLink";
 
 async function getSession(id: string) {
   return prisma.studioSession.findUnique({
@@ -124,9 +125,7 @@ export default async function SessionDetailPage({
   return (
     <div className="mx-auto max-w-2xl px-4 py-10">
       <div className="mb-6">
-        <Link href="/schedule" className="text-sm text-muted-foreground hover:underline">
-          ← Schedule
-        </Link>
+        <BackLink href="/schedule">Schedule</BackLink>
       </div>
 
       <div className="rounded-lg border bg-card p-8 shadow-sm">

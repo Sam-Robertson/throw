@@ -1,11 +1,10 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { PostCard } from "../_components/PostCard";
 import { CommentsSection } from "../_components/CommentsSection";
-import { ArrowLeft } from "lucide-react";
 import { richTextToPlain } from "@/lib/richText";
+import { BackLink } from "@/components/shared/BackLink";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -70,13 +69,7 @@ export default async function CommunityPostPage({ params }: Props) {
   return (
     <div className="mx-auto max-w-2xl px-4 py-10">
       {/* Back link */}
-      <Link
-        href="/community"
-        className="mb-6 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Community
-      </Link>
+      <BackLink href="/community">Community</BackLink>
 
       {/* Post card — no truncation */}
       <PostCard post={postForCard} isAuthenticated={isAuthenticated} truncate={false} />

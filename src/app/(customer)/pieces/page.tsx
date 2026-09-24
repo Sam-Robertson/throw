@@ -22,6 +22,7 @@ import {
   PIECE_STATUS_SHORT_LABELS,
   pieceCountLabel,
 } from "@/app/api/pieces/_shared";
+import { BackLink } from "@/components/shared/BackLink";
 
 export default async function PiecesPage({
   searchParams,
@@ -43,6 +44,7 @@ export default async function PiecesPage({
 
   return (
     <Container maxWidth="md" sx={{ py: 5, px: { xs: 3, md: 4 } }}>
+      <BackLink href="/dashboard">Dashboard</BackLink>
       <Box sx={{ mb: 4, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 2, flexWrap: "wrap" }}>
         <Box>
           <Typography variant="h2" sx={{ fontWeight: 700 }}>

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { formatMoney, type Location } from '../../_components/types';
+import { BackLink } from "@/components/shared/BackLink";
 
 interface DrawerPerson {
   id: string;
@@ -139,6 +140,7 @@ export function DrawerClient() {
   return (
     <main className="flex flex-col gap-6 p-8">
       <div>
+        <BackLink href="/admin/pos">Point of sale</BackLink>
         <h1 className="text-2xl font-semibold">Cash Drawer</h1>
         <p className="text-sm text-muted-foreground">Open, close, and reconcile the cash drawer</p>
       </div>

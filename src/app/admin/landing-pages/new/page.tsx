@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { LandingPageForm, type LandingPageFormValues } from "../_components/LandingPageForm";
+import { BackLink } from "@/components/shared/BackLink";
 
 export default function NewLandingPagePage() {
   const router = useRouter();
@@ -31,12 +31,7 @@ export default function NewLandingPagePage() {
   return (
     <div className="mx-auto max-w-3xl p-6">
       <div className="mb-6 flex items-center gap-4">
-        <Link
-          href="/admin/landing-pages"
-          className="text-sm text-muted-foreground underline underline-offset-4"
-        >
-          ← Landing Pages
-        </Link>
+        <BackLink href="/admin/landing-pages" className="mb-0">Landing Pages</BackLink>
         <h1 className="text-xl font-semibold">New Landing Page</h1>
       </div>
       <LandingPageForm onSubmit={handleSubmit} saving={saving} error={error} />

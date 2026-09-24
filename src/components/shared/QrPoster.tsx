@@ -1,5 +1,6 @@
 import { qrSvg } from "@/lib/qr";
 import { PrintButton } from "./PrintButton";
+import { BackLink } from "@/components/shared/BackLink";
 
 /**
  * One printable poster: a heading, a QR code and the link it encodes.
@@ -42,9 +43,7 @@ export function PrintSheet({ children, backHref, backLabel }: { children: React.
   return (
     <main className="mx-auto max-w-3xl bg-background">
       <div className="flex items-center justify-between gap-2 p-4 print:hidden">
-        <a href={backHref} className="text-sm text-muted-foreground underline underline-offset-4">
-          ← {backLabel}
-        </a>
+        <BackLink href={backHref} className="mb-0">{backLabel}</BackLink>
         <PrintButton />
       </div>
       {children}

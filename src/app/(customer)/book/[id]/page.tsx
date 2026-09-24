@@ -7,6 +7,7 @@ import { getTicketBalance } from "@/lib/credits";
 import { CLASS_PRICE_SELECT, isSellable, resolveClassPriceCents } from "@/lib/sellable";
 import { findUnsignedWaiver, waiverSignUrl } from "@/lib/waivers";
 import { BookingForm } from "./_components/BookingForm";
+import { BackLink } from "@/components/shared/BackLink";
 
 async function getSession(id: string) {
   return prisma.studioSession.findUnique({
@@ -51,12 +52,7 @@ export default async function BookPage({
     return (
       <main className="mx-auto max-w-2xl px-4 py-10">
         <div className="mb-6">
-          <Link
-            href="/schedule"
-            className="text-sm text-muted-foreground hover:underline"
-          >
-            ← Back to schedule
-          </Link>
+          <BackLink href="/schedule">Schedule</BackLink>
         </div>
         <div className="rounded-lg border bg-card p-8 shadow-sm">
           <h1 className="text-2xl font-bold">Session cancelled</h1>
@@ -73,12 +69,7 @@ export default async function BookPage({
     return (
       <main className="mx-auto max-w-2xl px-4 py-10">
         <div className="mb-6">
-          <Link
-            href="/schedule"
-            className="text-sm text-muted-foreground hover:underline"
-          >
-            ← Back to schedule
-          </Link>
+          <BackLink href="/schedule">Schedule</BackLink>
         </div>
         <div className="rounded-lg border bg-card p-8 shadow-sm">
           <h1 className="text-2xl font-bold">This session has started</h1>
@@ -110,12 +101,7 @@ export default async function BookPage({
     return (
       <main className="mx-auto max-w-2xl px-4 py-10">
         <div className="mb-6">
-          <Link
-            href="/schedule"
-            className="text-sm text-muted-foreground hover:underline"
-          >
-            ← Back to schedule
-          </Link>
+          <BackLink href="/schedule">Schedule</BackLink>
         </div>
         <div className="rounded-lg border bg-card p-8 shadow-sm">
           <h1 className="text-2xl font-bold">
@@ -156,12 +142,7 @@ export default async function BookPage({
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
       <div className="mb-6">
-        <Link
-          href={`/schedule/${id}`}
-          className="text-sm text-muted-foreground hover:underline"
-        >
-          ← Back to session details
-        </Link>
+        <BackLink href={`/schedule/${id}`}>Session details</BackLink>
       </div>
 
       <BookingForm

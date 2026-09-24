@@ -7,6 +7,7 @@ import { formatMountainTime } from "@/lib/timezone";
 import { getTicketBalance } from "@/lib/credits";
 import { MembershipActions } from "./_components/MembershipActions";
 import { PlanSwitcher } from "./_components/PlanSwitcher";
+import { BackLink } from "@/components/shared/BackLink";
 
 export const dynamic = "force-dynamic";
 
@@ -96,6 +97,7 @@ export default async function ManageMembershipPage() {
 
   return (
     <main className="mx-auto max-w-lg px-4 py-16">
+      <BackLink href="/dashboard">Dashboard</BackLink>
       <h1 className="mb-6 text-2xl font-bold">Manage Membership</h1>
 
       <div className="mb-6 rounded-lg border p-6 space-y-3">

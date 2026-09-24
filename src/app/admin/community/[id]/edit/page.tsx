@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PostForm } from "../../_components/PostForm";
+import { BackLink } from "@/components/shared/BackLink";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -28,6 +29,7 @@ export default async function AdminCommunityEditPage({ params }: Props) {
 
   return (
     <div className="mx-auto max-w-2xl p-6">
+      <BackLink href="/admin/community">Community posts</BackLink>
       <h1 className="mb-6 text-xl font-semibold">Edit Post</h1>
       <PostForm
         mode="edit"

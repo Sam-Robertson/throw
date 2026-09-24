@@ -2,16 +2,15 @@ import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { isSuppressed, normalizePhone, normalizeEmail } from '@/lib/consent';
-import NextLink from 'next/link';
 import Container from '@mui/material/Container';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import Link from '@mui/material/Link';
 import Divider from '@mui/material/Divider';
 import { ProfileForm } from './_components/ProfileForm';
 import { PasswordForm } from './_components/PasswordForm';
 import { DangerZone } from './_components/DangerZone';
 import { CommunicationPreferencesForm } from './_components/CommunicationPreferencesForm';
+import { BackLink } from "@/components/shared/BackLink";
 
 export default async function AccountPage() {
   const session = await auth();
@@ -40,15 +39,7 @@ export default async function AccountPage() {
   return (
     <Container maxWidth="sm" sx={{ py: 5, px: { xs: 3, md: 4 } }}>
       <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 3 }}>
-        <Link
-          component={NextLink}
-          href="/dashboard"
-          underline="always"
-          variant="body2"
-          color="text.secondary"
-        >
-          ← Dashboard
-        </Link>
+        <BackLink href="/dashboard">Dashboard</BackLink>
         <Typography variant="h2" sx={{ fontWeight: 700 }}>
           Account Settings
         </Typography>

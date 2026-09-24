@@ -11,6 +11,7 @@ import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
 import Alert from '@mui/material/Alert';
 import Link from '@mui/material/Link';
+import { BackLink } from "@/components/shared/BackLink";
 
 export default function ForgotPasswordPage() {
   const [pending, setPending] = useState(false);
@@ -52,6 +53,7 @@ export default function ForgotPasswordPage() {
       <Card sx={{ width: '100%', maxWidth: 400 }}>
         <Box component="form" onSubmit={handleSubmit}>
           <CardContent>
+            <BackLink href="/login">Sign in</BackLink>
             <Typography variant="h5" sx={{ mb: 1, fontWeight: 700 }}>
               Forgot your password?
             </Typography>

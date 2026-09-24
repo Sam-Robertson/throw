@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { DateRangePicker, defaultRange, type DateRange } from "@/components/shared/DateRangePicker";
 import { formatMountainTime } from "@/lib/timezone";
 import { Button } from "@/components/ui/button";
+import { BackLink } from "@/components/shared/BackLink";
 
 interface StaffTipRow {
   id: string;
@@ -70,6 +71,7 @@ export function StaffTipsClient() {
     <main className="flex flex-col gap-6 p-8 print:p-0">
       <div className="flex items-start justify-between gap-4">
         <div>
+          <BackLink href="/staff">Staff home</BackLink>
           <h1 className="text-2xl font-semibold">My Tips</h1>
           <p className="text-sm text-muted-foreground">Use this for your tip sheet.</p>
         </div>

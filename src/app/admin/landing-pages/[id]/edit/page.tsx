@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
   LandingPageForm,
   type LandingPageFormValues,
 } from "../../_components/LandingPageForm";
+import { BackLink } from "@/components/shared/BackLink";
 
 interface LandingPage {
   id: string;
@@ -96,12 +96,7 @@ export default function EditLandingPagePage() {
     <div className="mx-auto max-w-3xl p-6">
       <div className="mb-6 flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Link
-            href="/admin/landing-pages"
-            className="text-sm text-muted-foreground underline underline-offset-4"
-          >
-            ← Landing Pages
-          </Link>
+          <BackLink href="/admin/landing-pages" className="mb-0">Landing Pages</BackLink>
           <h1 className="text-xl font-semibold">Edit Landing Page</h1>
         </div>
         {isAdmin && (
