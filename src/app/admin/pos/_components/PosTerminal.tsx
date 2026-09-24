@@ -460,7 +460,6 @@ export function PosTerminal({
   const cartProps = {
     order,
     busy,
-    locationName,
     catalog,
     onUpdateItemQuantity: updateItemQuantity,
     onRemoveItem: removeItem,
