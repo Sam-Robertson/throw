@@ -21,11 +21,9 @@ logged on production during the test.
    "Set up card readers here" (creates the Stripe Terminal location). Then
    re-pair the WisePOS E to Lehi so it stops appearing under Provo. Do a
    $1 Custom amount sale on the reader and refund it.
-2. **Cancel two duplicate course sessions at Lehi.** The Momence import left a
-   one-session copy next to each course series: Pottery Kickstart Mon Oct 5
-   7:30 PM (the "1 session" row) and After-School Pottery Course Wed Oct 7
-   2:30 PM (the "1 session" row). Admin → Schedule → open each → Cancel.
-   They show as separate bookable rows on the schedule and in the POS.
+2. ~~Cancel two duplicate course sessions at Lehi.~~ Done 2026-09-24 by
+   `scripts/cancel-lehi-duplicate-sessions-2026-09-24.ts`: the one-session
+   copies of Pottery Kickstart (Oct 5) and After-School (Oct 7) are cancelled.
 3. **One real booking.** From a customer account that has not signed the Lehi
    waiver (robertsonnew@gmail.com qualifies): book Clay Together Oct 1 at
    Lehi, sign the waiver, pay $35, check the confirmation email, then cancel
@@ -37,11 +35,11 @@ logged on production during the test.
 
 ## Gaps found, not blocking Lehi
 
-- **Seed accounts are on production**: maya@throw.studio, diego@throw.studio,
-  frontdesk@throw.studio, staff@throw.studio (STAFF), and a daily
-  "Pay for Pottery Pieces" placeholder session at 6:00 AM. These came from
-  the seed. The staff accounts should be deactivated or their passwords
-  reset before launch.
+- **Seed data is on production.** Inventory and a dry-run removal script in
+  `scripts/remove-seed-data.ts` (see its header). Staff logins
+  maya@, diego@, frontdesk@ and staff@throw.studio should go before launch.
+  The daily 6:00 AM "Pay for Pottery Pieces" session is a Momence import of
+  an inactive class type, not seed; it still appears on the admin dashboard.
 - **Photo uploads** on the piece form are off because the upload service is
   not configured on Vercel. The old Google Form took photos.
 - **Poster URL** is `throw-kappa.vercel.app`. If the site moves to
