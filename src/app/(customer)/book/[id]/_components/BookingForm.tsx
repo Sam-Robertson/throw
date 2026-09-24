@@ -49,6 +49,7 @@ type Props = {
   /** False for $0 or retired class types: no paid drop-in, members only. */
   forSale: boolean;
   sessionName: string;
+  studioName: string | null;
   sessionDate: string;
   sessionTime: string;
   instructorName: string | null;
@@ -76,6 +77,7 @@ export function BookingForm({
   dropInPriceCents,
   forSale,
   sessionName,
+  studioName,
   sessionDate,
   sessionTime,
   instructorName,
@@ -203,6 +205,12 @@ export function BookingForm({
           <dt className="w-24 shrink-0 font-medium">Session</dt>
           <dd className="text-muted-foreground">{sessionName}</dd>
         </div>
+        {studioName && (
+          <div className="flex gap-2">
+            <dt className="w-24 shrink-0 font-medium">Studio</dt>
+            <dd className="text-muted-foreground">{studioName}</dd>
+          </div>
+        )}
         <div className="flex gap-2">
           <dt className="w-24 shrink-0 font-medium">Date</dt>
           <dd className="text-muted-foreground">{sessionDate}</dd>

@@ -21,6 +21,7 @@ async function getSession(id: string) {
           durationMinutes: true,
         },
       },
+      location: { select: { name: true } },
       instructor: { select: { name: true } },
       _count: { select: { bookings: { where: { status: "CONFIRMED" } } } },
     },
@@ -159,6 +160,7 @@ export default async function BookPage({
         dropInPriceCents={priceCents}
         forSale={isSellable(studioSession.sessionType, priceCents)}
         sessionName={studioSession.sessionType.name}
+        studioName={studioSession.location?.name ?? null}
         sessionDate={formatMountainTime(studioSession.startsAt, "date")}
         sessionTime={formatMountainTime(studioSession.startsAt, "time")}
         instructorName={studioSession.instructor?.name ?? null}

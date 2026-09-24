@@ -21,6 +21,7 @@ async function getSession(id: string) {
           priceUnit: true,
         },
       },
+      location: { select: { name: true, address: true } },
       instructor: { select: { name: true } },
       _count: { select: { bookings: { where: { status: "CONFIRMED" } } } },
     },
@@ -143,6 +144,15 @@ export default async function SessionDetailPage({
         )}
 
         <dl className="mb-8 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+          {session.location && (
+            <div className="col-span-2">
+              <dt className="font-medium">Studio</dt>
+              <dd className="text-muted-foreground">
+                {session.location.name}
+                {session.location.address ? ` · ${session.location.address}` : ""}
+              </dd>
+            </div>
+          )}
           <div>
             <dt className="font-medium">Date</dt>
             <dd className="text-muted-foreground">

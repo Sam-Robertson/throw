@@ -23,7 +23,7 @@ const FOOTER_COLUMNS = [
   {
     heading: 'Connect',
     links: [
-      { href: 'mailto:hello@throwstudio.com', label: 'hello@throwstudio.com' },
+      { href: 'mailto:info@throwartstudio.com', label: 'info@throwartstudio.com' },
       { href: '/login', label: 'My Account' },
     ],
   },
@@ -73,7 +73,7 @@ export function PublicFooter() {
             </Typography>
           </Box>
           <Typography variant="body2" sx={{ mt: 0.5, color: `${md3.inverseOnSurface}99` }}>
-            Pottery studio in Provo, Utah
+            Pottery studios in Provo and Lehi, Utah
           </Typography>
         </Box>
 

@@ -32,17 +32,33 @@ async function getSessionTypes() {
   });
 }
 
-async function getSessions(typeSlug?: string) {
+// Studios with something upcoming, for the studio filter.
+async function getStudios() {
+  return prisma.location.findMany({
+    where: {
+      isActive: true,
+      studioSessions: {
+        some: { startsAt: { gte: new Date() }, isCancelled: false, sessionType: PUBLICLY_LISTED_SESSION_TYPE },
+      },
+    },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  });
+}
+
+async function getSessions(typeSlug?: string, studioId?: string) {
   return prisma.studioSession.findMany({
     where: {
       startsAt: { gte: new Date() },
       isCancelled: false,
+      ...(studioId ? { locationId: studioId } : {}),
       sessionType: { ...PUBLICLY_LISTED_SESSION_TYPE, ...(typeSlug ? { slug: typeSlug } : {}) },
     },
     include: {
       sessionType: {
         select: { ...CLASS_PRICE_SELECT, name: true, slug: true, priceUnit: true, durationMinutes: true },
       },
+      location: { select: { name: true } },
       instructor: { select: { name: true } },
       _count: { select: { bookings: { where: { status: 'CONFIRMED' } } } },
     },
@@ -100,6 +116,7 @@ function SessionCard({ session }: { session: Session }) {
 
         <Stack spacing={0.5}>
           {[
+            ...(session.location ? [{ label: 'Studio', value: session.location.name }] : []),
             { label: 'Time', value: formatMountainTime(session.startsAt, 'time') },
             { label: 'Duration', value: `${durationMinutes} min` },
             ...(session.instructor?.name ? [{ label: 'Instructor', value: session.instructor.name }] : []),
@@ -149,12 +166,24 @@ function SessionCard({ session }: { session: Session }) {
 }
 
 interface Props {
-  searchParams: Promise<{ type?: string }>;
+  searchParams: Promise<{ type?: string; studio?: string }>;
+}
+
+/** /schedule?type=…&studio=… with either part left out when it is "all". */
+function scheduleHref(typeSlug?: string, studioId?: string) {
+  const params = new URLSearchParams();
+  if (typeSlug) params.set('type', typeSlug);
+  if (studioId) params.set('studio', studioId);
+  const query = params.toString();
+  return query ? `/schedule?${query}` : '/schedule';
 }
 
 export default async function SchedulePage({ searchParams }: Props) {
-  const { type: typeSlug } = await searchParams;
-  const [sessionTypes, sessions] = await Promise.all([getSessionTypes(), getSessions(typeSlug)]);
+  const { type: typeSlug, studio: studioParam } = await searchParams;
+  const [sessionTypes, studios] = await Promise.all([getSessionTypes(), getStudios()]);
+  // An unknown studio id in the URL means "all", not an empty page.
+  const studioId = studios.some((s) => s.id === studioParam) ? studioParam : undefined;
+  const sessions = await getSessions(typeSlug, studioId);
   const grouped = groupByDate(sessions);
 
   return (
@@ -163,12 +192,40 @@ export default async function SchedulePage({ searchParams }: Props) {
         Schedule
       </Typography>
 
-      {/* Filter pills */}
+      {/* Studio pills: only when there is more than one studio to choose from */}
+      {studios.length > 1 && (
+        <Box sx={{ mb: 2, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mr: 0.5 }}>
+            Studio
+          </Typography>
+          <Chip
+            component={NextLink}
+            href={scheduleHref(typeSlug)}
+            label="All studios"
+            clickable
+            variant={!studioId ? 'filled' : 'outlined'}
+            color={!studioId ? 'primary' : 'default'}
+          />
+          {studios.map((s) => (
+            <Chip
+              key={s.id}
+              component={NextLink}
+              href={scheduleHref(typeSlug, s.id)}
+              label={s.name}
+              clickable
+              variant={studioId === s.id ? 'filled' : 'outlined'}
+              color={studioId === s.id ? 'primary' : 'default'}
+            />
+          ))}
+        </Box>
+      )}
+
+      {/* Class type pills */}
       {sessionTypes.length > 0 && (
         <Box sx={{ mb: 5, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
           <Chip
             component={NextLink}
-            href="/schedule"
+            href={scheduleHref(undefined, studioId)}
             label="All"
             clickable
             variant={!typeSlug ? 'filled' : 'outlined'}
@@ -178,7 +235,7 @@ export default async function SchedulePage({ searchParams }: Props) {
             <Chip
               key={t.id}
               component={NextLink}
-              href={`/schedule?type=${t.slug}`}
+              href={scheduleHref(t.slug, studioId)}
               label={t.name}
               clickable
               variant={typeSlug === t.slug ? 'filled' : 'outlined'}
