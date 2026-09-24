@@ -13,6 +13,13 @@ export const WAIVER_KIND_LABELS: Record<WaiverKind, string> = {
   OTHER: "Other",
 };
 
+/** Longer labels for the Type picker, so "memberships" is findable at a glance. */
+export const WAIVER_KIND_PICKER_LABELS: Record<WaiverKind, string> = {
+  CLASS: "Class waiver — required to book a class, event or course",
+  MEMBERSHIP: "Membership waiver — required to start a membership",
+  OTHER: "Other — shared by link or QR code only",
+};
+
 /** When each kind is asked for, in words the admin page shows. */
 export const WAIVER_KIND_HELP: Record<WaiverKind, string> = {
   CLASS: "Customers must sign it before booking or being checked into a class at this studio. Applies to every class, or only courses, events or chosen class types.",

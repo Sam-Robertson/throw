@@ -10,6 +10,7 @@ import {
   WAIVER_KINDS,
   WAIVER_KIND_HELP,
   WAIVER_KIND_LABELS,
+  WAIVER_KIND_PICKER_LABELS,
   WAIVER_SCOPE_LABELS,
   scopesForKind,
   type WaiverKind,
@@ -786,7 +787,7 @@ export default function AdminWaiversPage() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <label className="text-sm font-medium" htmlFor="new-kind">Type</label>
+                <label className="text-sm font-medium" htmlFor="new-kind">Required for</label>
                 <select
                   id="new-kind"
                   value={newKind}
@@ -794,7 +795,7 @@ export default function AdminWaiversPage() {
                   className="w-full rounded-md border px-3 py-2 text-sm"
                 >
                   {WAIVER_KINDS.map((k) => (
-                    <option key={k} value={k}>{WAIVER_KIND_LABELS[k]}</option>
+                    <option key={k} value={k}>{WAIVER_KIND_PICKER_LABELS[k]}</option>
                   ))}
                 </select>
                 <p className="text-xs text-muted-foreground">{WAIVER_KIND_HELP[newKind]}</p>
