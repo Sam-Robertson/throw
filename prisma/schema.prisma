@@ -205,6 +205,7 @@ model Location {
   memberships            Membership[]
   membershipPlans        MembershipPlan[]
   staffRoles             StaffRole[]
+  waivers                Waiver[]
   waiverVersions         WaiverVersion[]
   payments               Payment[]
   tips                   Tip[]
@@ -252,19 +253,46 @@ model StaffRoleAssignment {
   @@unique([userId, locationId])
 }
 
+// A waiver is one document customers sign: the class waiver, a membership
+// agreement, a workshop release. Each can be for one studio or every studio,
+// and its text changes over time as WaiverVersions (only one active at once).
+//   kind: CLASS      — required before booking or attending a class there
+//         MEMBERSHIP — required before starting a membership there
+//         OTHER      — signed on request via its link or QR code
+model Waiver {
+  id          String    @id @default(cuid())
+  name        String
+  kind        String    @default("CLASS")
+  // Null means the waiver applies at every studio.
+  locationId  String?
+  description String?
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  location Location?       @relation(fields: [locationId], references: [id])
+  versions WaiverVersion[]
+
+  @@index([kind, locationId])
+}
+
 model WaiverVersion {
   id          String   @id @default(cuid())
-  locationId  String
+  // Rows published before Sept 2026 were backfilled into one CLASS waiver per
+  // studio; the app always sets waiverId. locationId mirrors the waiver's.
+  waiverId    String?
+  locationId  String?
   content     String   @db.Text
   version     Int
   publishedAt DateTime
   isActive    Boolean  @default(false)
   createdAt   DateTime @default(now())
 
-  location   Location          @relation(fields: [locationId], references: [id])
+  waiver     Waiver?           @relation(fields: [waiverId], references: [id])
+  location   Location?         @relation(fields: [locationId], references: [id])
   signatures WaiverSignature[]
 
-  @@unique([locationId, version])
+  @@unique([waiverId, version])
 }
 
 model WaiverSignature {

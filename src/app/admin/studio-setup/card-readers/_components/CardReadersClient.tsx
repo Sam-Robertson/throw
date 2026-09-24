@@ -49,6 +49,14 @@ interface Reader {
   busy: boolean;
 }
 
+interface TippingSetup {
+  enabled: boolean;
+  configurationId: string | null;
+  percentages: number[];
+  fixedAmountsCents: number[];
+  smartTipThresholdCents: number | null;
+}
+
 export function CardReadersClient({ locations: initial }: { locations: Location[] }) {
   const [locations, setLocations] = useState(initial);
   const [locationId, setLocationId] = useState(initial[0]?.id ?? '');
@@ -61,6 +69,41 @@ export function CardReadersClient({ locations: initial }: { locations: Location[
 
   const [pairOpen, setPairOpen] = useState(false);
   const [pair, setPair] = useState({ registrationCode: '', label: '' });
+
+  // On-reader tipping is one Stripe account setting, shared by every studio.
+  const [tipping, setTipping] = useState<TippingSetup | null>(null);
+  const [tippingError, setTippingError] = useState<string | null>(null);
+  const [tippingBusy, setTippingBusy] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/admin/terminal/tipping')
+      .then(async (res) => {
+        const data = await res.json();
+        if (res.ok) setTipping(data);
+        else setTippingError(data.error ?? 'Could not check the tipping setup.');
+      })
+      .catch(() => setTippingError('Could not check the tipping setup.'));
+  }, []);
+
+  async function setTippingEnabled(enabled: boolean) {
+    setTippingBusy(true);
+    setTippingError(null);
+    try {
+      const res = await fetch('/api/admin/terminal/tipping', {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ enabled }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setTippingError(data.error ?? 'Could not update the tipping setup.');
+        return;
+      }
+      setTipping(data);
+    } finally {
+      setTippingBusy(false);
+    }
+  }
 
   const location = locations.find((l) => l.id === locationId);
 
@@ -261,6 +304,53 @@ export function CardReadersClient({ locations: initial }: { locations: Location[
           </Typography>
         </>
       )}
+
+      {/* ── On-reader tipping ───────────────────────────────────────────── */}
+      <Paper variant="outlined" sx={{ mt: 4, p: 2.5 }}>
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+          <Box>
+            <Typography variant="h6" sx={{ mb: 0.5 }}>
+              Tip screen on the reader
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              When on, every card payment on a reader asks the customer for a tip
+              before they tap. This is one Stripe setting for all studios. Other
+              tenders ask on the POS screen, and Add tip in the cart stays as a
+              manual backup.
+            </Typography>
+          </Box>
+          {tipping === null && !tippingError && <CircularProgress size={20} />}
+          {tipping && (
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+              <Chip
+                size="small"
+                label={tipping.enabled ? 'On' : 'Off'}
+                color={tipping.enabled ? 'success' : 'default'}
+                variant={tipping.enabled ? 'filled' : 'outlined'}
+              />
+              <Button
+                variant={tipping.enabled ? 'outlined' : 'contained'}
+                onClick={() => setTippingEnabled(!tipping.enabled)}
+                disabled={tippingBusy}
+              >
+                {tippingBusy ? 'Saving…' : tipping.enabled ? 'Turn off' : 'Turn on'}
+              </Button>
+            </Stack>
+          )}
+        </Stack>
+        {tipping?.enabled && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+            Options: {tipping.percentages.map((p) => `${p}%`).join(' / ') || '—'}
+            {tipping.smartTipThresholdCents !== null &&
+              ` (under $${(tipping.smartTipThresholdCents / 100).toFixed(0)}: ${tipping.fixedAmountsCents.map((c) => `$${c / 100}`).join(' / ')})`}
+          </Typography>
+        )}
+        {tippingError && (
+          <Alert severity="error" sx={{ mt: 1.5 }} onClose={() => setTippingError(null)}>
+            {tippingError}
+          </Alert>
+        )}
+      </Paper>
 
       {/* ── Link studio ─────────────────────────────────────────────────── */}
       <Dialog open={linkOpen} onClose={() => setLinkOpen(false)} fullWidth maxWidth="sm">

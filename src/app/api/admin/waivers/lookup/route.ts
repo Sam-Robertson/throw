@@ -3,9 +3,9 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
 /**
- * Who has signed the waiver: customers matching `q` (name or email) with
- * every waiver signature they hold, plus whether that signature is for the
- * version currently in force at its studio. Lets the desk answer "has this
+ * Who has signed: customers matching `q` (name or email) with every waiver
+ * signature they hold, plus whether that signature is for the version of that
+ * waiver currently in force. Lets the desk answer "has this
  * person signed?" without knowing which version they signed.
  */
 export async function GET(request: NextRequest) {
@@ -47,6 +47,7 @@ export async function GET(request: NextRequest) {
               version: true,
               isActive: true,
               location: { select: { id: true, name: true } },
+              waiver: { select: { id: true, name: true, kind: true, archivedAt: true } },
             },
           },
         },
@@ -68,10 +69,13 @@ export async function GET(request: NextRequest) {
         hasImage: s.signatureImageData !== null,
         signatureImageData: s.signatureImageData,
         version: s.waiverVersion.version,
-        // Signed the version that is in force at that studio today.
-        isCurrent: s.waiverVersion.isActive,
-        locationId: s.waiverVersion.location.id,
-        locationName: s.waiverVersion.location.name,
+        waiverId: s.waiverVersion.waiver?.id ?? null,
+        waiverName: s.waiverVersion.waiver?.name ?? null,
+        kind: s.waiverVersion.waiver?.kind ?? "CLASS",
+        // Signed the version of that waiver that is in force today.
+        isCurrent: s.waiverVersion.isActive && !s.waiverVersion.waiver?.archivedAt,
+        locationId: s.waiverVersion.location?.id ?? null,
+        locationName: s.waiverVersion.location?.name ?? null,
       })),
     })),
   );

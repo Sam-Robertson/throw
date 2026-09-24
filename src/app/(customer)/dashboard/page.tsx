@@ -2,6 +2,7 @@ import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import NextLink from 'next/link';
 import { prisma } from '@/lib/prisma';
+import { findUnsignedWaiver, waiverSignUrl } from '@/lib/waivers';
 import Container from '@mui/material/Container';
 import Box from '@mui/material/Box';
 import Grid from '@mui/material/Grid';
@@ -33,17 +34,15 @@ export default async function DashboardPage() {
   const now = new Date();
   const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
 
-  const [membership, activeWaiver, upcomingCount, upcomingBookings] = await Promise.all([
+  const [membership, unsignedWaiver, upcomingCount, upcomingBookings] = await Promise.all([
     prisma.membership.findFirst({
       where: { userId, status: { in: ['ACTIVE', 'PAUSED'] } },
       include: { plan: { select: { name: true, classTicketsPerPeriod: true } } },
       orderBy: { createdAt: 'desc' },
     }),
-    prisma.waiverVersion.findFirst({
-      where: { isActive: true },
-      include: { signatures: { where: { userId } } },
-      orderBy: { publishedAt: 'desc' },
-    }),
+    // The next class waiver they still need to sign (all-studio ones, or
+    // the fallback studio's), if any.
+    findUnsignedWaiver(userId, null),
     prisma.booking.count({
       where: {
         userId,
@@ -70,7 +69,8 @@ export default async function DashboardPage() {
     }),
   ]);
 
-  const waiverSigned = !activeWaiver || activeWaiver.signatures.length > 0;
+  const waiverSigned = unsignedWaiver === null;
+  const waiverHref = unsignedWaiver ? waiverSignUrl(unsignedWaiver.id, '/dashboard') : '/waiver';
 
   const ticketBalance = membership ? await getTicketBalance(membership.id) : null;
 
@@ -183,7 +183,7 @@ export default async function DashboardPage() {
                 <Typography variant="body2" color="text.secondary">
                   Signature required
                 </Typography>
-                <Link component={NextLink} href="/waiver" underline="always" variant="body2" sx={{ display: 'block', mt: 0.5 }}>
+                <Link component={NextLink} href={waiverHref} underline="always" variant="body2" sx={{ display: 'block', mt: 0.5 }}>
                   Sign now
                 </Link>
               </>

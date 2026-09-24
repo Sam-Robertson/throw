@@ -1,24 +1,43 @@
 import { prisma } from "@/lib/prisma";
+import { safeNext } from "@/lib/safeNext";
+import { isWaiverKind, type WaiverKind } from "@/lib/waiverKinds";
 
 /**
- * Which waiver applies to a booking, and whether a customer has signed it.
+ * Which waivers apply, and whether a customer has signed them.
  *
- * Waivers are per location: signing Provo's waiver does not cover a Lehi
- * booking. A location with no active WaiverVersion of its own (and a session
- * with no location at all) falls back to the most recently published active
- * version at any location, so a studio that hasn't published its own waiver
- * yet still requires one rather than silently requiring none.
+ * A Waiver is one document (the class waiver, the membership agreement, a
+ * workshop release) with a current WaiverVersion. It is either for one studio
+ * or for every studio (locationId null). Its `kind` says when it is required:
+ *
+ *   CLASS       before booking or attending a class at that studio
+ *   MEMBERSHIP  before starting a membership at that studio
+ *   OTHER       never automatically; signed via its link or QR code
+ *
+ * A studio can require several waivers of one kind at once (its own plus an
+ * all-studio one). Signing Provo's class waiver does not cover a Lehi booking.
+ *
+ * Class waivers keep a fallback: a studio with no class waiver of its own and
+ * no all-studio one uses the most recently published active class waiver at
+ * any studio, so a studio that hasn't published its own yet still requires one
+ * rather than silently requiring none. Other kinds have no fallback.
  *
  * Server-only (imports Prisma).
  */
 
+export { WAIVER_KINDS, WAIVER_KIND_LABELS, isWaiverKind, type WaiverKind } from "@/lib/waiverKinds";
+
 export interface ApplicableWaiver {
+  /** The WaiverVersion id — what signatures and sign links refer to. */
   id: string;
-  locationId: string;
-  locationName: string;
+  waiverId: string;
+  name: string;
+  kind: WaiverKind;
+  /** Null when the waiver applies at every studio. */
+  locationId: string | null;
+  locationName: string | null;
   content: string;
   version: number;
-  /** True when the requested location had no active version and another location's was used. */
+  /** True when the requested studio had no class waiver and another studio's was used. */
   isFallback: boolean;
 }
 
@@ -27,63 +46,112 @@ const waiverSelect = {
   locationId: true,
   content: true,
   version: true,
+  isActive: true,
+  publishedAt: true,
   location: { select: { name: true } },
+  waiver: { select: { id: true, name: true, kind: true, locationId: true, archivedAt: true } },
 } as const;
 
-type SelectedWaiver = {
+type SelectedVersion = {
   id: string;
-  locationId: string;
+  locationId: string | null;
   content: string;
   version: number;
-  location: { name: string };
+  isActive: boolean;
+  publishedAt: Date;
+  location: { name: string } | null;
+  waiver: { id: string; name: string; kind: string; locationId: string | null; archivedAt: Date | null } | null;
 };
 
-function toApplicable(w: SelectedWaiver, isFallback: boolean): ApplicableWaiver {
+function toApplicable(v: SelectedVersion, isFallback: boolean): ApplicableWaiver {
+  const kind = isWaiverKind(v.waiver?.kind) ? v.waiver.kind : "CLASS";
   return {
-    id: w.id,
-    locationId: w.locationId,
-    locationName: w.location.name,
-    content: w.content,
-    version: w.version,
+    id: v.id,
+    waiverId: v.waiver?.id ?? "",
+    name: v.waiver?.name ?? (v.location ? `${v.location.name} waiver` : "Waiver"),
+    kind,
+    locationId: v.waiver?.locationId ?? v.locationId,
+    locationName: v.location?.name ?? null,
+    content: v.content,
+    version: v.version,
     isFallback,
   };
 }
 
-/** The active waiver for `locationId`, or the fallback. Null only if no location has an active waiver. */
-export async function getApplicableWaiver(
+/** Active, non-archived versions of `kind` that apply at `locationId` (studio-specific first). */
+async function activeVersions(locationId: string | null, kind: WaiverKind): Promise<SelectedVersion[]> {
+  return prisma.waiverVersion.findMany({
+    where: {
+      isActive: true,
+      waiver: {
+        kind,
+        archivedAt: null,
+        OR: locationId ? [{ locationId }, { locationId: null }] : [{ locationId: null }],
+      },
+    },
+    orderBy: [{ locationId: { sort: "asc", nulls: "last" } }, { publishedAt: "desc" }],
+    select: waiverSelect,
+  });
+}
+
+/**
+ * Every waiver of `kind` a customer must have signed at `locationId`. Empty
+ * when none is required. Class waivers fall back to another studio's (see
+ * above); a session with no studio at all gets the all-studio class waivers,
+ * or the fallback.
+ */
+export async function getApplicableWaivers(
   locationId: string | null,
-): Promise<ApplicableWaiver | null> {
-  if (locationId) {
-    const own = await prisma.waiverVersion.findFirst({
-      where: { locationId, isActive: true },
-      orderBy: { publishedAt: "desc" },
-      select: waiverSelect,
-    });
-    if (own) return toApplicable(own, false);
-  }
+  kind: WaiverKind = "CLASS",
+): Promise<ApplicableWaiver[]> {
+  const own = await activeVersions(locationId, kind);
+  if (own.length > 0) return own.map((v) => toApplicable(v, false));
+  if (kind !== "CLASS") return [];
 
   const fallback = await prisma.waiverVersion.findFirst({
-    where: { isActive: true },
+    where: { isActive: true, waiver: { kind: "CLASS", archivedAt: null } },
     orderBy: { publishedAt: "desc" },
     select: waiverSelect,
   });
-  return fallback ? toApplicable(fallback, true) : null;
+  return fallback ? [toApplicable(fallback, true)] : [];
+}
+
+/** The first class waiver for `locationId`, or the fallback. Null only if no studio has one. */
+export async function getApplicableWaiver(
+  locationId: string | null,
+  kind: WaiverKind = "CLASS",
+): Promise<ApplicableWaiver | null> {
+  return (await getApplicableWaivers(locationId, kind))[0] ?? null;
 }
 
 /**
  * Resolves a waiver link's `versionId`. An active version is used as-is; a
- * stale link to a superseded version resolves to whatever now applies at that
- * version's location. Unknown ids resolve like "no location".
+ * stale link to a superseded version resolves to that waiver's current
+ * version. A link to an archived or unknown waiver resolves like "no studio".
  */
 export async function resolveWaiverForVersion(
   versionId: string,
 ): Promise<ApplicableWaiver | null> {
   const version = await prisma.waiverVersion.findUnique({
     where: { id: versionId },
-    select: { ...waiverSelect, isActive: true },
+    select: waiverSelect,
   });
-  if (version?.isActive) return toApplicable(version, false);
-  return getApplicableWaiver(version?.locationId ?? null);
+  if (version?.isActive && !version.waiver?.archivedAt) return toApplicable(version, false);
+  if (version?.waiver && !version.waiver.archivedAt) {
+    const current = await resolveWaiverById(version.waiver.id);
+    if (current) return current;
+  }
+  return getApplicableWaiver(version?.waiver?.locationId ?? version?.locationId ?? null);
+}
+
+/** The current version of one waiver (for `/waiver?waiverId=…` links and QR codes). */
+export async function resolveWaiverById(waiverId: string): Promise<ApplicableWaiver | null> {
+  const version = await prisma.waiverVersion.findFirst({
+    where: { waiverId, isActive: true, waiver: { archivedAt: null } },
+    orderBy: { publishedAt: "desc" },
+    select: waiverSelect,
+  });
+  return version ? toApplicable(version, false) : null;
 }
 
 export async function hasSignedWaiver(userId: string, waiverVersionId: string): Promise<boolean> {
@@ -94,19 +162,44 @@ export async function hasSignedWaiver(userId: string, waiverVersionId: string): 
   return signature !== null;
 }
 
-/** The waiver this user must still sign before booking at `locationId`, or null if none is needed. */
+/** The waivers of `kind` this user must still sign at `locationId`, in the order to sign them. */
+export async function findUnsignedWaivers(
+  userId: string,
+  locationId: string | null,
+  kind: WaiverKind = "CLASS",
+): Promise<ApplicableWaiver[]> {
+  const waivers = await getApplicableWaivers(locationId, kind);
+  if (waivers.length === 0) return [];
+  const signed = await prisma.waiverSignature.findMany({
+    where: { userId, waiverVersionId: { in: waivers.map((w) => w.id) } },
+    select: { waiverVersionId: true },
+  });
+  const signedIds = new Set(signed.map((s) => s.waiverVersionId));
+  return waivers.filter((w) => !signedIds.has(w.id));
+}
+
+/** The next waiver this user must sign before booking at `locationId`, or null if none is needed. */
 export async function findUnsignedWaiver(
   userId: string,
   locationId: string | null,
+  kind: WaiverKind = "CLASS",
 ): Promise<ApplicableWaiver | null> {
-  const waiver = await getApplicableWaiver(locationId);
-  if (!waiver) return null;
-  return (await hasSignedWaiver(userId, waiver.id)) ? null : waiver;
+  return (await findUnsignedWaivers(userId, locationId, kind))[0] ?? null;
 }
 
-/** Link to the signing page for a specific waiver version, returning to `callbackUrl`. */
+/**
+ * Link to the signing page for a specific waiver version, returning to
+ * `callbackUrl`. When several waivers are required, send the customer back to
+ * the page that checked, which then sends them on to the next one.
+ */
 export function waiverSignUrl(waiverVersionId: string, callbackUrl: string): string {
   const params = new URLSearchParams({ versionId: waiverVersionId, callbackUrl });
+  return `/waiver?${params.toString()}`;
+}
+
+/** Link to sign whatever version of one waiver is current — stable enough to print on a QR code. */
+export function waiverLinkForWaiver(waiverId: string, callbackUrl = "/account"): string {
+  const params = new URLSearchParams({ waiverId, callbackUrl });
   return `/waiver?${params.toString()}`;
 }
 
@@ -115,9 +208,5 @@ export function waiverSignUrl(waiverVersionId: string, callbackUrl: string): str
  * crafted /waiver?callbackUrl=https://… link can't bounce users off-site.
  */
 export function safeCallbackUrl(callbackUrl: string | null | undefined, fallback = "/schedule"): string {
-  if (!callbackUrl) return fallback;
-  if (!callbackUrl.startsWith("/") || callbackUrl.startsWith("//") || callbackUrl.startsWith("/\\")) {
-    return fallback;
-  }
-  return callbackUrl;
+  return safeNext(callbackUrl, fallback);
 }

@@ -322,8 +322,9 @@ export function CartPanel({
             className="min-h-11 whitespace-normal px-2"
             onClick={() => setTipPanelOpen((v) => !v)}
             disabled={busy || !order}
+            title="Backup: customers are asked for a tip at checkout (on the reader, or on screen for other tenders)"
           >
-            Add tip
+            {order && order.tipCents > 0 ? 'Change tip' : 'Add tip'}
           </Button>
           <Button
             variant="outline"

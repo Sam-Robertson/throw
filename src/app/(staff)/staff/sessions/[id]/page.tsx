@@ -10,6 +10,7 @@ import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { prisma } from "@/lib/prisma";
+import { getApplicableWaivers } from "@/lib/waivers";
 import { checkPermission } from "@/lib/permissions";
 import { resolveLocationScope, scopeAllows } from "@/lib/locationScope";
 import { formatMountainTime } from "@/lib/timezone";
@@ -68,18 +69,10 @@ export default async function StaffSessionPage({
     );
   }
 
-  // Waivers are per studio: prefer this session's studio's active version,
-  // falling back to any active version if that studio has none.
-  const activeWaiver =
-    (studioSession.locationId
-      ? await prisma.waiverVersion.findFirst({
-          where: { isActive: true, locationId: studioSession.locationId },
-        })
-      : null) ??
-    (await prisma.waiverVersion.findFirst({
-      where: { isActive: true },
-      orderBy: { publishedAt: "desc" },
-    }));
+  // Every class waiver this session's studio requires (its own, plus any
+  // all-studio one, or the fallback when it has none).
+  const requiredWaivers = await getApplicableWaivers(studioSession.locationId);
+  const requiredVersionIds = requiredWaivers.map((w) => w.id);
 
   const relevantBookings = studioSession.bookings.filter(
     (b) => b.status === "CONFIRMED" || b.status === "NO_SHOW",
@@ -87,20 +80,25 @@ export default async function StaffSessionPage({
   const waitlistBookings = studioSession.bookings.filter((b) => b.status === "WAITLIST");
 
   const userIds = [...new Set(studioSession.bookings.map((b) => b.userId))];
-  const signatures = activeWaiver
+  const signatures = requiredVersionIds.length
     ? await prisma.waiverSignature.findMany({
-        where: { waiverVersionId: activeWaiver.id, userId: { in: userIds } },
-        select: { userId: true },
+        where: { waiverVersionId: { in: requiredVersionIds }, userId: { in: userIds } },
+        select: { userId: true, waiverVersionId: true },
       })
     : [];
-  const signedUserIds = new Set(signatures.map((s) => s.userId));
+  // Signed means signed every required waiver, not just one of them.
+  const signedCount = new Map<string, number>();
+  for (const s of signatures) signedCount.set(s.userId, (signedCount.get(s.userId) ?? 0) + 1);
+  const signedUserIds = new Set(
+    [...signedCount].filter(([, n]) => n >= requiredVersionIds.length).map(([id]) => id),
+  );
 
   const roster: RosterRow[] = relevantBookings.map((b) => ({
     bookingId: b.id,
     customerName: b.user.name ?? b.user.email,
     status: b.status as "CONFIRMED" | "NO_SHOW",
     source: b.source,
-    waiverSigned: !activeWaiver || signedUserIds.has(b.userId),
+    waiverSigned: requiredVersionIds.length === 0 || signedUserIds.has(b.userId),
   }));
 
   return (

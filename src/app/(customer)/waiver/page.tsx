@@ -4,27 +4,30 @@ import { WaiverSignatureForm } from "@/components/shared/WaiverSignatureForm";
 import {
   getApplicableWaiver,
   hasSignedWaiver,
+  resolveWaiverById,
   resolveWaiverForVersion,
   safeCallbackUrl,
 } from "@/lib/waivers";
 
 export const dynamic = "force-dynamic";
 
-// /waiver?versionId=…&callbackUrl=… (or ?locationId=…). The booking page and
-// booking APIs send the specific version the session's studio requires, since
-// each studio has its own waiver.
+// /waiver?versionId=…&callbackUrl=…   a specific version (booking flows)
+// /waiver?waiverId=…&callbackUrl=…    whatever version of one waiver is
+//                                     current (printed QR codes, sign links)
+// /waiver?locationId=…                that studio's class waiver
 export default async function WaiverPage({
   searchParams,
 }: {
-  searchParams: Promise<{ callbackUrl?: string; versionId?: string; locationId?: string }>;
+  searchParams: Promise<{ callbackUrl?: string; versionId?: string; waiverId?: string; locationId?: string }>;
 }) {
-  const { callbackUrl, versionId, locationId } = await searchParams;
+  const { callbackUrl, versionId, waiverId, locationId } = await searchParams;
   const callback = safeCallbackUrl(callbackUrl);
 
   const session = await auth();
   if (!session?.user?.id) {
     const params = new URLSearchParams();
     if (versionId) params.set("versionId", versionId);
+    if (waiverId) params.set("waiverId", waiverId);
     if (locationId) params.set("locationId", locationId);
     if (callbackUrl) params.set("callbackUrl", callback);
     const query = params.toString();
@@ -36,17 +39,27 @@ export default async function WaiverPage({
 
   const waiver = versionId
     ? await resolveWaiverForVersion(versionId)
-    : await getApplicableWaiver(locationId ?? null);
+    : waiverId
+      ? await resolveWaiverById(waiverId)
+      : await getApplicableWaiver(locationId ?? null);
 
   if (!waiver) redirect(callback);
 
   if (await hasSignedWaiver(userId, waiver.id)) redirect(callback);
 
+  const heading =
+    waiver.kind === "MEMBERSHIP"
+      ? "Before you start your membership"
+      : waiver.kind === "CLASS"
+        ? "Before you book"
+        : "Please sign";
+
   return (
     <main className="mx-auto max-w-2xl px-4 py-12">
-      <h1 className="mb-2 text-2xl font-bold">Before you book</h1>
+      <h1 className="mb-2 text-2xl font-bold">{heading}</h1>
       <p className="mb-8 text-sm text-muted-foreground">
-        Please read and sign the {waiver.locationName} waiver to continue.
+        Please read and sign the {waiver.name}
+        {waiver.locationName ? ` (${waiver.locationName})` : ""} to continue.
       </p>
       <WaiverSignatureForm
         waiverVersionId={waiver.id}

@@ -52,6 +52,8 @@ export function TerminalPane({
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  // Whether the reader will show its tip screen (not when a tip is already on the order).
+  const [askForTip, setAskForTip] = useState(true);
 
   // Poll loop is cancelled on unmount so closing the sheet mid-payment doesn't
   // leave a timer running against a dialog that's gone.
@@ -132,12 +134,13 @@ export function TerminalPane({
           headers: JSON_HEADERS,
           body: JSON.stringify({ amountCents: remaining, readerId }),
         });
-        const data = (await res.json()) as ApiErrorBody & { paymentId?: string };
+        const data = (await res.json()) as ApiErrorBody & { paymentId?: string; askForTip?: boolean };
         if (!res.ok || !data.paymentId) {
           setError(apiErrorMessage(data, 'Could not start the payment.'));
           setBusy(false);
           return;
         }
+        setAskForTip(data.askForTip !== false);
         setPaymentId(data.paymentId);
         setPhase('waiting');
         void poll(data.paymentId);
@@ -204,7 +207,8 @@ export function TerminalPane({
           <p className="text-5xl font-bold tracking-tight">{formatMoney(remaining)}</p>
           <p className="text-xl font-medium">Waiting for card on {reader.selected?.label ?? 'the reader'}</p>
           <p className="text-muted-foreground">
-            Tap, insert or swipe. They&apos;ll be asked about a tip before paying.
+            Tap, insert or swipe.
+            {askForTip ? " They'll be asked about a tip before paying." : ' The tip is already on the bill.'}
           </p>
         </div>
         <Button

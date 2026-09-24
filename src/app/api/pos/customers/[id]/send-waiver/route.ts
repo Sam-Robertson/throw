@@ -6,6 +6,7 @@ import { isSuppressed, normalizeEmail, normalizePhone } from "@/lib/consent";
 import { resend } from "@/lib/resend";
 import { sendSms } from "@/lib/sms";
 import { findUnsignedWaiver, waiverSignUrl } from "@/lib/waivers";
+import { isWaiverKind } from "@/lib/waiverKinds";
 import { realEmail } from "@/lib/walkinEmail";
 
 const DEFAULT_FROM = "Throw Art Studio <hello@throwartstudio.com>";
@@ -15,9 +16,10 @@ function appUrl(): string {
 }
 
 /**
- * Texts or emails a customer the link to sign this studio's waiver. Body:
- * `{ locationId, channel?: "sms" | "email" }`; without a channel it texts when
- * there is a phone number, else emails. Transactional, so only the
+ * Texts or emails a customer the link to sign the next waiver they are
+ * missing at this studio. Body: `{ locationId, channel?: "sms" | "email",
+ * kind?: "CLASS" | "MEMBERSHIP" }` (kind defaults to the class waiver);
+ * without a channel it texts when there is a phone number, else emails. Transactional, so only the
  * suppression list (STOP replies, bounces) is checked, not marketing consent.
  */
 export async function POST(
@@ -27,7 +29,11 @@ export async function POST(
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = (await req.json().catch(() => null)) as { locationId?: string; channel?: string } | null;
+  const body = (await req.json().catch(() => null)) as {
+    locationId?: string;
+    channel?: string;
+    kind?: string;
+  } | null;
   if (!body?.locationId) return NextResponse.json({ error: "locationId is required" }, { status: 400 });
 
   const allowed = await checkPermission(session.user.id, "canUsePos", body.locationId);
@@ -40,13 +46,15 @@ export async function POST(
   });
   if (!customer) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
 
-  const waiver = await findUnsignedWaiver(id, body.locationId);
+  const kind = isWaiverKind(body.kind) ? body.kind : "CLASS";
+  const waiver = await findUnsignedWaiver(id, body.locationId, kind);
   if (!waiver) {
     return NextResponse.json(
       { error: "WAIVER_ON_FILE", message: "This customer's waiver is already on file." },
       { status: 409 },
     );
   }
+  const waiverLabel = waiver.locationName ? `${waiver.name} (${waiver.locationName})` : waiver.name;
 
   // The signing page asks them to sign in, which takes a real email address.
   const email = realEmail(customer.email);
@@ -80,7 +88,7 @@ export async function POST(
     }
     const result = await sendSms({
       to,
-      message: `${firstName ? `Hi ${firstName}, p` : "P"}lease sign the ${waiver.locationName} waiver before your class: ${link}`,
+      message: `${firstName ? `Hi ${firstName}, p` : "P"}lease sign the ${waiverLabel}${kind === "CLASS" ? " before your class" : ""}: ${link}`,
       userId: customer.id,
       kind: "transactional",
     });
@@ -103,11 +111,11 @@ export async function POST(
     const { error } = await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL ?? DEFAULT_FROM,
       to: email,
-      subject: `Please sign the ${waiver.locationName} waiver`,
+      subject: `Please sign the ${waiverLabel}`,
       text: [
         `${firstName ? `Hi ${firstName},` : "Hi,"}`,
         "",
-        `Please read and sign the ${waiver.locationName} waiver before your class:`,
+        `Please read and sign the ${waiverLabel}${kind === "CLASS" ? " before your class" : ""}:`,
         link,
         "",
         "Thank you!",

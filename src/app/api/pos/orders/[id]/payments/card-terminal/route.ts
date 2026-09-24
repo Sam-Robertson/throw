@@ -134,18 +134,28 @@ export async function POST(
     },
   });
 
+  // The reader asks about a tip only while the order has none: a tip chosen
+  // on the POS screen or typed in by staff is already on the bill, and asking
+  // again on the reader would tip twice. (Whether the reader has a tip screen
+  // at all is the Stripe Terminal configuration — Studio setup → Card readers.)
+  const askForTip = order.tipCents === 0;
+
   try {
     await stripe.terminal.readers.processPaymentIntent(body.readerId, {
       payment_intent: paymentIntent.id,
-      process_config: {
-        tipping: {
-          // Tip options are based on the amount THIS reader is charging, not the
-          // whole bill. On a split payment the whole-bill basis would offer a
-          // full-bill tip on every leg, and settleTerminalPayment adds each one
-          // to order.tipCents — so the customer would be tipped twice over.
-          amount_eligible: body.amountCents,
-        },
-      },
+      ...(askForTip
+        ? {
+            process_config: {
+              tipping: {
+                // Tip options are based on the amount THIS reader is charging, not the
+                // whole bill. On a split payment the whole-bill basis would offer a
+                // full-bill tip on every leg, and settleTerminalPayment adds each one
+                // to order.tipCents — so the customer would be tipped twice over.
+                amount_eligible: body.amountCents,
+              },
+            },
+          }
+        : {}),
     });
   } catch (err) {
     // Never leave a PENDING payment behind for an action that never started.
@@ -160,7 +170,7 @@ export async function POST(
   }
 
   return NextResponse.json(
-    { paymentId: payment.id, readerId: body.readerId, tipPercentages: TIP_PERCENTAGES },
+    { paymentId: payment.id, readerId: body.readerId, askForTip, tipPercentages: TIP_PERCENTAGES },
     { status: 201 },
   );
 }

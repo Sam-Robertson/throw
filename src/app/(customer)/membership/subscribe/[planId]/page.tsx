@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { billingPeriodLabel } from "@/lib/billingInterval";
 import { checkPlanPurchasable } from "@/lib/membershipCatalog";
+import { findUnsignedWaiver, waiverSignUrl } from "@/lib/waivers";
 import { SubscribeForm } from "./_components/SubscribeForm";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,11 @@ export default async function SubscribePage({
   );
   if (!purchasable.ok) redirect("/membership");
   const { plan, capUsage } = purchasable;
+
+  // A membership waiver (this studio's or an all-studio one) is signed before
+  // the plan is chosen, so checkout never bounces back here.
+  const unsignedWaiver = await findUnsignedWaiver(session.user.id, plan.locationId, "MEMBERSHIP");
+  if (unsignedWaiver) redirect(waiverSignUrl(unsignedWaiver.id, `/membership/subscribe/${planId}`));
 
   const terms = await prisma.commitmentTerm.findMany({
     where: { isActive: true },

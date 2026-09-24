@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { safeNext } from '@/lib/safeNext';
 import NextLink from 'next/link';
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
@@ -16,7 +17,20 @@ import Link from '@mui/material/Link';
 import Stack from '@mui/material/Stack';
 
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = safeNext(searchParams.get('callbackUrl'), '/dashboard');
+  const registerHref = searchParams.get('callbackUrl')
+    ? `/register?callbackUrl=${encodeURIComponent(callbackUrl)}`
+    : '/register';
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -36,7 +50,7 @@ export default function LoginPage() {
       setError('Invalid email or password');
       setPending(false);
     } else {
-      router.push('/dashboard');
+      router.push(callbackUrl);
       router.refresh();
     }
   }
@@ -103,7 +117,7 @@ export default function LoginPage() {
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
               Don&apos;t have an account?{' '}
-              <Link component={NextLink} href="/register" underline="always">
+              <Link component={NextLink} href={registerHref} underline="always">
                 Register
               </Link>
             </Typography>

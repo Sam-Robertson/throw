@@ -7,6 +7,7 @@ import { stripe } from "@/lib/stripe";
 import { checkPlanPurchasable } from "@/lib/membershipCatalog";
 import { ensureStripePriceForPlan } from "@/lib/stripePrices";
 import { STUDIO_TIMEZONE } from "@/lib/timezone";
+import { findUnsignedWaiver } from "@/lib/waivers";
 
 type CheckoutSessionCreateParams = NonNullable<
   Parameters<typeof stripe.checkout.sessions.create>[0]
@@ -54,6 +55,17 @@ export async function POST(request: Request) {
       { status: purchasable.status },
     );
   const { plan } = purchasable;
+
+  const unsignedWaiver = await findUnsignedWaiver(userId, plan.locationId, "MEMBERSHIP");
+  if (unsignedWaiver)
+    return NextResponse.json(
+      {
+        error: `Please sign the ${unsignedWaiver.name} before starting a membership.`,
+        code: "WAIVER_REQUIRED",
+        waiverVersionId: unsignedWaiver.id,
+      },
+      { status: 403 },
+    );
 
   // The commitment term is the customer's choice on the subscribe page. With
   // none sent, month to month (months = null) is the default; if no terms are

@@ -6,9 +6,12 @@ const { auth } = NextAuth(authConfig);
 const STAFF_AND_ADMIN = ["ADMIN", "STAFF"];
 
 export default auth((req) => {
-  const { pathname } = req.nextUrl;
+  const { pathname, search } = req.nextUrl;
   const session = req.auth;
   const role = session?.user?.role;
+  // Come back to the exact page, query string included — a QR code that opens
+  // /pieces/new?location=… must still know the studio after signing in.
+  const callbackUrl = `${pathname}${search}`;
 
   // Authenticated users on auth pages go straight to dashboard
   if (session && (pathname === "/login" || pathname === "/register")) {
@@ -19,7 +22,7 @@ export default auth((req) => {
   if (pathname.startsWith("/admin") || pathname.startsWith("/staff")) {
     if (!session) {
       const url = new URL("/login", req.nextUrl.origin);
-      url.searchParams.set("callbackUrl", pathname);
+      url.searchParams.set("callbackUrl", callbackUrl);
       return NextResponse.redirect(url);
     }
     if (!role || !STAFF_AND_ADMIN.includes(role)) {
@@ -37,7 +40,7 @@ export default auth((req) => {
   ) {
     if (!session) {
       const url = new URL("/login", req.nextUrl.origin);
-      url.searchParams.set("callbackUrl", pathname);
+      url.searchParams.set("callbackUrl", callbackUrl);
       return NextResponse.redirect(url);
     }
   }

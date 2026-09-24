@@ -36,6 +36,9 @@ export async function POST(req: NextRequest) {
 
   const requestedSessionId =
     typeof b.studioSessionId === "string" && b.studioSessionId.trim() ? b.studioSessionId.trim() : null;
+  // From the studio's QR poster: the studio the pieces are physically at.
+  const requestedLocationId =
+    typeof b.locationId === "string" && b.locationId.trim() ? b.locationId.trim() : null;
 
   let studioSessionId: string | null = null;
   let locationId: string | null = null;
@@ -52,6 +55,15 @@ export async function POST(req: NextRequest) {
     }
     studioSessionId = booking.studioSessionId;
     locationId = booking.studioSession.locationId;
+  }
+
+  if (!locationId && requestedLocationId) {
+    const location = await prisma.location.findFirst({
+      where: { id: requestedLocationId, isActive: true },
+      select: { id: true },
+    });
+    if (!location) return NextResponse.json({ error: "That studio isn't one of ours" }, { status: 400 });
+    locationId = location.id;
   }
 
   if (!locationId) {
@@ -78,7 +90,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "We couldn't tell which studio your pieces are at. Choose the session you made them in, or ask the front desk to log them for you.",
+          "We couldn't tell which studio your pieces are at. Scan the QR code on the studio wall, choose the session you made them in, or ask the front desk to log them for you.",
       },
       { status: 400 },
     );

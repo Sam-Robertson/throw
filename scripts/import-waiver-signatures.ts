@@ -4,11 +4,12 @@
 // CSV columns (header names matched loosely; detected mapping is printed):
 // email, signed_at.
 //
-// Each matched customer gets one WaiverSignature against the active
-// WaiverVersion of EVERY active studio (so they're covered at Provo and Lehi),
+// Each matched customer gets one WaiverSignature against the current version
+// of EVERY active studio's class waiver (so they're covered at Provo and Lehi),
 // with source "momence", signedAt from the CSV, typedName from their account
-// name, and no signature image. If a studio has no active waiver, one is first
-// published there with the text of the most recent active waiver elsewhere.
+// name, and no signature image. If a studio has no class waiver of its own, one
+// is first created there with the text of the most recent class waiver
+// elsewhere. Membership and other waivers are not imported.
 //
 // Run:
 //   npm run import:waivers -- <file.csv> --dry-run    (prints plan, writes nothing)
@@ -70,18 +71,19 @@ async function main() {
     select: { id: true, name: true },
   });
   const activeVersions = await prisma.waiverVersion.findMany({
-    where: { isActive: true },
+    where: { isActive: true, waiver: { kind: "CLASS", archivedAt: null } },
     orderBy: { publishedAt: "desc" },
+    include: { waiver: { select: { locationId: true } } },
   });
   if (activeVersions.length === 0) {
-    throw new Error("No active WaiverVersion exists at any location; publish one before importing.");
+    throw new Error("No active class waiver exists at any location; publish one before importing.");
   }
   const template = activeVersions[0];
 
   type Target = { locationId: string; locationName: string; versionId: string | null; toPublish: boolean };
   const targets: Target[] = [];
   for (const location of locations) {
-    const version = activeVersions.find((v) => v.locationId === location.id);
+    const version = activeVersions.find((v) => v.waiver?.locationId === location.id);
     targets.push({
       locationId: location.id,
       locationName: location.name,
@@ -129,7 +131,7 @@ async function main() {
   for (const t of targets) {
     console.log(
       `  ${t.locationName}: ${
-        t.toPublish ? `no active waiver; will publish a copy of v${template.version} from another studio` : "active waiver found"
+        t.toPublish ? `no class waiver; will create one with the text of v${template.version} from another studio` : "class waiver found"
       }`,
     );
   }
@@ -143,24 +145,27 @@ async function main() {
     return;
   }
 
-  // Publish any missing studio waivers first, copying the template text.
+  // Create any missing studio class waivers first, copying the template text.
   for (const t of targets.filter((target) => target.toPublish)) {
-    const latest = await prisma.waiverVersion.findFirst({
-      where: { locationId: t.locationId },
-      orderBy: { version: "desc" },
-      select: { version: true },
-    });
-    const created = await prisma.waiverVersion.create({
+    const created = await prisma.waiver.create({
       data: {
+        name: `${t.locationName} class waiver`,
+        kind: "CLASS",
         locationId: t.locationId,
-        content: template.content,
-        version: (latest?.version ?? 0) + 1,
-        publishedAt: new Date(),
-        isActive: true,
+        versions: {
+          create: {
+            locationId: t.locationId,
+            content: template.content,
+            version: 1,
+            publishedAt: new Date(),
+            isActive: true,
+          },
+        },
       },
+      include: { versions: true },
     });
-    t.versionId = created.id;
-    console.log(`Published waiver v${created.version} at ${t.locationName}.`);
+    t.versionId = created.versions[0].id;
+    console.log(`Created class waiver v1 at ${t.locationName}.`);
   }
 
   const data = matched.flatMap((email) => {

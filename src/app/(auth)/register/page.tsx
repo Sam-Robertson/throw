@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { safeNext } from '@/lib/safeNext';
 import NextLink from 'next/link';
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
@@ -18,7 +19,20 @@ import Link from '@mui/material/Link';
 import Stack from '@mui/material/Stack';
 
 export default function RegisterPage() {
+  return (
+    <Suspense>
+      <RegisterForm />
+    </Suspense>
+  );
+}
+
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = safeNext(searchParams.get('callbackUrl'), '/dashboard');
+  const loginHref = searchParams.get('callbackUrl')
+    ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`
+    : '/login';
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [smsMarketingOptIn, setSmsMarketingOptIn] = useState(false);
@@ -59,9 +73,9 @@ export default function RegisterPage() {
     if (result?.error) {
       setError('Account created — please sign in.');
       setPending(false);
-      router.push('/login');
+      router.push(loginHref);
     } else {
-      router.push('/dashboard');
+      router.push(callbackUrl);
       router.refresh();
     }
   }
@@ -173,7 +187,7 @@ export default function RegisterPage() {
             </Button>
             <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
               Already have an account?{' '}
-              <Link component={NextLink} href="/login" underline="always">
+              <Link component={NextLink} href={loginHref} underline="always">
                 Sign in
               </Link>
             </Typography>

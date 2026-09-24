@@ -26,12 +26,15 @@ export function PieceForm({
   sessions,
   defaultSessionId,
   defaultPhone,
+  location,
 }: {
   userId: string;
   sessions: SessionOption[];
   defaultSessionId: string;
   /** The phone on the customer's profile, if any. */
   defaultPhone: string;
+  /** The studio whose QR poster was scanned, so pieces go to its kiln queue. */
+  location: { id: string; name: string } | null;
 }) {
   const router = useRouter();
 
@@ -72,6 +75,7 @@ export function PieceForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           studioSessionId: studioSessionId || null,
+          locationId: location?.id ?? null,
           groupName,
           pieceCount: Number(pieceCount),
           description,
@@ -97,20 +101,28 @@ export function PieceForm({
   return (
     <Box component="form" onSubmit={handleSubmit}>
       <Stack sx={{ gap: 2.5 }}>
-        <TextField
-          select
-          label="Session"
-          value={studioSessionId}
-          onChange={(e) => chooseSession(e.target.value)}
-          helperText="The class or open studio session you made them in"
-        >
-          <MenuItem value="">Not sure / not listed</MenuItem>
-          {sessions.map((s) => (
-            <MenuItem key={s.id} value={s.id}>
-              {s.label}
-            </MenuItem>
-          ))}
-        </TextField>
+        {location && (
+          <Alert severity="info" icon={false}>
+            Logging pieces at <strong>{location.name}</strong>.
+          </Alert>
+        )}
+
+        {sessions.length > 0 && (
+          <TextField
+            select
+            label="Session"
+            value={studioSessionId}
+            onChange={(e) => chooseSession(e.target.value)}
+            helperText="The class or open studio session you made them in"
+          >
+            <MenuItem value="">Not sure / not listed</MenuItem>
+            {sessions.map((s) => (
+              <MenuItem key={s.id} value={s.id}>
+                {s.label}
+              </MenuItem>
+            ))}
+          </TextField>
+        )}
 
         <TextField
           label="Group name (optional)"

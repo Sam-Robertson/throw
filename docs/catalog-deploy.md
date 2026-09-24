@@ -54,6 +54,11 @@ Class types: `backups/pre-catalog-sync-*.json` holds every `SessionType` row and
 original `sessionTypeId` of every upcoming session. Products, discounts and new plans
 can simply be archived in admin. Neon point-in-time restore covers anything else.
 
+## 2026-09-23: waivers migration
+`npx prisma migrate deploy` applies `20260923120000_waivers-and-kinds` (see
+`docs/jp-feedback-2026-09-23.md`). Then turn on the reader tip screen in Studio
+setup → Card readers.
+
 ## Code deploy
 Merge `launch-sept-2026` into `main` and push; Vercel builds production from `main`
 (`prisma generate && next build`).

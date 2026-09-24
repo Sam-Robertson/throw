@@ -568,7 +568,7 @@ export async function checkOrderPayable(orderId: string): Promise<PaymentBlock |
         return {
           status: 409,
           error: "WAIVER_REQUIRED",
-          message: `This customer hasn't signed the ${unsignedWaiver.locationName} waiver. Have them sign it (they can sign in and go to /waiver) before taking payment.`,
+          message: `This customer hasn't signed the ${unsignedWaiver.name}. Have them sign it (they can sign in and go to /waiver, or use Send waiver) before taking payment.`,
         };
       }
 

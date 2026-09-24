@@ -78,7 +78,11 @@ interface WaiverSignature {
   id: string;
   signedAt: string;
   ipAddress: string;
-  waiverVersion: { version: number };
+  waiverVersion: {
+    version: number;
+    isActive: boolean;
+    waiver: { name: string; kind: string } | null;
+  };
 }
 
 interface Task {
@@ -612,7 +616,7 @@ export default function AdminCustomerProfilePage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/30">
-                    <th className="px-4 py-2 text-left font-medium">Version</th>
+                    <th className="px-4 py-2 text-left font-medium">Waiver</th>
                     <th className="px-4 py-2 text-left font-medium">Signed</th>
                     <th className="px-4 py-2 text-left font-medium">IP Address</th>
                   </tr>
@@ -621,7 +625,10 @@ export default function AdminCustomerProfilePage() {
                   {customer.waiverSignatures.map((sig) => (
                     <tr key={sig.id} className="border-b last:border-0">
                       <td className="px-4 py-2">
-                        v{sig.waiverVersion.version}
+                        {sig.waiverVersion.waiver?.name ?? "Waiver"} v{sig.waiverVersion.version}
+                        {!sig.waiverVersion.isActive && (
+                          <span className="ml-2 text-xs text-muted-foreground">(old version)</span>
+                        )}
                       </td>
                       <td className="px-4 py-2 text-muted-foreground">
                         {formatMountainTime(new Date(sig.signedAt), "datetime")}

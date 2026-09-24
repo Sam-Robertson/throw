@@ -327,10 +327,19 @@ export function AdminPiecesClient() {
             The kiln queue: everything in the studio, oldest first within each stage.
           </Typography>
         </Box>
-        <Button component={NextLink} href="/admin/pieces/new" variant="contained" startIcon={<AddIcon />} sx={{ minHeight: 44 }}>
-          Log pieces
-        </Button>
+        <Stack direction="row" sx={{ gap: 1, flexWrap: "wrap" }}>
+          <Button component={NextLink} href="/admin/pieces/qr" target="_blank" variant="outlined" sx={{ minHeight: 44 }}>
+            Print QR poster
+          </Button>
+          <Button component={NextLink} href="/admin/pieces/new" variant="contained" startIcon={<AddIcon />} sx={{ minHeight: 44 }}>
+            Log pieces
+          </Button>
+        </Stack>
       </Box>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+        Customers log their own pieces by scanning the QR poster (it opens the form for this studio).
+        Log pieces here only for someone who can&apos;t.
+      </Typography>
 
       <Stack direction="row" sx={{ gap: 1, mt: 3, mb: 2, flexWrap: "wrap" }}>
         {chip(NOT_PICKED_UP, "Kiln queue", inStudioCount)}

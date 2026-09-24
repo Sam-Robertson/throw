@@ -10,21 +10,33 @@ import { PieceForm, type SessionOption } from "./_components/PieceForm";
 // How far back the session picker looks.
 const SESSION_LOOKBACK_DAYS = 60;
 
+// /pieces/new?session=…    from the after-class prompt (that booking's session)
+// /pieces/new?location=…   from the QR poster on the studio wall (that studio)
 export default async function NewPiecePage({
   searchParams,
 }: {
-  searchParams: Promise<{ session?: string }>;
+  searchParams: Promise<{ session?: string; location?: string }>;
 }) {
-  const { session: requestedSessionId } = await searchParams;
+  const { session: requestedSessionId, location: requestedLocationId } = await searchParams;
   const session = await auth();
   if (!session) {
-    const back = requestedSessionId
-      ? `/pieces/new?session=${encodeURIComponent(requestedSessionId)}`
-      : "/pieces/new";
+    const params = new URLSearchParams();
+    if (requestedSessionId) params.set("session", requestedSessionId);
+    if (requestedLocationId) params.set("location", requestedLocationId);
+    const query = params.toString();
+    const back = `/pieces/new${query ? `?${query}` : ""}`;
     redirect(`/login?callbackUrl=${encodeURIComponent(back)}`);
   }
   const userId = session.user.id;
   const now = new Date();
+
+  // The studio the QR code was scanned at, if it is one of ours.
+  const scannedLocation = requestedLocationId
+    ? await prisma.location.findFirst({
+        where: { id: requestedLocationId, isActive: true },
+        select: { id: true, name: true },
+      })
+    : null;
 
   const bookingInclude = {
     studioSession: {
@@ -88,13 +100,15 @@ export default async function NewPiecePage({
         Log your pieces
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 4 }}>
-        Tell us what you made so we can track it through drying and firing.
+        Tell us what you made so we can track it through drying and firing
+        {scannedLocation ? ` at ${scannedLocation.name}` : ""}.
       </Typography>
       <PieceForm
         userId={userId}
         sessions={sessions}
         defaultSessionId={defaultSessionId}
         defaultPhone={user?.phone ?? ""}
+        location={scannedLocation}
       />
     </Container>
   );

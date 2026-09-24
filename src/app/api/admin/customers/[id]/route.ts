@@ -46,7 +46,14 @@ export async function GET(
       },
       waiverSignatures: {
         include: {
-          waiverVersion: { select: { version: true, locationId: true } },
+          waiverVersion: {
+            select: {
+              version: true,
+              locationId: true,
+              isActive: true,
+              waiver: { select: { name: true, kind: true } },
+            },
+          },
         },
         orderBy: { signedAt: "desc" },
       },

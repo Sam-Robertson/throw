@@ -17,6 +17,7 @@ import { CardPane } from './payment/CardPane';
 import { CompPane } from './payment/CompPane';
 import { GiftCardPane } from './payment/GiftCardPane';
 import { SuccessPane } from './payment/SuccessPane';
+import { TipPromptPane } from './payment/TipPromptPane';
 import { JSON_HEADERS } from './payment/paneTypes';
 import { useReaderStatus } from './payment/useReaderStatus';
 import {
@@ -29,7 +30,10 @@ import {
   type PosOrder,
 } from './types';
 
-type View = 'methods' | 'terminal' | 'card' | 'giftcard' | 'credit' | 'comp';
+type View = 'methods' | 'tip' | 'terminal' | 'card' | 'giftcard' | 'credit' | 'comp';
+
+/** Tenders whose tip question the POS screen asks; the card reader asks on its own display. */
+type ScreenTender = 'card' | 'giftcard' | 'credit';
 
 interface PaymentSheetProps {
   order: PosOrder | null;
@@ -45,6 +49,11 @@ interface PaymentSheetProps {
  * (when the customer has some), typed-in card and admin comp underneath. The
  * studio takes no cash. Tenders can be combined: each one takes what it can
  * and the sheet comes back here with what is left.
+ *
+ * Tips: the customer is asked exactly once per order. The card reader asks on
+ * its own screen (Stripe Terminal tipping); for the other tenders this sheet
+ * shows the tip screen first, unless a tip is already on the order (typed in
+ * from the cart's Add tip, the manual backup). Comp skips it.
  */
 export function PaymentSheet({
   order,
@@ -61,6 +70,10 @@ export function PaymentSheet({
   const [tenderNote, setTenderNote] = useState<string | null>(null);
   const [readerWaiting, setReaderWaiting] = useState(false);
   const [summary, setSummary] = useState<CustomerSummary | null>(null);
+  // Which tender the tip screen is standing in front of, and whether this
+  // order's customer has already been asked (so a split payment asks once).
+  const [tipThen, setTipThen] = useState<ScreenTender>('card');
+  const [tipAskedFor, setTipAskedFor] = useState<string | null>(null);
 
   const reader = useReaderStatus(order?.locationId);
 
@@ -114,6 +127,18 @@ export function PaymentSheet({
 
   const remaining = remainingBalanceCents(order);
   const completed = order.status === 'COMPLETED';
+
+  // Open a screen tender, asking about a tip first when nobody has yet.
+  function openTender(tender: ScreenTender) {
+    setError(null);
+    setTenderNote(null);
+    if (order && order.tipCents === 0 && tipAskedFor !== order.id) {
+      setTipThen(tender);
+      setView('tip');
+      return;
+    }
+    setView(tender);
+  }
   const needsCustomer = orderHasDropIn(order) && !order.customerId;
   const creditCents = summary?.accountCreditCents ?? 0;
   const customerName = order.customer?.name ?? realEmail(order.customer?.email) ?? 'This customer';
@@ -171,7 +196,7 @@ export function PaymentSheet({
           <DialogTitle>{completed ? 'Payment complete' : `Order #${order.orderNumber}`}</DialogTitle>
         </DialogHeader>
 
-        {!completed && !readerWaiting && (
+        {!completed && !readerWaiting && view !== 'tip' && (
           <div className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2 text-sm">
             <span className="text-muted-foreground">Total {formatMoney(order.totalCents)}</span>
             <span className="text-base font-semibold">To pay {formatMoney(remaining)}</span>
@@ -244,7 +269,7 @@ export function PaymentSheet({
             <Button
               className="min-h-14 text-base"
               variant={reader.ready ? 'secondary' : 'default'}
-              onClick={() => setView('giftcard')}
+              onClick={() => openTender('giftcard')}
               disabled={busy}
             >
               Gift card
@@ -253,7 +278,7 @@ export function PaymentSheet({
               <Button
                 className="flex h-auto min-h-14 flex-col gap-0 whitespace-normal text-base"
                 variant={reader.ready ? 'secondary' : 'default'}
-                onClick={() => setView('credit')}
+                onClick={() => openTender('credit')}
                 disabled={busy}
               >
                 <span>Account credit</span>
@@ -265,7 +290,7 @@ export function PaymentSheet({
             <Button
               className="min-h-14 text-base"
               variant={reader.ready ? 'outline' : 'default'}
-              onClick={() => setView('card')}
+              onClick={() => openTender('card')}
               disabled={busy}
             >
               Enter card
@@ -276,6 +301,20 @@ export function PaymentSheet({
               </Button>
             )}
           </div>
+        )}
+
+        {!completed && view === 'tip' && (
+          <TipPromptPane
+            order={order}
+            busy={busy}
+            setBusy={setBusy}
+            setError={setError}
+            onDone={(updated) => {
+              setTipAskedFor(order.id);
+              if (updated) onOrderUpdate(updated);
+              setView(tipThen);
+            }}
+          />
         )}
 
         {!completed && view === 'terminal' && (

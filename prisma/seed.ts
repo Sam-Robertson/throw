@@ -182,10 +182,16 @@ sign this waiver on their behalf.
 By signing below you confirm you have read, understood, and agree to
 these terms.`;
 
+  const waiverDoc =
+    (await prisma.waiver.findFirst({ where: { kind: 'CLASS', locationId: location.id } })) ??
+    (await prisma.waiver.create({
+      data: { name: 'Class waiver', kind: 'CLASS', locationId: location.id },
+    }));
   const waiver = await prisma.waiverVersion.upsert({
-    where: { locationId_version: { locationId: location.id, version: 1 } },
+    where: { waiverId_version: { waiverId: waiverDoc.id, version: 1 } },
     update: { isActive: true, publishedAt: daysAgo(30), content: waiverContent },
     create: {
+      waiverId: waiverDoc.id,
       locationId: location.id,
       version: 1,
       isActive: true,

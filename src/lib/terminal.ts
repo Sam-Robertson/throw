@@ -18,8 +18,13 @@ import { maybeCompletePosOrder, recalculateOrderTotals } from "@/lib/pos";
 
 export const TERMINAL_METHOD = "CARD_TERMINAL";
 
-/** Tip options shown on the reader. Percentages of the pre-tip order total. */
-export const TIP_PERCENTAGES = [15, 18, 20];
+import {
+  SMART_TIP_THRESHOLD_CENTS,
+  TIP_FIXED_CENTS,
+  TIP_PERCENTAGES,
+} from "@/lib/tipping";
+
+export { TIP_PERCENTAGES };
 
 export class TerminalError extends Error {
   status: number;
@@ -27,6 +32,59 @@ export class TerminalError extends Error {
     super(message);
     this.status = status;
   }
+}
+
+/**
+ * On-reader tipping is a Stripe Terminal *configuration*: the reader only shows
+ * the tip screen when the account's default configuration has USD tipping set
+ * up, whatever process_config we send with the payment. These two helpers let
+ * Studio setup check and switch it on without visiting the Stripe Dashboard.
+ */
+export interface TippingSetup {
+  enabled: boolean;
+  configurationId: string | null;
+  percentages: number[];
+  fixedAmountsCents: number[];
+  smartTipThresholdCents: number | null;
+}
+
+async function defaultTerminalConfiguration(): Promise<Stripe.Terminal.Configuration | null> {
+  const configurations = await stripe.terminal.configurations.list({ is_account_default: true, limit: 1 });
+  return configurations.data[0] ?? null;
+}
+
+export async function getTippingSetup(): Promise<TippingSetup> {
+  const config = await defaultTerminalConfiguration();
+  const usd = config?.tipping?.usd;
+  return {
+    enabled: Boolean(usd && ((usd.percentages?.length ?? 0) > 0 || (usd.fixed_amounts?.length ?? 0) > 0)),
+    configurationId: config?.id ?? null,
+    percentages: usd?.percentages ?? [],
+    fixedAmountsCents: usd?.fixed_amounts ?? [],
+    smartTipThresholdCents: usd?.smart_tip_threshold ?? null,
+  };
+}
+
+/** Turns on the reader's tip screen with the studio's standard options (see src/lib/tipping.ts). */
+export async function enableOnReaderTipping(): Promise<TippingSetup> {
+  const tipping = {
+    usd: {
+      percentages: [...TIP_PERCENTAGES],
+      fixed_amounts: [...TIP_FIXED_CENTS],
+      smart_tip_threshold: SMART_TIP_THRESHOLD_CENTS,
+    },
+  };
+  const existing = await defaultTerminalConfiguration();
+  if (existing) await stripe.terminal.configurations.update(existing.id, { tipping });
+  else await stripe.terminal.configurations.create({ tipping });
+  return getTippingSetup();
+}
+
+/** Turns the reader's tip screen off. The POS screen prompt and manual tips still work. */
+export async function disableOnReaderTipping(): Promise<TippingSetup> {
+  const existing = await defaultTerminalConfiguration();
+  if (existing) await stripe.terminal.configurations.update(existing.id, { tipping: "" });
+  return getTippingSetup();
 }
 
 /** The Stripe Terminal Location a studio maps to, or a clear error if unlinked. */

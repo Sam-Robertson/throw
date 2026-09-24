@@ -123,6 +123,14 @@ DELETE is unchanged and reprices.
   - 404 Customer not found.
   - 409 `CUSTOMER_LOCKED`. It now triggers when the order has a drop-in, a class pack or any discount and also a PENDING or SUCCEEDED payment.
 
+### POST `/api/pos/orders/[id]/payments/card-terminal` (changed 2026-09-23)
+- The reader is asked to show its tip screen (`process_config.tipping.amount_eligible`) **only when `order.tipCents` is 0**. A tip chosen on the POS tip screen or typed in from the cart is already on the bill.
+- **Response** adds `askForTip: boolean`.
+- Whether the reader has a tip screen at all is the Stripe Terminal account configuration: `GET/POST /api/admin/terminal/tipping` (admin) reads and switches it; the POS tip options live in `src/lib/tipping.ts`.
+
+### Tip screen on the POS (2026-09-23)
+`PaymentSheet` shows `TipPromptPane` before Enter card, Gift card and Account credit when the order has no tip and this order hasn't been asked yet; it saves with `PATCH /api/pos/orders/[id] { tipCents }`. Comp and the card reader skip it (the reader asks on its own display).
+
 ### GET `/api/pos/orders?resumable=1&locationId=&excludeId=` (new mode, Prompt 6)
 The register's "Resume open order" list. Without `resumable=1` the route behaves as before (`status`, `staffId`, `from`, `to`, `page`, `limit`).
 - **Returns** OPEN orders with at least one item at the studio: every parked order (any staff member can pick one up), plus the caller's own unparked orders from the last 12 hours. `excludeId` leaves out the order on screen. Parked first (newest park first), then newest created. `limit` and `page` apply.

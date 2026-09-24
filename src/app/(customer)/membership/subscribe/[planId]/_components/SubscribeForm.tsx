@@ -49,6 +49,7 @@ export function SubscribeForm({
   const [termId, setTermId] = useState<string | null>(terms[0]?.id ?? null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [waiverHref, setWaiverHref] = useState<string | null>(null);
 
   async function handleSubscribe() {
     setLoading(true);
@@ -62,8 +63,20 @@ export function SubscribeForm({
       const data: { url: string } = await res.json();
       window.location.href = data.url;
     } else {
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        code?: string;
+        waiverVersionId?: string;
+      };
       setError(data.error ?? "Something went wrong. Please try again.");
+      setWaiverHref(
+        data.code === "WAIVER_REQUIRED" && data.waiverVersionId
+          ? `/waiver?${new URLSearchParams({
+              versionId: data.waiverVersionId,
+              callbackUrl: `/membership/subscribe/${planId}`,
+            })}`
+          : null,
+      );
       setLoading(false);
     }
   }
@@ -100,7 +113,19 @@ export function SubscribeForm({
           })}
         </fieldset>
       )}
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && (
+        <p className="text-sm text-destructive">
+          {error}
+          {waiverHref && (
+            <>
+              {" "}
+              <a href={waiverHref} className="font-medium underline underline-offset-4">
+                Sign it now
+              </a>
+            </>
+          )}
+        </p>
+      )}
       <Button className="w-full" size="lg" disabled={loading} onClick={handleSubscribe}>
         {loading ? "Redirecting..." : "Start Membership"}
       </Button>
