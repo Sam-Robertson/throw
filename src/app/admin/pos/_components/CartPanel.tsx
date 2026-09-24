@@ -43,7 +43,6 @@ interface CartPanelProps {
   onVoid: (reason: string) => void;
   onCharge: () => void;
   /** Short studio label shown beside Charge, so a sale never lands at the wrong studio. */
-  locationName?: string;
   /** For the saved staff discounts and the group events they can be tied to. */
   catalog?: PosCatalog | null;
   /** Called with the order returned by any route this panel calls itself. */
@@ -89,7 +88,6 @@ export function CartPanel({
   onSetTip,
   onVoid,
   onCharge,
-  locationName,
   catalog = null,
   onOrderUpdate,
   onPark,
@@ -377,12 +375,6 @@ export function CartPanel({
         )}
 
         <div className="flex items-stretch gap-2">
-          {locationName && (
-            <div className="flex max-w-[40%] shrink-0 flex-col justify-center rounded-md border-2 border-foreground/80 px-3 py-1">
-              <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Studio</span>
-              <span className="break-words text-lg font-bold leading-tight">{locationName}</span>
-            </div>
-          )}
           <Button
             className="h-auto min-h-14 flex-1 whitespace-normal text-lg font-semibold leading-tight"
             onClick={onCharge}
