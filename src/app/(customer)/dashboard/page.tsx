@@ -195,32 +195,26 @@ export default async function DashboardPage() {
       {/* Pottery pieces */}
       <Paper
         variant="outlined"
-        sx={{
-          p: 2.5,
-          borderRadius: 3,
-          mb: 5,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 2,
-          flexWrap: 'wrap',
-        }}
+        sx={{ p: 2.5, borderRadius: 3, mb: 5 }}
       >
-        <Box>
-          <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-            Your pieces
-          </Typography>
+        <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+          Your pieces
+        </Typography>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', gap: 2 }}
+        >
           <Typography variant="body2" color="text.secondary">
             Made something in class? Log your pieces so we can track them through firing.
           </Typography>
-        </Box>
-        <Stack direction="row" sx={{ gap: 1, flexShrink: 0 }}>
-          <Button component={NextLink} href="/pieces/new" variant="contained" size="small">
-            Log your pieces
-          </Button>
-          <Button component={NextLink} href="/pieces" variant="outlined" size="small">
-            View my pieces
-          </Button>
+          <Stack direction="row" sx={{ gap: 1, flexShrink: 0 }}>
+            <Button component={NextLink} href="/pieces/new" variant="contained" size="small">
+              Log your pieces
+            </Button>
+            <Button component={NextLink} href="/pieces" variant="outlined" size="small">
+              View my pieces
+            </Button>
+          </Stack>
         </Stack>
       </Paper>
 
