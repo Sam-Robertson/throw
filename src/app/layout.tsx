@@ -6,6 +6,8 @@ import { satoshi, gtAlpina } from '@/app/fonts';
 import './globals.css';
 
 export const metadata: Metadata = {
+  // Absolute URLs for social previews and canonical links come from here.
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? 'https://www.throwartstudios.app'),
   title: 'Throw',
   description: 'Pottery studio booking and membership platform',
 };

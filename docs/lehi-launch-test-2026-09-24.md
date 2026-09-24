@@ -2,7 +2,7 @@
 
 Final check of the four Lehi flows before JP is told they are ready:
 booking, in-person checkout, waivers, piece intake. Run against production
-(`throw-kappa.vercel.app`, signed in as the admin account) and the production
+(then at `throw-kappa.vercel.app`, now `www.throwartstudios.app`; signed in as the admin account) and the production
 database, read-only except where noted. Nothing was booked, signed, charged or
 logged on production during the test.
 
@@ -42,8 +42,9 @@ logged on production during the test.
   an inactive class type, not seed; it still appears on the admin dashboard.
 - **Photo uploads** on the piece form are off because the upload service is
   not configured on Vercel. The old Google Form took photos.
-- **Poster URL** is `throw-kappa.vercel.app`. If the site moves to
-  `throwartstudio.com`, print the posters after the move.
+- ~~Poster URL is `throw-kappa.vercel.app`.~~ The site moved to
+  `www.throwartstudios.app` on 2026-09-24; posters printed after that carry
+  the new address.
 - **Member firing** products are missing or unpriced (POS says so). Provo
   scope, Sept 25.
 - The staff roster page does not name the studio either. Minor.

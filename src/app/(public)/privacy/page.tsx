@@ -8,7 +8,7 @@ import Typography from '@mui/material/Typography';
 export const metadata = { title: 'Privacy Policy — Throw' };
 
 const LAST_UPDATED = 'July 22, 2026';
-const CONTACT_EMAIL = 'hello@throwstudio.com';
+const CONTACT_EMAIL = 'info@throwartstudio.com';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (

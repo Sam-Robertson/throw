@@ -48,9 +48,9 @@ export async function POST(
     }
   } else if (conversation.channel === "email") {
     await resend.emails.send({
-      from: "Throw Studio <hello@throwstudio.com>",
+      from: process.env.RESEND_FROM_EMAIL ?? "Throw Art Studio <hello@throwartstudio.com>",
       to: conversation.user.email,
-      subject: body.subject ?? conversation.subject ?? "Message from Throw Studio",
+      subject: body.subject ?? conversation.subject ?? "Message from Throw Art Studio",
       text: body.body.trim(),
     });
   }
