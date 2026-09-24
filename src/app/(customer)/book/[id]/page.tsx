@@ -16,6 +16,7 @@ async function getSession(id: string) {
         select: {
           ...CLASS_PRICE_SELECT,
           name: true,
+          kind: true,
           durationMinutes: true,
         },
       },
@@ -91,7 +92,10 @@ export default async function BookPage({
 
   // Waiver check — the same per-location lookup the booking APIs enforce, so
   // the page and the server never disagree about which waiver is required.
-  const unsignedWaiver = await findUnsignedWaiver(userId, studioSession.locationId);
+  const unsignedWaiver = await findUnsignedWaiver(userId, studioSession.locationId, "CLASS", {
+    sessionTypeId: studioSession.sessionType.id,
+    sessionKind: studioSession.sessionType.kind,
+  });
   if (unsignedWaiver) {
     redirect(waiverSignUrl(unsignedWaiver.id, `/book/${id}`));
   }

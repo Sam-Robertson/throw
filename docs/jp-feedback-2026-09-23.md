@@ -15,7 +15,16 @@ name, a type and a studio (or "All studios"), and its own version history.
 | Membership waiver | Before starting a membership online (subscribe page and API). No fallback: with none published, memberships need no waiver, as today. |
 | Other | Never automatically. Signed via its link or printed QR code (workshops, kids camps, photo releases). |
 
-- Admin → Waivers: **New waiver**, **Publish new version**, **Rename**, **Archive** /
+- **Applies to** (added 2026-09-24): a class waiver covers every class, event and
+  course, or only courses, only classes and events, or chosen class types. A
+  membership waiver covers every plan or chosen plans. So a course booking asks
+  for the course waiver, a membership sign-up asks for the membership waiver, and
+  a kids camp can have its own. The waivers at a studio add up: a course booking
+  needs every class waiver there that covers courses. Set it when creating a
+  waiver or later with **Rename / applies to**; changing it never touches
+  signatures. The POS customer panel and Send waiver check only the
+  "every class" waivers, since they don't know what is being booked yet.
+- Admin → Waivers: **New waiver**, **Publish new version**, **Rename / applies to**, **Archive** /
   **Restore**, **Sign link** (copy, or print a QR poster), per-version signature
   lists, and the "Has someone signed?" lookup now names the waiver.
 - Existing versions and signatures are untouched: the migration groups them into
@@ -26,7 +35,9 @@ name, a type and a studio (or "All studios"), and its own version history.
 - `/waiver?waiverId=…` links keep working after a new version is published.
 - Send waiver from the POS accepts `kind: "MEMBERSHIP"` (defaults to the class waiver).
 
-**Migration:** `20260923120000_waivers-and-kinds` (additive: new `Waiver` table,
+**Migrations:** `20260924130000_waiver-applies-to` (additive: `Waiver.appliesTo`,
+join tables `WaiverSessionType` and `WaiverMembershipPlan`) and
+`20260923120000_waivers-and-kinds` (additive: new `Waiver` table,
 nullable `WaiverVersion.waiverId`, `locationId` made nullable, the old
 `(locationId, version)` unique swapped for `(waiverId, version)`, data backfilled
 in the same migration). Run on production, from a machine with the Neon URL:

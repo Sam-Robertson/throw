@@ -56,7 +56,7 @@ export async function POST(request: Request) {
     );
   const { plan } = purchasable;
 
-  const unsignedWaiver = await findUnsignedWaiver(userId, plan.locationId, "MEMBERSHIP");
+  const unsignedWaiver = await findUnsignedWaiver(userId, plan.locationId, "MEMBERSHIP", { planId: plan.id });
   if (unsignedWaiver)
     return NextResponse.json(
       {

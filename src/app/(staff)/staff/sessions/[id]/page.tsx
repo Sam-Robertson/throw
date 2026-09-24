@@ -29,7 +29,7 @@ export default async function StaffSessionPage({
   const studioSession = await prisma.studioSession.findUnique({
     where: { id },
     include: {
-      sessionType: { select: { name: true } },
+      sessionType: { select: { id: true, name: true, kind: true } },
       instructor: { select: { name: true, email: true } },
       bookings: {
         include: { user: { select: { id: true, name: true, email: true } } },
@@ -69,9 +69,12 @@ export default async function StaffSessionPage({
     );
   }
 
-  // Every class waiver this session's studio requires (its own, plus any
-  // all-studio one, or the fallback when it has none).
-  const requiredWaivers = await getApplicableWaivers(studioSession.locationId);
+  // Every class waiver this session requires at its studio (its own, plus any
+  // all-studio one, or the fallback when it has none), for this class type.
+  const requiredWaivers = await getApplicableWaivers(studioSession.locationId, "CLASS", {
+    sessionTypeId: studioSession.sessionType.id,
+    sessionKind: studioSession.sessionType.kind,
+  });
   const requiredVersionIds = requiredWaivers.map((w) => w.id);
 
   const relevantBookings = studioSession.bookings.filter(

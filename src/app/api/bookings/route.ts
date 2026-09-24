@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
   const studioSession = await prisma.studioSession.findUnique({
     where: { id: studioSessionId },
     include: {
-      sessionType: { select: { ...CLASS_PRICE_SELECT, isTicketEligible: true } },
+      sessionType: { select: { ...CLASS_PRICE_SELECT, isTicketEligible: true, kind: true } },
       _count: { select: { bookings: { where: { status: "CONFIRMED" } } } },
     },
   });
@@ -145,7 +145,10 @@ export async function POST(req: NextRequest) {
   // Checked before the membership lookup so a missing waiver is reported even
   // to non-members, and before consumeTicket so no ticket is ever spent on a
   // booking that then gets refused.
-  const unsignedWaiver = await findUnsignedWaiver(userId, studioSession.locationId);
+  const unsignedWaiver = await findUnsignedWaiver(userId, studioSession.locationId, "CLASS", {
+    sessionTypeId: sessionType.id,
+    sessionKind: sessionType.kind,
+  });
   if (unsignedWaiver) {
     return NextResponse.json(
       { error: "WAIVER_REQUIRED", waiverVersionId: unsignedWaiver.id },

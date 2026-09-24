@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sanitizeRichText, isRichTextEmpty } from "@/lib/richText";
 import { isWaiverKind } from "@/lib/waiverKinds";
-import { WAIVER_ADMIN_SELECT } from "./_shared";
+import { WAIVER_ADMIN_SELECT, parseScope } from "./_shared";
 
 /** Every waiver with all its versions, current first. Archived ones included (flagged). */
 export async function GET() {
@@ -23,7 +23,9 @@ export async function GET() {
 
 /**
  * Creates a waiver and publishes its first version.
- * Body: `{ name, kind, locationId | null, description?, content }`.
+ * Body: `{ name, kind, locationId | null, description?, content, appliesTo?,
+ * sessionTypeIds?, planIds? }`. `appliesTo` defaults to "ALL"; the id lists
+ * are only read for "SELECTED".
  */
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -38,6 +40,9 @@ export async function POST(request: NextRequest) {
     locationId?: unknown;
     description?: unknown;
     content?: unknown;
+    appliesTo?: unknown;
+    sessionTypeIds?: unknown;
+    planIds?: unknown;
   } | null;
   if (!body) return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
 
@@ -49,6 +54,8 @@ export async function POST(request: NextRequest) {
     typeof body.description === "string" && body.description.trim()
       ? body.description.trim().slice(0, 500)
       : null;
+  const scope = parseScope(body.kind, body);
+  if ("error" in scope) return NextResponse.json({ error: scope.error }, { status: 400 });
 
   // Cleaned here, not just in the editor — this route accepts arbitrary JSON.
   const content = typeof body.content === "string" ? sanitizeRichText(body.content) : "";
@@ -60,6 +67,16 @@ export async function POST(request: NextRequest) {
     const location = await prisma.location.findUnique({ where: { id: locationId }, select: { id: true } });
     if (!location) return NextResponse.json({ error: "Unknown location" }, { status: 400 });
   }
+  if (scope.sessionTypeIds.length) {
+    const found = await prisma.sessionType.count({ where: { id: { in: scope.sessionTypeIds } } });
+    if (found !== scope.sessionTypeIds.length)
+      return NextResponse.json({ error: "Unknown class type" }, { status: 400 });
+  }
+  if (scope.planIds.length) {
+    const found = await prisma.membershipPlan.count({ where: { id: { in: scope.planIds } } });
+    if (found !== scope.planIds.length)
+      return NextResponse.json({ error: "Unknown membership plan" }, { status: 400 });
+  }
 
   const waiver = await prisma.waiver.create({
     data: {
@@ -67,6 +84,9 @@ export async function POST(request: NextRequest) {
       kind: body.kind,
       locationId,
       description,
+      appliesTo: scope.appliesTo,
+      sessionTypes: { create: scope.sessionTypeIds.map((sessionTypeId) => ({ sessionTypeId })) },
+      plans: { create: scope.planIds.map((planId) => ({ planId })) },
       versions: {
         create: { locationId, content, version: 1, publishedAt: new Date(), isActive: true },
       },

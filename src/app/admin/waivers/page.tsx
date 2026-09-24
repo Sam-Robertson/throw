@@ -6,7 +6,15 @@ import { RichTextEditor } from "@/components/shared/RichTextEditor";
 import { Input } from "@/components/ui/input";
 import { shortLocationName } from "@/lib/locationName";
 import { isRichTextEmpty } from "@/lib/richText";
-import { WAIVER_KINDS, WAIVER_KIND_HELP, WAIVER_KIND_LABELS, type WaiverKind } from "@/lib/waiverKinds";
+import {
+  WAIVER_KINDS,
+  WAIVER_KIND_HELP,
+  WAIVER_KIND_LABELS,
+  WAIVER_SCOPE_LABELS,
+  scopesForKind,
+  type WaiverKind,
+  type WaiverScope,
+} from "@/lib/waiverKinds";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,12 +47,31 @@ interface Waiver {
   name: string;
   kind: WaiverKind;
   locationId: string | null;
+  appliesTo: WaiverScope;
   description: string | null;
   archivedAt: string | null;
   createdAt: string;
   location: { id: string; name: string; address: string | null } | null;
+  sessionTypes: { sessionType: { id: string; name: string; kind: string } }[];
+  plans: { plan: { id: string; name: string } }[];
   versions: WaiverVersion[];
 }
+
+/** A class type or membership plan the "applies to" picker can choose. */
+interface ScopeOption {
+  id: string;
+  name: string;
+  detail?: string;
+  retired: boolean;
+}
+
+interface ScopeState {
+  appliesTo: WaiverScope;
+  sessionTypeIds: string[];
+  planIds: string[];
+}
+
+const DEFAULT_SCOPE: ScopeState = { appliesTo: "ALL", sessionTypeIds: [], planIds: [] };
 
 interface Location {
   id: string;
@@ -96,9 +123,110 @@ function signatureTotal(w: Waiver): number {
   return w.versions.reduce((sum, v) => sum + v._count.signatures, 0);
 }
 
+/** "Courses only", or "Only: Kids Camp, Date Night" for a SELECTED waiver. */
+function scopeLabel(w: Waiver): string | null {
+  if (w.kind === "OTHER") return null;
+  if (w.appliesTo === "SELECTED") {
+    const names = w.kind === "CLASS" ? w.sessionTypes.map((t) => t.sessionType.name) : w.plans.map((p) => p.plan.name);
+    return names.length ? `Only: ${names.join(", ")}` : "Only: nothing chosen";
+  }
+  return WAIVER_SCOPE_LABELS[w.kind][w.appliesTo] ?? null;
+}
+
+/**
+ * "Applies to" for a class or membership waiver: a scope select, and a
+ * checklist of class types or plans when the scope is "SELECTED".
+ */
+function ScopePicker({
+  idPrefix,
+  kind,
+  value,
+  onChange,
+  sessionTypes,
+  plans,
+}: {
+  idPrefix: string;
+  kind: WaiverKind;
+  value: ScopeState;
+  onChange: (next: ScopeState) => void;
+  sessionTypes: ScopeOption[];
+  plans: ScopeOption[];
+}) {
+  const [filter, setFilter] = useState("");
+  if (kind === "OTHER") return null;
+  const scopes = scopesForKind(kind);
+  const options = kind === "CLASS" ? sessionTypes : plans;
+  const chosen = kind === "CLASS" ? value.sessionTypeIds : value.planIds;
+  const setChosen = (ids: string[]) =>
+    onChange(kind === "CLASS" ? { ...value, sessionTypeIds: ids } : { ...value, planIds: ids });
+  const q = filter.trim().toLowerCase();
+  const visible = options.filter(
+    (o) => (!o.retired || chosen.includes(o.id)) && (!q || o.name.toLowerCase().includes(q)),
+  );
+  const noun = kind === "CLASS" ? "class types" : "membership plans";
+
+  return (
+    <div className="space-y-1.5">
+      <label className="text-sm font-medium" htmlFor={`${idPrefix}-applies`}>Applies to</label>
+      <select
+        id={`${idPrefix}-applies`}
+        value={value.appliesTo}
+        onChange={(e) => onChange({ ...value, appliesTo: e.target.value as WaiverScope })}
+        className="w-full rounded-md border px-3 py-2 text-sm"
+      >
+        {scopes.map((sc) => (
+          <option key={sc} value={sc}>{WAIVER_SCOPE_LABELS[kind][sc]}</option>
+        ))}
+      </select>
+      {value.appliesTo === "SELECTED" && (
+        <div className="rounded-md border">
+          <div className="flex items-center justify-between gap-2 border-b p-2">
+            <Input
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder={`Search ${noun}…`}
+              className="h-8"
+            />
+            <span className="shrink-0 text-xs text-muted-foreground">{chosen.length} chosen</span>
+          </div>
+          <div className="max-h-56 overflow-y-auto p-2">
+            {options.length === 0 ? (
+              <p className="p-2 text-sm text-muted-foreground">No {noun} yet.</p>
+            ) : visible.length === 0 ? (
+              <p className="p-2 text-sm text-muted-foreground">Nothing matches.</p>
+            ) : (
+              visible.map((o) => (
+                <label key={o.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-muted">
+                  <input
+                    type="checkbox"
+                    checked={chosen.includes(o.id)}
+                    onChange={(e) =>
+                      setChosen(e.target.checked ? [...chosen, o.id] : chosen.filter((id) => id !== o.id))
+                    }
+                  />
+                  <span>{o.name}</span>
+                  {o.detail && <span className="text-xs text-muted-foreground">{o.detail}</span>}
+                  {o.retired && <span className="text-xs text-muted-foreground">(retired)</span>}
+                </label>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+      <p className="text-xs text-muted-foreground">
+        {kind === "CLASS"
+          ? "Customers are asked to sign before booking anything this covers. A studio's class waivers add up: a course booking needs every class waiver at that studio that covers courses."
+          : "Customers are asked to sign before starting any plan this covers."}
+      </p>
+    </div>
+  );
+}
+
 export default function AdminWaiversPage() {
   const [waivers, setWaivers] = useState<Waiver[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [sessionTypes, setSessionTypes] = useState<ScopeOption[]>([]);
+  const [plans, setPlans] = useState<ScopeOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
@@ -110,6 +238,7 @@ export default function AdminWaiversPage() {
   const [newLocationId, setNewLocationId] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newContent, setNewContent] = useState("");
+  const [newScope, setNewScope] = useState<ScopeState>(DEFAULT_SCOPE);
 
   // New version of an existing waiver
   const [versionFor, setVersionFor] = useState<Waiver | null>(null);
@@ -119,6 +248,7 @@ export default function AdminWaiversPage() {
   const [editFor, setEditFor] = useState<Waiver | null>(null);
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [editScope, setEditScope] = useState<ScopeState>(DEFAULT_SCOPE);
 
   const [submitting, setSubmitting] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
@@ -145,13 +275,31 @@ export default function AdminWaiversPage() {
   const [lookupLoading, setLookupLoading] = useState(false);
 
   async function load() {
-    const [waiversRes, locationsRes] = await Promise.all([
+    const [waiversRes, locationsRes, typesRes, plansRes] = await Promise.all([
       fetch("/api/admin/waivers"),
       fetch("/api/admin/locations"),
+      fetch("/api/admin/session-types"),
+      fetch("/api/admin/membership-plans"),
     ]);
     if (waiversRes.ok) setWaivers(await waiversRes.json());
     else setPageError("Could not load waivers.");
     if (locationsRes.ok) setLocations(await locationsRes.json());
+    if (typesRes.ok) {
+      const rows: { id: string; name: string; kind: string; isActive: boolean; archivedAt: string | null }[] =
+        await typesRes.json();
+      setSessionTypes(
+        rows.map((t) => ({
+          id: t.id,
+          name: t.name,
+          detail: t.kind === "COURSE" ? "course" : undefined,
+          retired: !t.isActive || t.archivedAt !== null,
+        })),
+      );
+    }
+    if (plansRes.ok) {
+      const rows: { id: string; name: string; isActive: boolean; locationId: string | null }[] = await plansRes.json();
+      setPlans(rows.map((p) => ({ id: p.id, name: p.name, retired: !p.isActive })));
+    }
     setLoading(false);
   }
 
@@ -163,6 +311,7 @@ export default function AdminWaiversPage() {
     setNewLocationId("");
     setNewDescription("");
     setNewContent("");
+    setNewScope(DEFAULT_SCOPE);
     setDialogError(null);
     setNewOpen(true);
   }
@@ -181,6 +330,7 @@ export default function AdminWaiversPage() {
           locationId: newLocationId || null,
           description: newDescription,
           content: newContent,
+          ...newScope,
         }),
       });
       if (!res.ok) {
@@ -228,6 +378,11 @@ export default function AdminWaiversPage() {
     setEditFor(w);
     setEditName(w.name);
     setEditDescription(w.description ?? "");
+    setEditScope({
+      appliesTo: w.appliesTo,
+      sessionTypeIds: w.sessionTypes.map((t) => t.sessionType.id),
+      planIds: w.plans.map((p) => p.plan.id),
+    });
     setDialogError(null);
   }
 
@@ -252,7 +407,9 @@ export default function AdminWaiversPage() {
     if (!editFor) return;
     setSubmitting(true);
     try {
-      if (await patchWaiver(editFor.id, { name: editName, description: editDescription })) setEditFor(null);
+      const body: Record<string, unknown> = { name: editName, description: editDescription };
+      if (editFor.kind !== "OTHER") Object.assign(body, editScope);
+      if (await patchWaiver(editFor.id, body)) setEditFor(null);
     } finally {
       setSubmitting(false);
     }
@@ -480,6 +637,7 @@ export default function AdminWaiversPage() {
                             ? ` · v${current.version} published ${formatDate(current.publishedAt)} · ${current._count.signatures} signed`
                             : " · no current version"}
                         </p>
+                        {scopeLabel(w) && <p className="text-xs text-muted-foreground">{scopeLabel(w)}</p>}
                         {w.description && <p className="mt-1 text-sm text-muted-foreground">{w.description}</p>}
                       </div>
                       <Badge variant="outline">{locationLabel(w.locationId)}</Badge>
@@ -502,7 +660,7 @@ export default function AdminWaiversPage() {
                         Sign link
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => openEdit(w)}>
-                        Rename
+                        {w.kind === "OTHER" ? "Rename" : "Rename / applies to"}
                       </Button>
                       <Button
                         size="sm"
@@ -632,7 +790,7 @@ export default function AdminWaiversPage() {
                 <select
                   id="new-kind"
                   value={newKind}
-                  onChange={(e) => setNewKind(e.target.value as WaiverKind)}
+                  onChange={(e) => { setNewKind(e.target.value as WaiverKind); setNewScope(DEFAULT_SCOPE); }}
                   className="w-full rounded-md border px-3 py-2 text-sm"
                 >
                   {WAIVER_KINDS.map((k) => (
@@ -659,6 +817,14 @@ export default function AdminWaiversPage() {
                 </p>
               </div>
             </div>
+            <ScopePicker
+              idPrefix="new"
+              kind={newKind}
+              value={newScope}
+              onChange={setNewScope}
+              sessionTypes={sessionTypes}
+              plans={plans}
+            />
             <div className="space-y-1.5">
               <label className="text-sm font-medium" htmlFor="new-description">Note for staff (optional)</label>
               <Input
@@ -731,7 +897,7 @@ export default function AdminWaiversPage() {
       <Dialog open={!!editFor} onOpenChange={(o) => !o && setEditFor(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Rename waiver</DialogTitle>
+            <DialogTitle>Edit waiver</DialogTitle>
           </DialogHeader>
           <form onSubmit={submitEdit} className="space-y-4">
             <div className="space-y-1.5">
@@ -742,6 +908,16 @@ export default function AdminWaiversPage() {
               <label className="text-sm font-medium" htmlFor="edit-description">Note for staff (optional)</label>
               <Input id="edit-description" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} maxLength={500} />
             </div>
+            {editFor && (
+              <ScopePicker
+                idPrefix="edit"
+                kind={editFor.kind}
+                value={editScope}
+                onChange={setEditScope}
+                sessionTypes={sessionTypes}
+                plans={plans}
+              />
+            )}
             {editFor && (
               <p className="text-xs text-muted-foreground">
                 {WAIVER_KIND_LABELS[editFor.kind]} · {locationLabel(editFor.locationId)}. To change the type or studio,

@@ -265,15 +265,46 @@ model Waiver {
   kind        String    @default("CLASS")
   // Null means the waiver applies at every studio.
   locationId  String?
+  // Which bookings of `kind` require it (see src/lib/waiverKinds.ts):
+  //   CLASS       "ALL" | "EVENTS" | "COURSES" | "SELECTED" (sessionTypes)
+  //   MEMBERSHIP  "ALL" | "SELECTED" (plans)
+  //   OTHER       ignored
+  appliesTo   String    @default("ALL")
   description String?
   archivedAt  DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  location Location?       @relation(fields: [locationId], references: [id])
-  versions WaiverVersion[]
+  location     Location?              @relation(fields: [locationId], references: [id])
+  versions     WaiverVersion[]
+  sessionTypes WaiverSessionType[]
+  plans        WaiverMembershipPlan[]
 
   @@index([kind, locationId])
+}
+
+// A class type whose bookings require this waiver (appliesTo "SELECTED").
+model WaiverSessionType {
+  waiverId      String
+  sessionTypeId String
+
+  waiver      Waiver      @relation(fields: [waiverId], references: [id], onDelete: Cascade)
+  sessionType SessionType @relation(fields: [sessionTypeId], references: [id], onDelete: Cascade)
+
+  @@id([waiverId, sessionTypeId])
+  @@index([sessionTypeId])
+}
+
+// A membership plan whose sign-up requires this waiver (appliesTo "SELECTED").
+model WaiverMembershipPlan {
+  waiverId String
+  planId   String
+
+  waiver Waiver         @relation(fields: [waiverId], references: [id], onDelete: Cascade)
+  plan   MembershipPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@id([waiverId, planId])
+  @@index([planId])
 }
 
 model WaiverVersion {
@@ -356,8 +387,9 @@ model MembershipPlan {
   updatedAt                    DateTime  @updatedAt // UTC
 
   memberships Membership[]
-  location    Location?           @relation(fields: [locationId], references: [id])
-  capGroup    MembershipCapGroup? @relation(fields: [capGroupId], references: [id])
+  location    Location?              @relation(fields: [locationId], references: [id])
+  capGroup    MembershipCapGroup?    @relation(fields: [capGroupId], references: [id])
+  waivers     WaiverMembershipPlan[]
 }
 
 // A shared cap on how many memberships can be sold across a set of plans,
@@ -583,6 +615,7 @@ model SessionType {
   location       Location?                  @relation(fields: [locationId], references: [id])
   locationPrices SessionTypeLocationPrice[]
   discountCodes  DiscountCode[]
+  waivers        WaiverSessionType[]
 }
 
 // Price of a class type at one studio. Overrides SessionType.dropInPriceCents

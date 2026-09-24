@@ -36,7 +36,7 @@ export default async function SubscribePage({
 
   // A membership waiver (this studio's or an all-studio one) is signed before
   // the plan is chosen, so checkout never bounces back here.
-  const unsignedWaiver = await findUnsignedWaiver(session.user.id, plan.locationId, "MEMBERSHIP");
+  const unsignedWaiver = await findUnsignedWaiver(session.user.id, plan.locationId, "MEMBERSHIP", { planId: plan.id });
   if (unsignedWaiver) redirect(waiverSignUrl(unsignedWaiver.id, `/membership/subscribe/${planId}`));
 
   const terms = await prisma.commitmentTerm.findMany({

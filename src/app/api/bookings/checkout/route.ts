@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
 
   const studioSession = await prisma.studioSession.findUnique({
     where: { id: studioSessionId },
-    include: { sessionType: { select: { ...CLASS_PRICE_SELECT, name: true } } },
+    include: { sessionType: { select: { ...CLASS_PRICE_SELECT, name: true, kind: true } } },
   });
   if (!studioSession) {
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
@@ -68,7 +68,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "SESSION_IN_PAST" }, { status: 400 });
   }
 
-  const unsignedWaiver = await findUnsignedWaiver(userId, studioSession.locationId);
+  const unsignedWaiver = await findUnsignedWaiver(userId, studioSession.locationId, "CLASS", {
+    sessionTypeId: studioSession.sessionType.id,
+    sessionKind: studioSession.sessionType.kind,
+  });
   if (unsignedWaiver) {
     return NextResponse.json(
       { error: "WAIVER_REQUIRED", waiverVersionId: unsignedWaiver.id },

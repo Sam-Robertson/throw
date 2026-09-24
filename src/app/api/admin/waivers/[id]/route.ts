@@ -1,12 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { WAIVER_ADMIN_SELECT } from "../_shared";
+import { isWaiverKind } from "@/lib/waiverKinds";
+import { WAIVER_ADMIN_SELECT, parseScope } from "../_shared";
 
 /**
- * Renames, describes, archives or restores a waiver.
- * Body: `{ name?, description?, archived? }`. Kind and studio can't change
- * once people have signed against them — publish a new waiver instead.
+ * Renames, describes, re-scopes, archives or restores a waiver.
+ * Body: `{ name?, description?, archived?, appliesTo?, sessionTypeIds?,
+ * planIds? }`. Kind and studio can't change once people have signed against
+ * them — publish a new waiver instead. What it applies to can: the document
+ * (and its signatures) stay the same, only when it is asked for changes.
  */
 export async function PATCH(
   request: NextRequest,
@@ -23,13 +27,19 @@ export async function PATCH(
     name?: unknown;
     description?: unknown;
     archived?: unknown;
+    appliesTo?: unknown;
+    sessionTypeIds?: unknown;
+    planIds?: unknown;
   } | null;
   if (!body) return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
 
-  const existing = await prisma.waiver.findUnique({ where: { id }, select: { id: true, archivedAt: true } });
+  const existing = await prisma.waiver.findUnique({
+    where: { id },
+    select: { id: true, kind: true, archivedAt: true },
+  });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const data: { name?: string; description?: string | null; archivedAt?: Date | null } = {};
+  const data: Prisma.WaiverUpdateInput = {};
   if (body.name !== undefined) {
     const name = typeof body.name === "string" ? body.name.trim().slice(0, 120) : "";
     if (!name) return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -43,6 +53,27 @@ export async function PATCH(
   }
   if (body.archived !== undefined) {
     data.archivedAt = body.archived === true ? (existing.archivedAt ?? new Date()) : null;
+  }
+  if (body.appliesTo !== undefined) {
+    const kind = isWaiverKind(existing.kind) ? existing.kind : "CLASS";
+    const scope = parseScope(kind, body);
+    if ("error" in scope) return NextResponse.json({ error: scope.error }, { status: 400 });
+    if (scope.sessionTypeIds.length) {
+      const found = await prisma.sessionType.count({ where: { id: { in: scope.sessionTypeIds } } });
+      if (found !== scope.sessionTypeIds.length)
+        return NextResponse.json({ error: "Unknown class type" }, { status: 400 });
+    }
+    if (scope.planIds.length) {
+      const found = await prisma.membershipPlan.count({ where: { id: { in: scope.planIds } } });
+      if (found !== scope.planIds.length)
+        return NextResponse.json({ error: "Unknown membership plan" }, { status: 400 });
+    }
+    data.appliesTo = scope.appliesTo;
+    data.sessionTypes = {
+      deleteMany: {},
+      create: scope.sessionTypeIds.map((sessionTypeId) => ({ sessionTypeId })),
+    };
+    data.plans = { deleteMany: {}, create: scope.planIds.map((planId) => ({ planId })) };
   }
 
   const waiver = await prisma.waiver.update({ where: { id }, data, select: WAIVER_ADMIN_SELECT });

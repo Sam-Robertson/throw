@@ -548,7 +548,10 @@ export async function checkOrderPayable(orderId: string): Promise<PaymentBlock |
     for (const studioSessionId of sessionIds) {
       const session = await prisma.studioSession.findUnique({
         where: { id: studioSessionId },
-        include: { _count: { select: { bookings: { where: { status: "CONFIRMED" } } } } },
+        include: {
+          sessionType: { select: { id: true, kind: true } },
+          _count: { select: { bookings: { where: { status: "CONFIRMED" } } } },
+        },
       });
       if (!session || session.isCancelled) {
         return {
@@ -563,7 +566,10 @@ export async function checkOrderPayable(orderId: string): Promise<PaymentBlock |
 
       // Everyone needs a signed waiver for the studio they're booking at, POS
       // included (Sam, 2026-09-12) — same rule as the online booking routes.
-      const unsignedWaiver = await findUnsignedWaiver(order.customerId, session.locationId);
+      const unsignedWaiver = await findUnsignedWaiver(order.customerId, session.locationId, "CLASS", {
+        sessionTypeId: session.sessionType.id,
+        sessionKind: session.sessionType.kind,
+      });
       if (unsignedWaiver) {
         return {
           status: 409,
