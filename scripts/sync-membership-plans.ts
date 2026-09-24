@@ -9,8 +9,8 @@
 // unlimited tickets (classTicketsPerPeriod null).
 //
 // What it does:
-//   1. STUDIOS — finds Provo ("Throw Art Studio") and Lehi ("Throw Art
-//                Studio - Lehi") by name. Stops if either is missing.
+//   1. STUDIOS — finds the Provo and Lehi studios by name. Stops if either is
+//                missing.
 //   2. PLANS   — Basic / Pro / Expert for both studios.
 //   3. RETIRE  — the dev-seed plans and the still-active Momence plan become
 //                inactive and non-public. Every imported Momence plan (slug
@@ -47,8 +47,8 @@ const APPLY = process.argv.includes("--apply");
 const OVERWRITE = process.argv.includes("--overwrite");
 
 const STUDIOS = {
-  provo: "Throw Art Studio",
-  lehi: "Throw Art Studio - Lehi",
+  provo: "Provo",
+  lehi: "Lehi",
 } as const;
 type StudioKey = keyof typeof STUDIOS;
 

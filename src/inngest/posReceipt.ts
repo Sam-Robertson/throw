@@ -160,7 +160,7 @@ export async function sendReceipt(
       const { error } = await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL ?? DEFAULT_FROM,
         to: address,
-        subject: `Your receipt from ${order.location.name} — #${order.orderNumber}`,
+        subject: `Your Throw Art Studio receipt — #${order.orderNumber}`,
         text: buildReceiptText(order),
       });
       if (error) throw new Error(error.message);

@@ -45,8 +45,8 @@ All money is USD. Anything that can differ between studios is per location.
 
 | Location | Name in the app | Short label | Status |
 |---|---|---|---|
-| Provo | Throw Art Studio | Provo | CONFIRMED |
-| Lehi | Throw Art Studio - Lehi | Lehi | CONFIRMED (opens October 2026) |
+| Provo | Provo | Provo | CONFIRMED |
+| Lehi | Lehi | Lehi | CONFIRMED (opens October 2026) |
 
 - The studio does **not take cash**. CONFIRMED by Sam 2026-09-19. (The build
   prompts still describe a cash tender and cash drawer; Sam's statement wins.)

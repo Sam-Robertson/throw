@@ -19,8 +19,8 @@ name, a type and a studio (or "All studios"), and its own version history.
   **Restore**, **Sign link** (copy, or print a QR poster), per-version signature
   lists, and the "Has someone signed?" lookup now names the waiver.
 - Existing versions and signatures are untouched: the migration groups them into
-  one class waiver per studio ("Throw Art Studio waiver", "Throw Art Studio - Lehi
-  waiver"). Rename them in admin if you like.
+  one class waiver per studio ("Provo waiver", "Lehi waiver"). Rename them in
+  admin if you like.
 - Class-waiver fallback is unchanged: a studio with no class waiver of its own
   uses the newest one elsewhere, so Lehi is covered until it gets its own.
 - `/waiver?waiverId=…` links keep working after a new version is published.
@@ -66,6 +66,6 @@ npx prisma migrate status
 
 1. `npx prisma migrate deploy` (above).
 2. Admin → Studio setup → Card readers → turn the reader tip screen on.
-3. Admin → Waivers: rename the two migrated class waivers if wanted; create the
-   membership waiver (All studios) so the membership gate becomes active.
+3. Admin → Waivers: create the membership waiver (All studios) so the membership
+   gate becomes active.
 4. Admin → Pieces → Print QR poster; put one up at each studio.

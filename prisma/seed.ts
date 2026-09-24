@@ -72,16 +72,16 @@ async function main() {
   // ── Location ──────────────────────────────────────────────────────────────────
   // Location has no unique constraint on name, so we findFirst + update-or-create.
 
-  let location = await prisma.location.findFirst({ where: { name: 'Throw Art Studio' } });
+  let location = await prisma.location.findFirst({ where: { name: { in: ['Provo', 'Throw Art Studio'] } } });
   if (location) {
     location = await prisma.location.update({
       where: { id: location.id },
-      data: { address: '123 Center Street, Provo, UT 84601', timezone: 'America/Denver', isActive: true },
+      data: { name: 'Provo', address: '123 Center Street, Provo, UT 84601', timezone: 'America/Denver', isActive: true },
     });
   } else {
     location = await prisma.location.create({
       data: {
-        name: 'Throw Art Studio',
+        name: 'Provo',
         address: '123 Center Street, Provo, UT 84601',
         timezone: 'America/Denver',
         isActive: true,
@@ -687,7 +687,7 @@ these terms.`;
   const bPriya  = await prisma.user.findUniqueOrThrow({ where: { email: 'priya@example.com' } });
   const bJordan = await prisma.user.findUniqueOrThrow({ where: { email: 'jordan@example.com' } });
   const bClaire = await prisma.user.findUniqueOrThrow({ where: { email: 'claire@example.com' } });
-  const bLoc    = await prisma.location.findFirstOrThrow({ where: { name: 'Throw Art Studio' } });
+  const bLoc    = await prisma.location.findFirstOrThrow({ where: { name: 'Provo' } });
 
   const sarahMs = await prisma.membership.findUniqueOrThrow({ where: { stripeSubscriptionId: 'sub_seed_sarah' } });
   const mikeMbs = await prisma.membership.findUniqueOrThrow({ where: { stripeSubscriptionId: 'sub_seed_mike' } });
@@ -863,7 +863,7 @@ these terms.`;
   const cSarah     = await prisma.user.findUniqueOrThrow({ where: { email: 'sarah@example.com' } });
   const cMike      = await prisma.user.findUniqueOrThrow({ where: { email: 'mike@example.com' } });
   const cClaire    = await prisma.user.findUniqueOrThrow({ where: { email: 'claire@example.com' } });
-  const cLoc       = await prisma.location.findFirstOrThrow({ where: { name: 'Throw Art Studio' } });
+  const cLoc       = await prisma.location.findFirstOrThrow({ where: { name: 'Provo' } });
 
   // Load session type, then find each target session by sessionTypeId + startsAt.
   // startsAt is computed via makeSessionData (in scope from Part B) to guarantee

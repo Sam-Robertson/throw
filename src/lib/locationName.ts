@@ -1,20 +1,17 @@
 /**
  * Short display label for a studio.
  *
- * Studios are all named "Throw Art Studio…", which is useless in a switcher, so
- * a short label is derived rather than adding a column for it:
+ * Studios are named by city ("Provo", "Lehi") since the studio-short-names
+ * migration, so the name is the label. The parsing below only still matters
+ * for a database that has not run that migration yet, where the studios are
+ * "Throw Art Studio" and "Throw Art Studio - Lehi":
  *
  *   "Throw Art Studio - Lehi"  ->  "Lehi"    (suffix after " - ")
  *   "Throw Art Studio"         ->  "Provo"   (city from the address)
- *
- * The address fallback takes the token before the trailing state, matching what
- * the current records look like ("308 E 300 S Provo Utah"). Anything it can't
- * read falls back to the full name — unlovely, but never silently wrong.
- *
- * If studios are ever renamed properly, or a shortName column is added, this
- * becomes a one-line change at its single call site.
  */
 export function shortLocationName(name: string, address?: string | null): string {
+  if (!/^throw art studio/i.test(name.trim())) return name;
+
   const dash = name.lastIndexOf(" - ");
   if (dash !== -1) {
     const suffix = name.slice(dash + 3).trim();
