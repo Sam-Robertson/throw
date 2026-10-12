@@ -163,3 +163,49 @@ export async function ensureStripePriceForPlan(planId: string): Promise<EnsuredP
 
   return { stripePriceId: price.id, created, archivedPriceId };
 }
+
+// ── Freeze price ─────────────────────────────────────────────────────────────
+
+const FREEZE_PRODUCT_ID = "throw_membership_freeze";
+
+/** The lookup key every freeze Price carries, so the webhook can recognise one. */
+export const FREEZE_LOOKUP_PREFIX = "throw_freeze_";
+
+/**
+ * The monthly Price a paused membership bills at (docs: "Pausing your
+ * membership", $5 a month). One Product, one Price per fee amount; the same
+ * reuse rules as plan prices, and like them it is made lazily with the running
+ * app's key.
+ */
+export async function ensureFreezePrice(monthlyFeeCents: number): Promise<string> {
+  if (monthlyFeeCents <= 0) throw new Error("A freeze fee has to be more than $0 to be billed");
+  const lookupKey = `${FREEZE_LOOKUP_PREFIX}${monthlyFeeCents}_1month`;
+
+  const existing = (await stripe.prices.list({ lookup_keys: [lookupKey], limit: 1 })).data[0];
+  if (existing && priceMatches(existing, monthlyFeeCents, { unit: "month", count: 1 })) {
+    return existing.active ? existing.id : (await stripe.prices.update(existing.id, { active: true })).id;
+  }
+
+  try {
+    await stripe.products.retrieve(FREEZE_PRODUCT_ID);
+  } catch (err) {
+    if (!isMissing(err)) throw err;
+    await stripe.products.create(
+      { id: FREEZE_PRODUCT_ID, name: "Paused membership" },
+      { idempotencyKey: `create_${FREEZE_PRODUCT_ID}` },
+    );
+  }
+
+  const price = await stripe.prices.create(
+    {
+      product: FREEZE_PRODUCT_ID,
+      currency: CURRENCY,
+      unit_amount: monthlyFeeCents,
+      recurring: { interval: "month", interval_count: 1 },
+      lookup_key: lookupKey,
+      metadata: { throwFreeze: "true" },
+    },
+    { idempotencyKey: `create_${lookupKey}` },
+  );
+  return price.id;
+}

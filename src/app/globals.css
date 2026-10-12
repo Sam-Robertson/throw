@@ -181,6 +181,21 @@ body {
   }
 }
 
+/* The account page's edit sheet rising from the foot of the phone. */
+@keyframes sheet-up {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.animate-sheet-up {
+  animation: sheet-up 180ms ease-out;
+}
+
 /* Class/event pages carry a fixed "Book your class" bar pinned to the viewport
    foot. It is out of flow, so reserve its height at the end of the footer —
    the bar is rendered inside <main> but the footer is a sibling in the layout,

@@ -55,11 +55,12 @@ type StudioKey = keyof typeof STUDIOS;
 const MONTHLY = 30;
 
 // From the memberships page: included with every plan.
+// Worded as the "My membership" design files list them (Oct 2026).
 const STANDARD_PERKS = [
-  "24/6 studio access",
-  "Clay and firing discounts",
+  "24/6 studio access (Closed Sundays)",
   "Studio glazes",
-  "Workshops and member events",
+  "Clay and firing discounts",
+  "Member workshops",
 ];
 
 type Tier = "BASIC" | "PRO" | "EXPERT" | "STUDENT";

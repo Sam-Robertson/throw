@@ -10,6 +10,7 @@ import { parseTenderMetadata, recordBookingTenders } from "@/lib/bookingCheckout
 import { TERMINAL_METHOD, settleTerminalPayment } from "@/lib/terminal";
 import { grantPeriodAllowance } from "@/lib/credits";
 import { GUEST_PASS_ADD_ON_SLUG } from "@/lib/membershipCatalog";
+import { freezeTermsFor } from "@/lib/membershipFreeze";
 import { addMonths } from "date-fns";
 import { Prisma } from "@prisma/client";
 import type Stripe from "stripe";
@@ -101,6 +102,87 @@ async function recordInvoicePayment(invoice: Stripe.Invoice, subscriptionId: str
     }
     throw err;
   }
+}
+
+/**
+ * A paused membership bills on the freeze price (src/lib/membershipFreeze.ts).
+ * The freeze phase stamps `throwFreeze=true` on the subscription, and the
+ * invoice carries a snapshot of that metadata; the pause dates on the
+ * membership are the fallback for an invoice whose snapshot predates the
+ * phase change.
+ */
+function isFreezeInvoice(
+  invoice: Stripe.Invoice,
+  membership: { pausedAt: Date | null; resumesAt: Date | null },
+): boolean {
+  if (invoice.parent?.subscription_details?.metadata?.throwFreeze === "true") return true;
+  if (!membership.pausedAt) return false;
+  const hour = 60 * 60 * 1000;
+  const start = invoice.period_start * 1000;
+  const afterPause = start >= membership.pausedAt.getTime() - hour;
+  const beforeResume = !membership.resumesAt || start < membership.resumesAt.getTime() - hour;
+  return afterPause && beforeResume;
+}
+
+/**
+ * A paid freeze invoice: the membership is paused for this period and the
+ * member earns the month's store credit (the amount promised when they
+ * paused, not whatever the policy says now). Idempotent on the invoice id.
+ */
+async function applyFreezeInvoice(
+  invoice: Stripe.Invoice,
+  membership: { id: string; userId: string; locationId: string | null; planId: string },
+  periodStart: Date,
+  periodEnd: Date,
+) {
+  await prisma.membership.update({
+    where: { id: membership.id },
+    data: { status: "PAUSED", currentPeriodStart: periodStart, currentPeriodEnd: periodEnd },
+  });
+
+  const already = await prisma.membershipEvent.findFirst({
+    where: {
+      membershipId: membership.id,
+      eventType: "CREDIT_ISSUED",
+      metadata: { path: ["invoiceId"], equals: invoice.id },
+    },
+    select: { id: true },
+  });
+  if (already) return;
+
+  const pauseEvent = await prisma.membershipEvent.findFirst({
+    where: { membershipId: membership.id, eventType: "PAUSED" },
+    orderBy: { createdAt: "desc" },
+    select: { metadata: true },
+  });
+  const promised = (pauseEvent?.metadata as { creditCentsPerFrozenMonth?: unknown } | null)
+    ?.creditCentsPerFrozenMonth;
+  const cents =
+    typeof promised === "number"
+      ? promised
+      : (
+          await freezeTermsFor({
+            locationId: membership.locationId,
+            plan: await prisma.membershipPlan.findUniqueOrThrow({
+              where: { id: membership.planId },
+              select: { locationId: true },
+            }),
+          })
+        ).creditCentsPerFrozenMonth;
+  if (cents <= 0) return;
+
+  await prisma.user.update({
+    where: { id: membership.userId },
+    data: { accountCreditCents: { increment: cents } },
+  });
+  await prisma.membershipEvent.create({
+    data: {
+      membershipId: membership.id,
+      eventType: "CREDIT_ISSUED",
+      note: "Store credit for a paused month",
+      metadata: { source: "freeze", cents, invoiceId: invoice.id },
+    },
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -221,11 +303,15 @@ export async function POST(req: NextRequest) {
       const periodStart = new Date(item.current_period_start * 1000);
       const periodEnd = new Date(item.current_period_end * 1000);
 
+      // A cancellation scheduled from the Stripe dashboard (or withdrawn there)
+      // shows on the membership too.
+      const cancelAt = subscription.cancel_at ? new Date(subscription.cancel_at * 1000) : null;
+
       if (subscription.status === "past_due") {
         // PAST_DUE is not in the MembershipStatus enum; PAUSED is the closest available
         await prisma.membership.update({
           where: { id: membership.id },
-          data: { status: "PAUSED", currentPeriodStart: periodStart, currentPeriodEnd: periodEnd },
+          data: { status: "PAUSED", currentPeriodStart: periodStart, currentPeriodEnd: periodEnd, cancelAt },
         });
         await prisma.membershipEvent.create({
           data: {
@@ -234,10 +320,16 @@ export async function POST(req: NextRequest) {
             note: "Payment past due",
           },
         });
-      } else if (subscription.status === "active" && membership.status === "PAUSED") {
+      } else if (
+        subscription.status === "active" &&
+        membership.status === "PAUSED" &&
+        membership.pausedAt === null
+      ) {
+        // Recovered from past due. A real pause (pausedAt set) is ended by the
+        // first plan invoice after the freeze months, in invoice.payment_succeeded.
         await prisma.membership.update({
           where: { id: membership.id },
-          data: { status: "ACTIVE", currentPeriodStart: periodStart, currentPeriodEnd: periodEnd },
+          data: { status: "ACTIVE", currentPeriodStart: periodStart, currentPeriodEnd: periodEnd, cancelAt },
         });
         await prisma.membershipEvent.create({
           data: { membershipId: membership.id, eventType: "RESUMED" },
@@ -245,7 +337,7 @@ export async function POST(req: NextRequest) {
       } else {
         await prisma.membership.update({
           where: { id: membership.id },
-          data: { currentPeriodStart: periodStart, currentPeriodEnd: periodEnd },
+          data: { currentPeriodStart: periodStart, currentPeriodEnd: periodEnd, cancelAt },
         });
       }
     }
@@ -254,24 +346,21 @@ export async function POST(req: NextRequest) {
     const membership = await prisma.membership.findUnique({
       where: { stripeSubscriptionId: subscription.id },
     });
-    if (membership) {
-      if (membership.pausedAt != null) {
-        await prisma.membership.update({
-          where: { id: membership.id },
-          data: { status: "PAUSED" },
-        });
-        await prisma.membershipEvent.create({
-          data: { membershipId: membership.id, eventType: "PAUSED" },
-        });
-      } else {
-        await prisma.membership.update({
-          where: { id: membership.id },
-          data: { status: "CANCELLED", cancelledAt: new Date() },
-        });
-        await prisma.membershipEvent.create({
-          data: { membershipId: membership.id, eventType: "CANCELLED" },
-        });
-      }
+    // The subscription has ended: a scheduled cancellation reaching its date,
+    // an admin ending it, or Stripe giving up on payment. Paused memberships
+    // keep their subscription (on the freeze price), so this is always the end.
+    if (membership && membership.status !== "CANCELLED") {
+      await prisma.membership.update({
+        where: { id: membership.id },
+        data: { status: "CANCELLED", cancelledAt: new Date(), cancelAt: null },
+      });
+      await prisma.membershipEvent.create({
+        data: {
+          membershipId: membership.id,
+          eventType: "CANCELLED",
+          note: membership.cancelAt ? "Membership ended as requested" : "Subscription ended",
+        },
+      });
     }
   } else if (event.type === "invoice.payment_failed") {
     const invoice = event.data.object as Stripe.Invoice;
@@ -307,20 +396,40 @@ export async function POST(req: NextRequest) {
       const membership = await prisma.membership.findUnique({
         where: { stripeSubscriptionId: subscriptionId },
       });
-      if (membership) {
+      // Only a period's own invoice moves the period along. A proration
+      // invoice (restarting a paused membership mid-month, a plan switch)
+      // has billing_reason subscription_update and is just recorded as revenue.
+      const periodInvoice =
+        invoice.billing_reason === "subscription_cycle" || invoice.billing_reason === "subscription_create";
+      if (membership && periodInvoice) {
         const newPeriodStart = new Date(invoice.period_start * 1000);
         const newPeriodEnd = new Date(invoice.period_end * 1000);
-        await prisma.membership.update({
-          where: { id: membership.id },
-          data: {
-            currentPeriodStart: newPeriodStart,
-            currentPeriodEnd: newPeriodEnd,
-          },
-        });
-        await prisma.membershipEvent.create({
-          data: { membershipId: membership.id, eventType: "RENEWED" },
-        });
-        await grantPeriodAllowance(membership.id, newPeriodStart, newPeriodEnd);
+        if (isFreezeInvoice(invoice, membership)) {
+          await applyFreezeInvoice(invoice, membership, newPeriodStart, newPeriodEnd);
+        } else {
+          const wasPaused = membership.status === "PAUSED" && membership.pausedAt !== null;
+          await prisma.membership.update({
+            where: { id: membership.id },
+            data: {
+              currentPeriodStart: newPeriodStart,
+              currentPeriodEnd: newPeriodEnd,
+              ...(wasPaused ? { status: "ACTIVE", pausedAt: null, resumesAt: null } : {}),
+            },
+          });
+          if (wasPaused) {
+            await prisma.membershipEvent.create({
+              data: {
+                membershipId: membership.id,
+                eventType: "RESUMED",
+                note: "Billing resumed after the paused months",
+              },
+            });
+          }
+          await prisma.membershipEvent.create({
+            data: { membershipId: membership.id, eventType: "RENEWED" },
+          });
+          await grantPeriodAllowance(membership.id, newPeriodStart, newPeriodEnd);
+        }
       }
       await recordInvoicePayment(invoice, subscriptionId);
     }

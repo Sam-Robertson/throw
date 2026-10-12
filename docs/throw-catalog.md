@@ -191,8 +191,17 @@ Tickets and shelf for legacy plans: OPEN.
 
 ### 4.6 Freeze
 
-Monthly fee: OPEN. Credit accrued per frozen month: OPEN. Freezing forfeits a
-founding rate: yes (ASSUMED).
+From the "My membership" design files (2026-10-12): **$5 a month** for as long
+as the member likes, **$7 of store credit per frozen month** ($5 back plus $2),
+normal billing resumes on its own after **3 months**, only members of at least
+one full month can freeze, and a freeze requested after the last day of the
+month starts after one more regular month. Store credit is not cash, cannot go
+toward dues, and is forfeited on cancel while frozen. These are the defaults in
+`src/lib/membershipLifecycle.ts`; a studio's Freeze policy in admin overrides
+the fee and credit. Freezing forfeits a founding rate: yes (ASSUMED).
+
+Cancelling (same files): by the 15th the membership ends with the current
+period; after the 15th one more period is billed first.
 
 ## 5. Gift cards and tax
 
@@ -244,7 +253,7 @@ Promo codes must be fully manageable in admin; the client changes them often.
 1. Lehi standard membership prices (seeded equal to Provo; need confirmation).
 2. Ticket rollover rules for Basic / Pro / Expert.
 3. Tickets and shelf allocation for the three legacy plans.
-4. Freeze: monthly fee and credit accrued per frozen month.
+4. Freeze: $5 fee / $7 credit / 3 months per the design files (§4.6); confirm with JP.
 5. Price for a finished piece over 2 lb.
 6. Prices for Speckled Buff, Charcoal, the 10 lb / 25 lb bags, and the sample pack.
 7. Shipping for 5 or more pieces.

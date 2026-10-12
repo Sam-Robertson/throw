@@ -196,3 +196,98 @@ export function TikTokIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+// ── Account and membership pages ─────────────────────────────────────────────
+
+export function ChevronRight({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M9 5l7 7-7 7" />
+    </svg>
+  );
+}
+
+/** A tick in a ring: the active membership card and the "Membership paused" page. */
+export function CheckCircleIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 12.5l2.5 2.5L16 9.5" />
+    </svg>
+  );
+}
+
+/** Two bars in a ring: the paused membership card. */
+export function PauseCircleIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M10 9v6M14 9v6" />
+    </svg>
+  );
+}
+
+/** A calendar with a tick: the "Pause membership" row. */
+export function CalendarCheckIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="3" y="5" width="18" height="16" rx="3" />
+      <path d="M3 10h18M8 3v4M16 3v4M9 15.5l2 2 4-4" />
+    </svg>
+  );
+}
+
+/** A rosette (award ribbon): the "Cancel membership" row. */
+export function RosetteIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 3l1.9 1.4 2.3-.4.9 2.2 2.2.9-.4 2.3L20.3 12l-1.4 1.9.4 2.3-2.2.9-.9 2.2-2.3-.4L12 20.3l-1.9-1.4-2.3.4-.9-2.2-2.2-.9.4-2.3L3.7 12l1.4-1.9-.4-2.3 2.2-.9.9-2.2 2.3.4z" />
+      <path d="M9 21l1.2-2.7M15 21l-1.2-2.7" />
+    </svg>
+  );
+}

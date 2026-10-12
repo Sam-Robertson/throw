@@ -1,47 +1,32 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
-import { stripe } from "@/lib/stripe";
-import { sendInngestEvent } from "@/lib/inngest";
+import { requestPause } from "@/lib/membershipFreeze";
+import { sendMembershipPausedEmail } from "@/lib/email/membership";
+import { actionError, currentMembership } from "../_lib";
 
-export async function POST() {
-  const session = await auth();
-  if (!session?.user?.id)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+/**
+ * Pauses the signed-in member's membership from the next period end: $5 a
+ * month (or the studio's freeze fee) for three months, then normal billing.
+ * The body must carry `agree: true`, the terms checkbox on the pause page.
+ */
+export async function POST(request: Request) {
+  const found = await currentMembership();
+  if ("error" in found) return found.error;
 
-  const userId = session.user.id;
+  const body = (await request.json().catch(() => ({}))) as { agree?: boolean };
+  if (body.agree !== true)
+    return NextResponse.json({ error: "Please agree to the pause terms first" }, { status: 400 });
 
-  const membership = await prisma.membership.findFirst({
-    where: { userId, status: "ACTIVE" },
-  });
-
-  if (!membership)
-    return NextResponse.json({ error: "No active membership found" }, { status: 404 });
-
-  if (!membership.stripeSubscriptionId)
-    return NextResponse.json({ error: "No Stripe subscription found" }, { status: 400 });
-
-  await stripe.subscriptions.update(membership.stripeSubscriptionId, {
-    cancel_at_period_end: true,
-  });
-
-  const now = new Date();
-  const resumesAt = new Date(membership.currentPeriodEnd);
-  resumesAt.setDate(resumesAt.getDate() + 30);
-
-  const updated = await prisma.membership.update({
-    where: { id: membership.id },
-    data: { pausedAt: now, resumesAt },
-  });
-
-  await prisma.membershipEvent.create({
-    data: { membershipId: membership.id, eventType: "PAUSED" },
-  });
-
-  await sendInngestEvent({
-    name: "membership/paused",
-    data: { membershipId: membership.id, userId },
-  });
-
-  return NextResponse.json(updated);
+  try {
+    const result = await requestPause(found.membership.id, { by: "customer" });
+    const emailed = await sendMembershipPausedEmail({ membershipId: found.membership.id, ...result });
+    return NextResponse.json({
+      pausedAt: result.pausedAt,
+      resumesAt: result.resumesAt,
+      monthlyFeeCents: result.terms.monthlyFeeCents,
+      creditCentsPerFrozenMonth: result.terms.creditCentsPerFrozenMonth,
+      emailed,
+    });
+  } catch (err) {
+    return actionError(err);
+  }
 }

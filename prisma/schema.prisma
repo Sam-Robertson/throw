@@ -486,8 +486,15 @@ model Membership {
   currentPeriodStart   DateTime // UTC
   currentPeriodEnd     DateTime // UTC
   creditsRemaining     Int
+  // A pause starts at a period end, so pausedAt is in the future until then
+  // (status stays ACTIVE and the pause can still be withdrawn). Billing goes
+  // back to normal at resumesAt on its own.
   pausedAt             DateTime? // UTC
   resumesAt            DateTime? // UTC
+  // A requested cancellation: the subscription ends at cancelAt (status stays
+  // ACTIVE or PAUSED until then). cancelledAt is when it actually ended.
+  cancelAt             DateTime? // UTC
+  cancelReason         String?
   cancelledAt          DateTime? // UTC
   commitmentEndsAt     DateTime?
   joiningFeePaid       Boolean          @default(false)

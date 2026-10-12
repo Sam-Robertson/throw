@@ -17,7 +17,8 @@ import { cn } from '@/lib/utils';
 export type Option = {
   id: string;
   label: string;
-  subhead?: string;
+  /** One line, or several stacked ("No shelf space" / "8 class tickets"). */
+  subhead?: string | string[];
   /** Pre-formatted, e.g. "$40.00" — the sheet shows "$XX.XX". */
   price?: string;
   disabled?: boolean;
@@ -84,16 +85,18 @@ export function OptionCardGroup({
                   </span>
                 )}
               </span>
-              {opt.subhead && (
-                <span
-                  className={cn(
-                    't-body-sm block',
-                    selected ? 'text-body' : 'text-details',
-                  )}
-                >
-                  {opt.subhead}
-                </span>
-              )}
+              {opt.subhead &&
+                (Array.isArray(opt.subhead) ? opt.subhead : [opt.subhead]).map((line) => (
+                  <span
+                    key={line}
+                    className={cn(
+                      't-body-sm block',
+                      selected ? 'text-body' : 'text-details',
+                    )}
+                  >
+                    {line}
+                  </span>
+                ))}
             </span>
           </label>
         );
