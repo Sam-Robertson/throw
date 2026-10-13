@@ -58,7 +58,7 @@ export const KIDS_CAMPS_MENU = [
 
 export const HERO = {
   heading: 'Learn to throw',
-  photo: { src: '/site/hero-bowls.jpg', alt: '' } as Photo,
+  photo: { src: '/site/hero-bowls-2.jpg', alt: 'Unglazed bowls and cups drying in the sun' } as Photo,
   // The mobile design labels this CTA "Book a class"; desktop says "Take a
   // class". Both are drawn as-is rather than normalised.
   ctaMobile: 'Book a class',
@@ -83,7 +83,7 @@ export const OFFERS = [
     cta: 'Book a 4 week course',
     href: '/classes/kickstarter',
     photo: {
-      src: '/site/offer-checker-mug.png',
+      src: '/site/offer-checker-mug.jpg',
       alt: 'A red and cream checkered mug',
     },
   },
@@ -93,7 +93,7 @@ export const OFFERS = [
     blurb: 'Create around your schedule',
     cta: 'Start a membership',
     href: '/membership',
-    photo: { src: '/site/offer-dark-vase.png', alt: 'A dark ribbed vase' },
+    photo: { src: '/site/offer-dark-vase.jpg', alt: 'A dark ribbed vase' },
   },
 ] as const;
 
@@ -132,7 +132,7 @@ export const LOCATIONS: Location[] = [
     fullAddress: '308 E 300 S, Provo, UT 84606',
     mapHref: 'https://maps.google.com/?q=308+E+300+S+Provo+UT+84606',
     href: '/about#locations',
-    photo: { src: '/site/studio-provo-1.jpg', alt: 'Inside the Provo studio' },
+    photo: { src: '/site/studio-provo-2.jpg', alt: 'Inside the Provo studio' },
   },
   {
     name: 'Lehi Studio',

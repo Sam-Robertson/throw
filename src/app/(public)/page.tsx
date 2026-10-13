@@ -43,15 +43,20 @@ export default function HomePage() {
     <>
       {/* ── Hero ──────────────────────────────────────────────────────────── */}
       <section className="relative">
+        {/* A portrait photo of bisque-fired bowls (1702x2400). Cover-cropped:
+            the phone shows most of it, desktop takes a landscape band from the
+            middle where the big bowls are. */}
         <SitePhoto
           photo={HERO.photo}
           priority
           sizes="100vw"
-          className="h-[560px] w-full md:h-[660px]"
+          className="h-[560px] w-full md:h-[680px] [&_img]:object-[50%_45%]"
         />
-        {/* The photo is dark enough at the foot to carry white type; a soft
-            scrim keeps it legible whatever crop the final image lands on. */}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 via-black/10 to-transparent" />
+        {/* The bowls are pale, so the type needs a real scrim: a bottom-heavy
+            gradient that fades out by the top third, plus a faint overall
+            tint so the white heading reads everywhere it can land. */}
+        <div className="pointer-events-none absolute inset-0 bg-black/10" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-black/25 to-transparent" />
 
         {/* Desktop: the review asked for the heading and CTA "down a touch"
             from dead centre, so the block is centred on 58% rather than 50%. */}
