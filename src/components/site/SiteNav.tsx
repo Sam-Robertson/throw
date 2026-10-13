@@ -183,6 +183,11 @@ export function SiteNav({ user }: { user: NavUser | null }) {
                   </NextLink>
                 ),
               )}
+              {isStaffOrAdmin && (
+                <NextLink href="/admin" className={cn(LINK_CLASS, 'ml-2')}>
+                  Admin
+                </NextLink>
+              )}
               <Button
                 href={user ? '/dashboard' : '/login'}
                 className="ml-5 h-10 px-6 text-[15px] md:h-10"

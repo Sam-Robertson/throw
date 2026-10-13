@@ -8,6 +8,7 @@ import { Button } from '@/components/site/Button';
 import {
   CalendarIcon,
   ChevronRight,
+  PinIcon,
   RosetteIcon,
   TicketIcon,
   UserIcon,
@@ -75,6 +76,18 @@ export default async function DashboardPage() {
         : 'No membership yet',
     },
     { href: '/account', icon: UserIcon, title: 'My account', line: null },
+    // Staff and admins get the back-office entry here too; the public design
+    // has no place for it otherwise.
+    ...(session.user.role === 'STAFF' || session.user.role === 'ADMIN'
+      ? [
+          {
+            href: '/admin',
+            icon: PinIcon,
+            title: 'Admin panel',
+            line: 'Schedule, POS, studio setup',
+          },
+        ]
+      : []),
   ];
 
   return (
