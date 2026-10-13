@@ -8,10 +8,8 @@ import type { Photo } from './site';
 import type { Faq } from './classes';
 
 export const MEMBERSHIP_HERO: Photo = {
-  // Interim: the design shows a member at the wheel; a dedicated photo for
-  // this page has not been supplied, so the drop-in class photo stands in.
-  src: '/site/hero-drop-in-2.jpg',
-  alt: 'Hands shaping a pot on the wheel',
+  src: '/site/hero-membership.jpg',
+  alt: 'A member centring clay on the wheel',
 };
 
 /** "Every membership includes:" — two columns on desktop, in this order. */
