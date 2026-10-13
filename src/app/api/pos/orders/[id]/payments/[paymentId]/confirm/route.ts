@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { stripe } from "@/lib/stripe";
+import { stripeForLocation } from "@/lib/stripe";
 import { checkPermission } from "@/lib/permissions";
 import { POS_ORDER_INCLUDE, maybeCompletePosOrder } from "@/lib/pos";
 
@@ -40,7 +40,8 @@ export async function POST(
     return NextResponse.json({ error: "This payment has no associated Stripe PaymentIntent" }, { status: 400 });
   }
 
-  const intent = await stripe.paymentIntents.retrieve(payment.stripePaymentIntentId);
+  const account = await stripeForLocation(orderLocation.locationId);
+  const intent = await account.client.paymentIntents.retrieve(payment.stripePaymentIntentId);
 
   if (intent.status === "succeeded") {
     const { count } = await prisma.posPayment.updateMany({

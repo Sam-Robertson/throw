@@ -4,7 +4,7 @@ import { auth } from "@/auth";
 export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { CLASS_PRICE_SELECT, isSellable, resolveClassPriceCents } from "@/lib/sellable";
-import { stripe } from "@/lib/stripe";
+import { stripeForLocation } from "@/lib/stripe";
 import { formatMountainTime } from "@/lib/timezone";
 import { findUnsignedWaiver } from "@/lib/waivers";
 import { sendInngestEvent } from "@/lib/inngest";
@@ -188,7 +188,9 @@ export async function POST(req: NextRequest) {
     process.env.NEXT_PUBLIC_APP_URL ??
     "http://localhost:3000";
 
-  const checkoutSession = await stripe.checkout.sessions.create({
+  // The class is paid into its studio's own Stripe account.
+  const account = await stripeForLocation(studioSession.locationId);
+  const checkoutSession = await account.client.checkout.sessions.create({
     mode: "payment",
     line_items: [
       {

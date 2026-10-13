@@ -11,8 +11,12 @@ before the first deploy.
 | `DIRECT_URL`            | Neon direct connection string (used by Prisma Migrate)   |
 | `NEXTAUTH_SECRET`       | Random 32-char string: `openssl rand -base64 32`         |
 | `NEXTAUTH_URL`          | `https://your-app.vercel.app`                            |
-| `STRIPE_SECRET_KEY`     | From Stripe Dashboard → Developers → API keys            |
-| `STRIPE_WEBHOOK_SECRET` | From Stripe Dashboard → Webhooks (set after step 5)      |
+| `STRIPE_SECRET_KEY`     | Provo's account (the default): Stripe Dashboard → Developers → API keys, live mode |
+| `STRIPE_WEBHOOK_SECRET` | Provo's account: Dashboard → Webhooks, the endpoint for `/api/webhooks/stripe` (set after step 5) |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Provo's publishable key (POS typed-in card entry) |
+| `STRIPE_SECRET_KEY_LEHI` | Lehi's account secret key. Each studio with its own Stripe account gets `STRIPE_SECRET_KEY_<STUDIO>` (studio name upper-cased); without one it shares the default account |
+| `STRIPE_WEBHOOK_SECRET_LEHI` | Lehi's account: its own webhook endpoint pointing at the same `/api/webhooks/stripe` URL |
+| `STRIPE_PUBLISHABLE_KEY_LEHI` | Lehi's publishable key |
 | `TWILIO_ACCOUNT_SID`    | From Twilio console                                      |
 | `TWILIO_AUTH_TOKEN`     | From Twilio console                                      |
 | `TWILIO_PHONE_NUMBER`   | From Twilio console (E.164 format, e.g. +15005550006)    |

@@ -1,4 +1,4 @@
-import { stripe } from "@/lib/stripe";
+import type { StripeAccount } from "@/lib/stripeAccounts";
 
 /**
  * Stripe Tax for in-person POS sales.
@@ -6,6 +6,10 @@ import { stripe } from "@/lib/stripe";
  * An in-person sale is taxed where it happens, so the studio's own address is
  * sent as the customer address. Only lines with a tax code are sent (see
  * src/config/taxCodes.ts); tips are never included.
+ *
+ * Tax is calculated and recorded in the studio's own Stripe account (the one
+ * the sale is charged through), so each account needs Stripe Tax switched on
+ * and a Utah registration.
  *
  * Tax must never block checkout: if tax is switched off for the location, the
  * location has no postal code, or Stripe Tax errors (e.g. not enabled on the
@@ -44,7 +48,11 @@ function noTax(warning: string | null): TaxResult {
   return { calculationId: null, taxByReference: new Map(), totalTaxCents: 0, warning };
 }
 
-export async function calculatePosTax(location: TaxLocation, lines: TaxLine[]): Promise<TaxResult> {
+export async function calculatePosTax(
+  account: StripeAccount,
+  location: TaxLocation,
+  lines: TaxLine[],
+): Promise<TaxResult> {
   const taxable = lines.filter(
     (l): l is TaxLine & { taxCode: string } => l.taxCode !== null && l.amountCents > 0,
   );
@@ -60,7 +68,7 @@ export async function calculatePosTax(location: TaxLocation, lines: TaxLine[]): 
   }
 
   try {
-    const calculation = await stripe.tax.calculations.create({
+    const calculation = await account.client.tax.calculations.create({
       currency: "usd",
       line_items: taxable.map((l) => ({
         amount: l.amountCents,
@@ -121,11 +129,12 @@ export async function calculatePosTax(location: TaxLocation, lines: TaxLine[]): 
  * undo a sale that's already been paid for; it's logged for follow-up.
  */
 export async function recordTaxTransaction(
+  account: StripeAccount,
   calculationId: string,
   reference: string,
 ): Promise<string | null> {
   try {
-    const transaction = await stripe.tax.transactions.createFromCalculation(
+    const transaction = await account.client.tax.transactions.createFromCalculation(
       { calculation: calculationId, reference },
       { idempotencyKey: `pos-tax-${reference}` },
     );

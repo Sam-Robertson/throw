@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
-import { stripe } from "@/lib/stripe";
+import { retrieveCheckoutSessionAnyAccount } from "@/lib/stripe";
 import { prisma } from "@/lib/prisma";
 import { formatMountainTime } from "@/lib/timezone";
 
@@ -75,14 +75,16 @@ export default async function BookingSuccessPage({
     redirect("/schedule");
   }
 
-  let checkoutSession: Awaited<
-    ReturnType<typeof stripe.checkout.sessions.retrieve>
-  >;
+  // The URL only carries the session id, not which studio's Stripe account
+  // made it, so every configured account is asked.
+  let found: Awaited<ReturnType<typeof retrieveCheckoutSessionAnyAccount>> = null;
   try {
-    checkoutSession = await stripe.checkout.sessions.retrieve(session_id);
+    found = await retrieveCheckoutSessionAnyAccount(session_id);
   } catch {
     redirect("/schedule");
   }
+  if (!found) redirect("/schedule");
+  const checkoutSession = found.session;
 
   if (checkoutSession.payment_status !== "paid") {
     return (

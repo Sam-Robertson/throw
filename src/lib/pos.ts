@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sendInngestEvent } from "@/lib/inngest";
 import { calculatePosTax, recordTaxTransaction } from "@/lib/stripeTax";
+import { stripeAccountForStudio } from "@/lib/stripeAccounts";
 import { findUnsignedWaiver } from "@/lib/waivers";
 import { formatMountainTime } from "@/lib/timezone";
 import {
@@ -256,7 +257,9 @@ export async function repriceOrder(
     },
   );
 
+  // Tax is calculated in the studio's own Stripe account, the one the sale is charged through.
   const tax = await calculatePosTax(
+    stripeAccountForStudio(order.location.name),
     order.location,
     order.items.map((item) => ({
       reference: item.id,
@@ -891,7 +894,7 @@ export async function reverseCompletionSideEffects(orderId: string): Promise<voi
 export async function maybeCompletePosOrder(orderId: string): Promise<PosOrderWithDetails> {
   const order = await prisma.posOrder.findUniqueOrThrow({
     where: { id: orderId },
-    include: { items: true, payments: true, discounts: true },
+    include: { items: true, payments: true, discounts: true, location: { select: { name: true } } },
   });
 
   if (order.status !== "OPEN") {
@@ -976,7 +979,11 @@ export async function maybeCompletePosOrder(orderId: string): Promise<PosOrderWi
   await attachFiringCharges(order);
 
   if (order.stripeTaxCalculationId && order.taxCents > 0) {
-    await recordTaxTransaction(order.stripeTaxCalculationId, `pos-order-${order.orderNumber}`);
+    await recordTaxTransaction(
+      stripeAccountForStudio(order.location.name),
+      order.stripeTaxCalculationId,
+      `pos-order-${order.orderNumber}`,
+    );
   }
 
   await sendInngestEvent({ name: "pos/order.completed", data: { orderId: order.id } });

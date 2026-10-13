@@ -39,6 +39,8 @@ interface Location {
   name: string;
   address: string | null;
   stripeTerminalLocationId: string | null;
+  /** Which Stripe account this studio's readers and sales go through. */
+  stripeAccount: { label: string; live: boolean; shared: boolean };
 }
 
 interface Reader {
@@ -70,20 +72,24 @@ export function CardReadersClient({ locations: initial }: { locations: Location[
   const [pairOpen, setPairOpen] = useState(false);
   const [pair, setPair] = useState({ registrationCode: '', label: '' });
 
-  // On-reader tipping is one Stripe account setting, shared by every studio.
+  // On-reader tipping is one setting per Stripe account: each studio with its
+  // own account (Provo, Lehi) is switched on its own.
   const [tipping, setTipping] = useState<TippingSetup | null>(null);
   const [tippingError, setTippingError] = useState<string | null>(null);
   const [tippingBusy, setTippingBusy] = useState(false);
 
   useEffect(() => {
-    fetch('/api/admin/terminal/tipping')
+    if (!locationId) return;
+    setTipping(null);
+    setTippingError(null);
+    fetch(`/api/admin/terminal/tipping?locationId=${locationId}`)
       .then(async (res) => {
         const data = await res.json();
         if (res.ok) setTipping(data);
         else setTippingError(data.error ?? 'Could not check the tipping setup.');
       })
       .catch(() => setTippingError('Could not check the tipping setup.'));
-  }, []);
+  }, [locationId]);
 
   async function setTippingEnabled(enabled: boolean) {
     setTippingBusy(true);
@@ -92,7 +98,7 @@ export function CardReadersClient({ locations: initial }: { locations: Location[
       const res = await fetch('/api/admin/terminal/tipping', {
         method: 'POST',
         headers: JSON_HEADERS,
-        body: JSON.stringify({ enabled }),
+        body: JSON.stringify({ locationId, enabled }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -180,9 +186,12 @@ export function CardReadersClient({ locations: initial }: { locations: Location[
   }
 
   async function removeReader(id: string) {
+    if (!location) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/admin/terminal/readers/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/admin/terminal/readers/${id}?locationId=${location.id}`, {
+        method: 'DELETE',
+      });
       if (!res.ok) {
         const data = await res.json();
         setError(data.error ?? 'Could not remove that reader.');
@@ -241,6 +250,17 @@ export function CardReadersClient({ locations: initial }: { locations: Location[
           </Button>
         )}
       </Stack>
+
+      {location && (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          {location.name} charges through {location.stripeAccount.label} Stripe account
+          {location.stripeAccount.live ? ' (live)' : ' (test mode)'}.
+          {location.stripeAccount.shared &&
+            ' To give it its own account, set STRIPE_SECRET_KEY_' +
+              location.name.toUpperCase().replace(/[^A-Z0-9]+/g, '_') +
+              ' in the environment.'}
+        </Typography>
+      )}
 
       {location && !location.stripeTerminalLocationId && (
         <Alert severity="info">
@@ -313,10 +333,11 @@ export function CardReadersClient({ locations: initial }: { locations: Location[
               Tip screen on the reader
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              When on, every card payment on a reader asks the customer for a tip
-              before they tap. This is one Stripe setting for all studios. Other
-              tenders ask on the POS screen, and Add tip in the cart stays as a
-              manual backup.
+              When on, every card payment on a reader at {location?.name ?? 'this studio'} asks
+              the customer for a tip before they tap. This is a setting on the studio&apos;s
+              Stripe account, so each studio with its own account is switched here
+              separately. Other tenders ask on the POS screen, and Add tip in the cart
+              stays as a manual backup.
             </Typography>
           </Box>
           {tipping === null && !tippingError && <CircularProgress size={20} />}

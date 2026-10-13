@@ -1,25 +1,29 @@
 'use client';
 
 import { useState } from 'react';
-import { CardElement, useElements, useStripe } from '@stripe/react-stripe-js';
+import { CardElement, Elements, useElements, useStripe } from '@stripe/react-stripe-js';
 import { Button } from '@/components/ui/button';
 import { apiErrorMessage, formatMoney, type ApiErrorBody, type PosOrder } from '../types';
 import { JSON_HEADERS, type PaneProps } from './paneTypes';
+import { getStripePromise } from '../stripeClient';
 
-/** Typed-in card: phone orders, and the fallback when the reader is offline. Wrap in <Elements>. */
-export function CardPane({
-  orderId,
-  remaining,
-  busy,
-  setBusy,
-  setError,
-  onBack,
-  onResult,
-}: PaneProps & { remaining: number }) {
-  const stripe = useStripe();
-  const elements = useElements();
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [paymentId, setPaymentId] = useState<string | null>(null);
+interface CardIntent {
+  clientSecret: string;
+  paymentId: string;
+  /** The publishable key of the Stripe account the PaymentIntent was made in (the studio's). */
+  publishableKey: string;
+}
+
+/**
+ * Typed-in card: phone orders, and the fallback when the reader is offline.
+ *
+ * The PaymentIntent is created first, because its response says which Stripe
+ * account (Provo's or Lehi's) it lives in; Stripe.js is then loaded with that
+ * account's publishable key before the card form is shown.
+ */
+export function CardPane(props: PaneProps & { remaining: number }) {
+  const { orderId, remaining, busy, setBusy, setError, onBack } = props;
+  const [intent, setIntent] = useState<CardIntent | null>(null);
 
   async function createIntent() {
     setBusy(true);
@@ -30,15 +34,51 @@ export function CardPane({
       body: JSON.stringify({ amountCents: remaining }),
     });
     if (res.ok) {
-      const data = (await res.json()) as { clientSecret: string; paymentId: string };
-      setClientSecret(data.clientSecret);
-      setPaymentId(data.paymentId);
+      setIntent((await res.json()) as CardIntent);
     } else {
       const data = (await res.json().catch(() => ({}))) as ApiErrorBody;
       setError(apiErrorMessage(data, 'Failed to start card payment'));
     }
     setBusy(false);
   }
+
+  if (!intent) {
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="text-sm text-muted-foreground">
+          Charge {formatMoney(remaining)} to a card.
+        </p>
+        <div className="flex gap-2">
+          <Button variant="outline" className="min-h-11 flex-1" onClick={onBack} disabled={busy}>
+            Back
+          </Button>
+          <Button className="min-h-11 flex-1" onClick={createIntent} disabled={busy}>
+            Continue
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Elements stripe={getStripePromise(intent.publishableKey)}>
+      <CardForm {...props} intent={intent} />
+    </Elements>
+  );
+}
+
+function CardForm({
+  orderId,
+  remaining,
+  busy,
+  setBusy,
+  setError,
+  onBack,
+  onResult,
+  intent,
+}: PaneProps & { remaining: number; intent: CardIntent }) {
+  const stripe = useStripe();
+  const elements = useElements();
 
   async function pollConfirm(id: string, attemptsLeft: number): Promise<void> {
     const res = await fetch(`/api/pos/orders/${orderId}/payments/${id}/confirm`, {
@@ -60,13 +100,13 @@ export function CardPane({
   }
 
   async function submit() {
-    if (!stripe || !elements || !clientSecret || !paymentId) return;
+    if (!stripe || !elements) return;
     const card = elements.getElement(CardElement);
     if (!card) return;
 
     setBusy(true);
     setError(null);
-    const result = await stripe.confirmCardPayment(clientSecret, {
+    const result = await stripe.confirmCardPayment(intent.clientSecret, {
       payment_method: { card },
     });
 
@@ -76,26 +116,8 @@ export function CardPane({
       return;
     }
 
-    await pollConfirm(paymentId, 4);
+    await pollConfirm(intent.paymentId, 4);
     setBusy(false);
-  }
-
-  if (!clientSecret) {
-    return (
-      <div className="flex flex-col gap-3">
-        <p className="text-sm text-muted-foreground">
-          Charge {formatMoney(remaining)} to a card.
-        </p>
-        <div className="flex gap-2">
-          <Button variant="outline" className="min-h-11 flex-1" onClick={onBack} disabled={busy}>
-            Back
-          </Button>
-          <Button className="min-h-11 flex-1" onClick={createIntent} disabled={busy}>
-            Continue
-          </Button>
-        </div>
-      </div>
-    );
   }
 
   return (

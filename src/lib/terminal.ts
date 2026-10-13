@@ -1,6 +1,6 @@
 import type Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
-import { stripe } from "@/lib/stripe";
+import { stripeAccountForStudio, type StripeAccount } from "@/lib/stripe";
 import { maybeCompletePosOrder, recalculateOrderTotals } from "@/lib/pos";
 
 /**
@@ -13,7 +13,9 @@ import { maybeCompletePosOrder, recalculateOrderTotals } from "@/lib/pos";
  * the M2/chipper.
  *
  * Card readers belong to a Stripe Terminal Location (tml_...), which each studio
- * maps to via Location.stripeTerminalLocationId.
+ * maps to via Location.stripeTerminalLocationId. Both live in the studio's own
+ * Stripe account (src/lib/stripeAccounts.ts), so every call here takes or
+ * resolves the account for the studio in question.
  */
 
 export const TERMINAL_METHOD = "CARD_TERMINAL";
@@ -37,8 +39,9 @@ export class TerminalError extends Error {
 /**
  * On-reader tipping is a Stripe Terminal *configuration*: the reader only shows
  * the tip screen when the account's default configuration has USD tipping set
- * up, whatever process_config we send with the payment. These two helpers let
- * Studio setup check and switch it on without visiting the Stripe Dashboard.
+ * up, whatever process_config we send with the payment. It is one setting per
+ * Stripe account, so Provo's and Lehi's are switched separately. These helpers
+ * let Studio setup check and switch it on without visiting the Stripe Dashboard.
  */
 export interface TippingSetup {
   enabled: boolean;
@@ -48,13 +51,18 @@ export interface TippingSetup {
   smartTipThresholdCents: number | null;
 }
 
-async function defaultTerminalConfiguration(): Promise<Stripe.Terminal.Configuration | null> {
-  const configurations = await stripe.terminal.configurations.list({ is_account_default: true, limit: 1 });
+async function defaultTerminalConfiguration(
+  account: StripeAccount,
+): Promise<Stripe.Terminal.Configuration | null> {
+  const configurations = await account.client.terminal.configurations.list({
+    is_account_default: true,
+    limit: 1,
+  });
   return configurations.data[0] ?? null;
 }
 
-export async function getTippingSetup(): Promise<TippingSetup> {
-  const config = await defaultTerminalConfiguration();
+export async function getTippingSetup(account: StripeAccount): Promise<TippingSetup> {
+  const config = await defaultTerminalConfiguration(account);
   const usd = config?.tipping?.usd;
   return {
     enabled: Boolean(usd && ((usd.percentages?.length ?? 0) > 0 || (usd.fixed_amounts?.length ?? 0) > 0)),
@@ -66,7 +74,7 @@ export async function getTippingSetup(): Promise<TippingSetup> {
 }
 
 /** Turns on the reader's tip screen with the studio's standard options (see src/lib/tipping.ts). */
-export async function enableOnReaderTipping(): Promise<TippingSetup> {
+export async function enableOnReaderTipping(account: StripeAccount): Promise<TippingSetup> {
   const tipping = {
     usd: {
       percentages: [...TIP_PERCENTAGES],
@@ -74,17 +82,17 @@ export async function enableOnReaderTipping(): Promise<TippingSetup> {
       smart_tip_threshold: SMART_TIP_THRESHOLD_CENTS,
     },
   };
-  const existing = await defaultTerminalConfiguration();
-  if (existing) await stripe.terminal.configurations.update(existing.id, { tipping });
-  else await stripe.terminal.configurations.create({ tipping });
-  return getTippingSetup();
+  const existing = await defaultTerminalConfiguration(account);
+  if (existing) await account.client.terminal.configurations.update(existing.id, { tipping });
+  else await account.client.terminal.configurations.create({ tipping });
+  return getTippingSetup(account);
 }
 
 /** Turns the reader's tip screen off. The POS screen prompt and manual tips still work. */
-export async function disableOnReaderTipping(): Promise<TippingSetup> {
-  const existing = await defaultTerminalConfiguration();
-  if (existing) await stripe.terminal.configurations.update(existing.id, { tipping: "" });
-  return getTippingSetup();
+export async function disableOnReaderTipping(account: StripeAccount): Promise<TippingSetup> {
+  const existing = await defaultTerminalConfiguration(account);
+  if (existing) await account.client.terminal.configurations.update(existing.id, { tipping: "" });
+  return getTippingSetup(account);
 }
 
 /** The Stripe Terminal Location a studio maps to, or a clear error if unlinked. */
@@ -109,9 +117,10 @@ export async function requireTerminalLocation(locationId: string) {
  * "gone" and "never existed" the same way.
  */
 export async function retrieveReader(
+  account: StripeAccount,
   readerId: string,
 ): Promise<Stripe.Terminal.Reader | null> {
-  const reader = await stripe.terminal.readers.retrieve(readerId).catch(() => null);
+  const reader = await account.client.terminal.readers.retrieve(readerId).catch(() => null);
   if (!reader) return null;
   if ("deleted" in reader && reader.deleted) return null;
   return reader as Stripe.Terminal.Reader;
@@ -139,7 +148,8 @@ function toSummary(r: Stripe.Terminal.Reader): ReaderSummary {
 /** Readers registered to a studio. Stripe is the registry — we never mirror it. */
 export async function listReadersForLocation(locationId: string) {
   const location = await requireTerminalLocation(locationId);
-  const readers = await stripe.terminal.readers.list({
+  const account = stripeAccountForStudio(location.name);
+  const readers = await account.client.terminal.readers.list({
     location: location.stripeTerminalLocationId,
     limit: 100,
   });
@@ -220,11 +230,12 @@ export type TerminalProgress =
  * as a failure. Only a terminal (pun intended) reader action state is a failure.
  */
 export async function getTerminalProgress(
+  account: StripeAccount,
   paymentId: string,
   readerId: string,
   paymentIntentId: string,
 ): Promise<TerminalProgress> {
-  const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
+  const intent = await account.client.paymentIntents.retrieve(paymentIntentId);
 
   // Only `succeeded` counts. These intents are created with automatic capture,
   // so `requires_capture` should never appear — and if it somehow did, treating
@@ -241,7 +252,7 @@ export async function getTerminalProgress(
 
   // The PaymentIntent is still open, so the reader is the source of truth for
   // whether the customer is mid-flow or the attempt already failed.
-  const reader = await retrieveReader(readerId);
+  const reader = await retrieveReader(account, readerId);
   const action = reader?.action;
 
   if (action?.status === "failed") {

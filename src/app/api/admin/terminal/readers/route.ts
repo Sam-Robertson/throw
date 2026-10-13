@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { stripe } from "@/lib/stripe";
+import { stripeAccountForStudio } from "@/lib/stripe";
 import { TerminalError, listReadersForLocation } from "@/lib/terminal";
 
 /** Readers registered to a studio, with their Stripe Terminal location. */
@@ -66,7 +66,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const reader = await stripe.terminal.readers.create({
+    const { client } = stripeAccountForStudio(location.name);
+    const reader = await client.terminal.readers.create({
       registration_code: body.registrationCode.trim(),
       location: location.stripeTerminalLocationId,
       ...(body.label?.trim() ? { label: body.label.trim() } : {}),

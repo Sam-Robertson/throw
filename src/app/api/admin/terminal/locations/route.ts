@@ -1,13 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { stripe } from "@/lib/stripe";
+import { stripeAccountForStudio } from "@/lib/stripe";
 
 /**
  * Links a studio to a Stripe Terminal Location, creating one if needed.
  *
  * Readers are registered against a Stripe Terminal Location, so every studio
- * that takes card payments needs one before a reader can be paired.
+ * that takes card payments needs one before a reader can be paired. The
+ * Terminal Location is made in the studio's own Stripe account.
  * Admin-only: this changes Stripe-side configuration, not day-to-day POS use.
  */
 export async function POST(req: NextRequest) {
@@ -30,10 +31,12 @@ export async function POST(req: NextRequest) {
 
   const location = await prisma.location.findUnique({ where: { id: body.locationId } });
   if (!location) return NextResponse.json({ error: "Location not found" }, { status: 404 });
+  const { client } = stripeAccountForStudio(location.name);
 
   if (location.stripeTerminalLocationId) {
-    // Already linked — verify it still exists Stripe-side rather than assuming.
-    const existing = await stripe.terminal.locations
+    // Already linked — verify it still exists Stripe-side rather than assuming
+    // (an id made in another account or the sandbox is invisible here and is replaced).
+    const existing = await client.terminal.locations
       .retrieve(location.stripeTerminalLocationId)
       .catch(() => null);
     if (existing && !("deleted" in existing && existing.deleted)) {
@@ -58,7 +61,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const created = await stripe.terminal.locations.create({
+  const created = await client.terminal.locations.create({
     display_name: location.name,
     address: { line1, city, state, country: "US", postal_code: postalCode },
     metadata: { locationId: location.id },

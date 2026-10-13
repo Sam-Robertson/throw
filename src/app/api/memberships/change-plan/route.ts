@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { stripe } from "@/lib/stripe";
+import { stripeForMembership } from "@/lib/stripe";
 import { checkPlanPurchasable } from "@/lib/membershipCatalog";
 import { ensureStripePriceForPlan } from "@/lib/stripePrices";
 
@@ -37,17 +37,32 @@ export async function POST(request: Request) {
   const newPlan = check.plan;
 
   let newPriceId: string;
+  let priceAccount: Awaited<ReturnType<typeof ensureStripePriceForPlan>>["account"];
   try {
-    newPriceId = (await ensureStripePriceForPlan(newPlan.id)).stripePriceId;
+    ({ stripePriceId: newPriceId, account: priceAccount } = await ensureStripePriceForPlan(newPlan.id));
   } catch {
     return NextResponse.json({ error: "New plan not configured for payments" }, { status: 400 });
   }
 
-  const stripeSubscription = await stripe.subscriptions.retrieve(
+  // The subscription lives in one studio's Stripe account and a Price in
+  // another account can't be put on it, so a plan at the other studio is not
+  // a switch — it would be a cancel and a new membership.
+  const account = await stripeForMembership(membership);
+  if (priceAccount !== account) {
+    return NextResponse.json(
+      {
+        error: "OTHER_STUDIO",
+        message: "That plan belongs to a different studio, so it can't be switched to from this membership.",
+      },
+      { status: 400 },
+    );
+  }
+
+  const stripeSubscription = await account.client.subscriptions.retrieve(
     membership.stripeSubscriptionId,
   );
 
-  await stripe.subscriptions.update(membership.stripeSubscriptionId, {
+  await account.client.subscriptions.update(membership.stripeSubscriptionId, {
     items: [
       {
         id: stripeSubscription.items.data[0].id,

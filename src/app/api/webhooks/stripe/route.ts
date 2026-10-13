@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { stripe } from "@/lib/stripe";
+import { configuredStripeAccounts, type StripeAccount } from "@/lib/stripe";
+import { defaultStudioLocationId } from "@/lib/locations";
 
 export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
@@ -28,17 +29,28 @@ export const config = { api: { bodyParser: false } };
  * metadata snapshot on the invoice (written by /api/memberships/subscribe).
  */
 /**
- * The studio a membership or payment belongs to when neither the membership nor
- * its plan names one: the oldest active studio, which is Provo. Sam's rule
- * (2026-09-12) is that memberships default to Provo for now.
+ * Provo and Lehi are separate Stripe accounts, and each one has its own
+ * endpoint registered for this URL with its own signing secret. The signature
+ * only verifies with the secret of the account that sent the event, so trying
+ * each configured secret both authenticates the delivery and says which
+ * account it came from. Nothing below calls Stripe back, so the account is
+ * only used for logging; ids in the payload (subscriptions, invoices,
+ * PaymentIntents) are unique across accounts and look up the same rows.
  */
-async function defaultStudioLocationId(): Promise<string | undefined> {
-  const location = await prisma.location.findFirst({
-    where: { isActive: true },
-    orderBy: { createdAt: "asc" },
-    select: { id: true },
-  });
-  return location?.id;
+function verifyWebhook(
+  body: string,
+  signature: string,
+): { event: Stripe.Event; account: StripeAccount } | null {
+  for (const account of configuredStripeAccounts()) {
+    if (!account.webhookSecret) continue;
+    try {
+      const event = account.client.webhooks.constructEvent(body, signature, account.webhookSecret);
+      return { event, account };
+    } catch {
+      // Not this account's secret (or a tampered body): try the next.
+    }
+  }
+  return null;
 }
 
 async function recordInvoicePayment(invoice: Stripe.Invoice, subscriptionId: string) {
@@ -193,19 +205,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing signature" }, { status: 400 });
   }
 
-  let event: Stripe.Event;
-  try {
-    event = stripe.webhooks.constructEvent(
-      body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET!,
-    );
-  } catch {
+  const verified = verifyWebhook(body, sig);
+  if (!verified) {
     return NextResponse.json(
       { error: "Webhook signature verification failed" },
       { status: 400 },
     );
   }
+  const { event, account } = verified;
 
   if (event.type === "customer.subscription.created") {
     const subscription = event.data.object as Stripe.Subscription;
@@ -514,11 +521,11 @@ export async function POST(req: NextRequest) {
         // ever succeeding.
         if (metadata.source === "lehi-preorder-widget") {
           console.log(
-            `[stripe webhook] Lehi preorder checkout ${checkoutSession.id} completed (not persisted)`,
+            `[stripe webhook] Lehi preorder checkout ${checkoutSession.id} completed in the ${account.label} account (not persisted)`,
           );
         } else {
           console.warn(
-            `[stripe webhook] checkout ${checkoutSession.id} has no booking metadata; ignored`,
+            `[stripe webhook] checkout ${checkoutSession.id} (${account.label} account) has no booking metadata; ignored`,
           );
         }
         return NextResponse.json({ received: true });

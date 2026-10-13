@@ -1,10 +1,13 @@
-import { NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { stripe } from "@/lib/stripe";
+import { stripeForLocation } from "@/lib/stripe";
 
-/** Unregisters a reader from the Stripe account. */
+/**
+ * Unregisters a reader from its studio's Stripe account. `?locationId=` says
+ * which studio (and so which account) the reader belongs to.
+ */
 export async function DELETE(
-  _req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ readerId: string }> },
 ) {
   const session = await auth();
@@ -14,8 +17,14 @@ export async function DELETE(
   }
 
   const { readerId } = await params;
+  const locationId = req.nextUrl.searchParams.get("locationId");
+  if (!locationId) {
+    return NextResponse.json({ error: "locationId is required" }, { status: 400 });
+  }
+
   try {
-    await stripe.terminal.readers.del(readerId);
+    const account = await stripeForLocation(locationId);
+    await account.client.terminal.readers.del(readerId);
     return NextResponse.json({ deleted: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not remove that reader.";

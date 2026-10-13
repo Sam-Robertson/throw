@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { stripe } from "@/lib/stripe";
+import { stripeAccountForStudio } from "@/lib/stripe";
 
 // Public, unauthenticated endpoint — called cross-origin from the Squarespace-hosted
 // Lehi preorder widget (squarespace/lehi-preorder.html), which never holds a Stripe key.
@@ -7,6 +7,11 @@ import { stripe } from "@/lib/stripe";
 // CONFIG; it does not trust or persist anything beyond what Stripe stores as metadata.
 // Everything sold through this widget (classes, courses) is a one-time payment —
 // there's no subscription/membership path anymore.
+//
+// The widget sells Lehi classes, so the session is made in Lehi's Stripe account
+// (PREORDER_STUDIO names the studio; default "Lehi"). The price ids in the widget's
+// CONFIG have to be Prices in that account.
+const PREORDER_STUDIO = process.env.PREORDER_STUDIO?.trim() || "Lehi";
 
 // The widget is live at this exact Squarespace origin, so CORS is locked to it.
 const ALLOWED_ORIGIN = "https://www.throwartstudio.com";
@@ -121,7 +126,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const checkoutSession = await stripe.checkout.sessions.create({
+    const { client } = stripeAccountForStudio(PREORDER_STUDIO);
+    const checkoutSession = await client.checkout.sessions.create({
       mode: "payment",
       line_items: [{ price: priceId, quantity: qty }],
       customer_email: email,

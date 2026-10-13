@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { stripe } from "@/lib/stripe";
+import { configuredStripeAccounts, isStripeMissing } from "@/lib/stripe";
 import { normalizeEmail, normalizePhone } from "@/lib/consent";
 import { isValidEmail } from "@/lib/membershipLifecycle";
 
@@ -72,14 +72,33 @@ export async function PATCH(req: NextRequest) {
     },
   });
 
-  // Receipts and billing emails go to the Stripe customer, so it follows.
-  if ((data.email || data.name) && updated.stripeCustomerId) {
-    await stripe.customers
-      .update(updated.stripeCustomerId, {
-        ...(data.email ? { email: updated.email } : {}),
-        ...(data.name ? { name: updated.name ?? undefined } : {}),
-      })
-      .catch((err) => console.error("[account/profile] Stripe customer update:", err));
+  // Receipts and billing emails go to the Stripe customer, so it follows. The
+  // user's Customer ids (the one on the user and any on their memberships)
+  // each live in one studio's account; an update is tried in every account
+  // and "no such customer" just means it belongs to another one.
+  if (data.email || data.name) {
+    const memberships = await prisma.membership.findMany({
+      where: { userId: session.user.id, stripeCustomerId: { not: null } },
+      select: { stripeCustomerId: true },
+    });
+    const customerIds = new Set(
+      [updated.stripeCustomerId, ...memberships.map((m) => m.stripeCustomerId)].filter(
+        (id): id is string => Boolean(id),
+      ),
+    );
+    const fields = {
+      ...(data.email ? { email: updated.email } : {}),
+      ...(data.name ? { name: updated.name ?? undefined } : {}),
+    };
+    for (const customerId of customerIds) {
+      for (const account of configuredStripeAccounts()) {
+        try {
+          await account.client.customers.update(customerId, fields);
+        } catch (err) {
+          if (!isStripeMissing(err)) console.error("[account/profile] Stripe customer update:", err);
+        }
+      }
+    }
   }
 
   const { stripeCustomerId: _omit, ...publicFields } = updated;

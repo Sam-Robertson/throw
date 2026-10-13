@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { stripe } from "@/lib/stripe";
+import { stripeForLocation } from "@/lib/stripe";
 import { checkPermission } from "@/lib/permissions";
 import { POS_ORDER_INCLUDE } from "@/lib/pos";
 import { failTerminalPayment } from "@/lib/terminal";
@@ -46,13 +46,14 @@ export async function POST(
     return NextResponse.json({ state: "succeeded", order });
   }
 
+  const account = await stripeForLocation(orderLocation.locationId);
   if (payment.externalRef) {
-    await stripe.terminal.readers.cancelAction(payment.externalRef).catch(() => {
+    await account.client.terminal.readers.cancelAction(payment.externalRef).catch(() => {
       // No action in progress, or the reader is offline — nothing to stop.
     });
   }
   if (payment.stripePaymentIntentId) {
-    await stripe.paymentIntents.cancel(payment.stripePaymentIntentId).catch(() => {
+    await account.client.paymentIntents.cancel(payment.stripePaymentIntentId).catch(() => {
       // Already cancelled or already succeeded; the status route reconciles.
     });
   }

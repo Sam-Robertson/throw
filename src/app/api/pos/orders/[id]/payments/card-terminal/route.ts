@@ -1,7 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { stripe } from "@/lib/stripe";
+import { stripeAccountForStudio } from "@/lib/stripe";
+import { findStripeCustomerId } from "@/lib/stripeCustomers";
 import { checkPermission } from "@/lib/permissions";
 import { checkOrderPayable, formatMoney, remainingBalanceCents } from "@/lib/pos";
 import {
@@ -73,11 +74,15 @@ export async function POST(
     );
   }
 
-  // Reject a reader that belongs to a different studio than the order.
+  // Reject a reader that belongs to a different studio than the order. The
+  // reader, the Terminal location and the payment all live in the studio's
+  // own Stripe account.
   let terminalLocationId: string;
+  let account: ReturnType<typeof stripeAccountForStudio>;
   try {
-    terminalLocationId = (await requireTerminalLocation(order.locationId))
-      .stripeTerminalLocationId;
+    const location = await requireTerminalLocation(order.locationId);
+    terminalLocationId = location.stripeTerminalLocationId;
+    account = stripeAccountForStudio(location.name);
   } catch (err) {
     if (err instanceof TerminalError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
@@ -85,7 +90,7 @@ export async function POST(
     throw err;
   }
 
-  const reader = await retrieveReader(body.readerId);
+  const reader = await retrieveReader(account, body.readerId);
   if (!reader || reader.location !== terminalLocationId) {
     return NextResponse.json(
       { error: "That reader is not registered to this studio." },
@@ -102,19 +107,16 @@ export async function POST(
     );
   }
 
-  let stripeCustomerId: string | undefined;
-  if (order.customerId) {
-    const customer = await prisma.user.findUnique({
-      where: { id: order.customerId },
-      select: { stripeCustomerId: true },
-    });
-    stripeCustomerId = customer?.stripeCustomerId ?? undefined;
-  }
+  // Attach the customer only if they already exist in this account; a POS
+  // sale never creates a Stripe Customer.
+  const stripeCustomerId = order.customerId
+    ? await findStripeCustomerId(account, order.customerId)
+    : null;
 
   // capture_method stays automatic so payment_intent.succeeded actually fires —
   // manual capture would park the intent at requires_capture and the existing
   // POS webhook would never settle it.
-  const paymentIntent = await stripe.paymentIntents.create({
+  const paymentIntent = await account.client.paymentIntents.create({
     amount: body.amountCents,
     currency: "usd",
     payment_method_types: ["card_present"],
@@ -141,7 +143,7 @@ export async function POST(
   const askForTip = order.tipCents === 0;
 
   try {
-    await stripe.terminal.readers.processPaymentIntent(body.readerId, {
+    await account.client.terminal.readers.processPaymentIntent(body.readerId, {
       payment_intent: paymentIntent.id,
       ...(askForTip
         ? {
@@ -163,7 +165,7 @@ export async function POST(
       where: { id: payment.id },
       data: { status: "FAILED" },
     });
-    await stripe.paymentIntents.cancel(paymentIntent.id).catch(() => {});
+    await account.client.paymentIntents.cancel(paymentIntent.id).catch(() => {});
     const message =
       err instanceof Error ? err.message : "Could not start the payment on that reader.";
     return NextResponse.json({ error: message }, { status: 502 });

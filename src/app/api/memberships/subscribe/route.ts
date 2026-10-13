@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
+import type Stripe from "stripe";
 import { addMonths, setDate, startOfDay } from "date-fns";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { stripe } from "@/lib/stripe";
 import { checkPlanPurchasable } from "@/lib/membershipCatalog";
 import { ensureStripePriceForPlan } from "@/lib/stripePrices";
+import { ensureStripeCustomerId } from "@/lib/stripeCustomers";
 import { STUDIO_TIMEZONE } from "@/lib/timezone";
 import { findUnsignedWaiver } from "@/lib/waivers";
 
 type CheckoutSessionCreateParams = NonNullable<
-  Parameters<typeof stripe.checkout.sessions.create>[0]
+  Parameters<Stripe["checkout"]["sessions"]["create"]>[0]
 >;
 type LineItem = NonNullable<CheckoutSessionCreateParams["line_items"]>[number];
 
@@ -83,11 +84,13 @@ export async function POST(request: Request) {
     );
   const joiningFeeCents = term ? term.joiningFeeCents : plan.joiningFeeCents;
 
-  // Stripe Prices are created here, at checkout time, with the running app's
-  // own key — so production always bills against live-mode prices.
+  // Stripe Prices are created here, at checkout time, in the plan's studio's
+  // own Stripe account with the running app's key — so production always
+  // bills against live-mode prices, and a Lehi plan bills into Lehi's account.
   let stripePriceId: string;
+  let account: Awaited<ReturnType<typeof ensureStripePriceForPlan>>["account"];
   try {
-    ({ stripePriceId } = await ensureStripePriceForPlan(plan.id));
+    ({ stripePriceId, account } = await ensureStripePriceForPlan(plan.id));
   } catch (err) {
     console.error(`[subscribe] no Stripe price for plan ${plan.slug}`, err);
     return NextResponse.json(
@@ -96,18 +99,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
-  let stripeCustomerId = user.stripeCustomerId;
-
-  if (!stripeCustomerId) {
-    const customer = await stripe.customers.create({
-      email: user.email,
-      name: user.name ?? undefined,
-      metadata: { userId },
-    });
-    stripeCustomerId = customer.id;
-    await prisma.user.update({ where: { id: userId }, data: { stripeCustomerId } });
-  }
+  // The customer has to exist in the same account as the price.
+  const stripeCustomerId = await ensureStripeCustomerId(account, userId);
 
   // Joining fee applies only to members who have never held a membership
   // before (any Membership row for this userId, regardless of status) — a
@@ -134,7 +127,7 @@ export async function POST(request: Request) {
   if (term) subscriptionMetadata.commitmentTermId = term.id;
   if (chargeJoiningFee) subscriptionMetadata.joiningFeeCharged = "true";
 
-  const checkoutSession = await stripe.checkout.sessions.create({
+  const checkoutSession = await account.client.checkout.sessions.create({
     mode: "subscription",
     line_items: lineItems,
     customer: stripeCustomerId,

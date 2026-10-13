@@ -1,6 +1,6 @@
-import Stripe from "stripe";
+import type Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
-import { stripe } from "@/lib/stripe";
+import { isStripeMissing, stripeForLocation, type StripeAccount } from "@/lib/stripe";
 import { billingIntervalFromDays, type BillingInterval } from "@/lib/billingInterval";
 
 /**
@@ -18,7 +18,14 @@ import { billingIntervalFromDays, type BillingInterval } from "@/lib/billingInte
  *     so the same plan at the same price always resolves to the same Price
  *     (an archived one is reactivated instead of being created again).
  *
- * Test and live mode. Production runs a live key; local .env files hold a test
+ * Which account. A plan's Prices live in its studio's Stripe account (Provo
+ * plans in Provo's, Lehi plans in Lehi's; a plan with no studio uses the
+ * default account), so a plan is only ever billed where its studio's money
+ * goes. ensureStripePriceForPlan returns the account along with the Price so
+ * the caller creates the Checkout Session or updates the subscription with the
+ * same one.
+ *
+ * Test and live mode. Production runs live keys; local .env files hold a test
  * key and may point at a copy of production data. A price id made with one
  * key is invisible to the other, so:
  *   - a live key that can't see the stored id replaces it (self-healing)
@@ -35,14 +42,6 @@ const CURRENCY = "usd";
 /** Seed data uses `price_placeholder_*` ids. They are not Stripe objects. */
 export function isPlaceholderPriceId(stripePriceId: string | null): boolean {
   return stripePriceId === null || stripePriceId.startsWith(PLACEHOLDER_PREFIX);
-}
-
-function isLiveMode(): boolean {
-  return /^(sk|rk)_live_/.test(process.env.STRIPE_SECRET_KEY ?? "");
-}
-
-function isMissing(err: unknown): boolean {
-  return err instanceof Stripe.errors.StripeInvalidRequestError && err.code === "resource_missing";
 }
 
 function productIdForPlan(planId: string): string {
@@ -62,27 +61,31 @@ function priceMatches(price: Stripe.Price, amountCents: number, interval: Billin
   );
 }
 
-async function retrievePrice(stripePriceId: string): Promise<Stripe.Price | null> {
+async function retrievePrice(account: StripeAccount, stripePriceId: string): Promise<Stripe.Price | null> {
   try {
-    return await stripe.prices.retrieve(stripePriceId);
+    return await account.client.prices.retrieve(stripePriceId);
   } catch (err) {
-    if (isMissing(err)) return null;
+    if (isStripeMissing(err)) return null;
     throw err;
   }
 }
 
-async function ensureProduct(plan: { id: string; name: string; slug: string }): Promise<string> {
+async function ensureProduct(
+  account: StripeAccount,
+  plan: { id: string; name: string; slug: string },
+): Promise<string> {
+  const { client } = account;
   const productId = productIdForPlan(plan.id);
   try {
-    const product = await stripe.products.retrieve(productId);
+    const product = await client.products.retrieve(productId);
     if (product.name !== plan.name || !product.active) {
-      await stripe.products.update(productId, { name: plan.name, active: true });
+      await client.products.update(productId, { name: plan.name, active: true });
     }
     return productId;
   } catch (err) {
-    if (!isMissing(err)) throw err;
+    if (!isStripeMissing(err)) throw err;
   }
-  await stripe.products.create(
+  await client.products.create(
     {
       id: productId,
       name: plan.name,
@@ -95,6 +98,8 @@ async function ensureProduct(plan: { id: string; name: string; slug: string }): 
 
 export interface EnsuredPrice {
   stripePriceId: string;
+  /** The account the Price lives in: the plan's studio's. Bill through this one. */
+  account: StripeAccount;
   /** True when a new Stripe Price was created by this call. */
   created: boolean;
   /** The Price that was archived because the plan's amount or interval changed. */
@@ -110,33 +115,44 @@ export interface EnsuredPrice {
 export async function ensureStripePriceForPlan(planId: string): Promise<EnsuredPrice> {
   const plan = await prisma.membershipPlan.findUniqueOrThrow({
     where: { id: planId },
-    select: { id: true, name: true, slug: true, price: true, billingIntervalDays: true, stripePriceId: true },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      price: true,
+      billingIntervalDays: true,
+      stripePriceId: true,
+      locationId: true,
+    },
   });
   if (plan.price <= 0) throw new Error(`Plan "${plan.name}" has no price, so it can't be billed`);
 
+  const account = await stripeForLocation(plan.locationId);
+  const { client } = account;
   const interval = billingIntervalFromDays(plan.billingIntervalDays);
 
   const stored = isPlaceholderPriceId(plan.stripePriceId)
     ? null
-    : await retrievePrice(plan.stripePriceId!);
+    : await retrievePrice(account, plan.stripePriceId!);
   if (stored && stored.active && priceMatches(stored, plan.price, interval)) {
-    return { stripePriceId: stored.id, created: false, archivedPriceId: null };
+    return { stripePriceId: stored.id, account, created: false, archivedPriceId: null };
   }
 
-  // The stored id belongs to the other Stripe mode when this key can't see it.
+  // The stored id belongs to another key (the other mode, or the sandbox)
+  // when this account can't see it.
   const storedIsForeign = !isPlaceholderPriceId(plan.stripePriceId) && stored === null;
-  const mayStore = !storedIsForeign || isLiveMode();
+  const mayStore = !storedIsForeign || account.live;
 
   const lookupKey = lookupKeyForPlan(plan.id, plan.price, interval);
-  const existing = (await stripe.prices.list({ lookup_keys: [lookupKey], limit: 1 })).data[0];
+  const existing = (await client.prices.list({ lookup_keys: [lookupKey], limit: 1 })).data[0];
 
   let price: Stripe.Price;
   let created = false;
   if (existing && priceMatches(existing, plan.price, interval)) {
-    price = existing.active ? existing : await stripe.prices.update(existing.id, { active: true });
+    price = existing.active ? existing : await client.prices.update(existing.id, { active: true });
   } else {
-    const productId = await ensureProduct(plan);
-    price = await stripe.prices.create(
+    const productId = await ensureProduct(account, plan);
+    price = await client.prices.create(
       {
         product: productId,
         currency: CURRENCY,
@@ -157,11 +173,11 @@ export async function ensureStripePriceForPlan(planId: string): Promise<EnsuredP
   // Archive the outdated Price last, once the plan points at its replacement.
   let archivedPriceId: string | null = null;
   if (stored && stored.id !== price.id && stored.active) {
-    await stripe.prices.update(stored.id, { active: false });
+    await client.prices.update(stored.id, { active: false });
     archivedPriceId = stored.id;
   }
 
-  return { stripePriceId: price.id, created, archivedPriceId };
+  return { stripePriceId: price.id, account, created, archivedPriceId };
 }
 
 // ── Freeze price ─────────────────────────────────────────────────────────────
@@ -173,30 +189,31 @@ export const FREEZE_LOOKUP_PREFIX = "throw_freeze_";
 
 /**
  * The monthly Price a paused membership bills at (docs: "Pausing your
- * membership", $5 a month). One Product, one Price per fee amount; the same
- * reuse rules as plan prices, and like them it is made lazily with the running
- * app's key.
+ * membership", $5 a month), in the account the membership bills through. One
+ * Product, one Price per fee amount; the same reuse rules as plan prices, and
+ * like them it is made lazily with the running app's key.
  */
-export async function ensureFreezePrice(monthlyFeeCents: number): Promise<string> {
+export async function ensureFreezePrice(account: StripeAccount, monthlyFeeCents: number): Promise<string> {
   if (monthlyFeeCents <= 0) throw new Error("A freeze fee has to be more than $0 to be billed");
+  const { client } = account;
   const lookupKey = `${FREEZE_LOOKUP_PREFIX}${monthlyFeeCents}_1month`;
 
-  const existing = (await stripe.prices.list({ lookup_keys: [lookupKey], limit: 1 })).data[0];
+  const existing = (await client.prices.list({ lookup_keys: [lookupKey], limit: 1 })).data[0];
   if (existing && priceMatches(existing, monthlyFeeCents, { unit: "month", count: 1 })) {
-    return existing.active ? existing.id : (await stripe.prices.update(existing.id, { active: true })).id;
+    return existing.active ? existing.id : (await client.prices.update(existing.id, { active: true })).id;
   }
 
   try {
-    await stripe.products.retrieve(FREEZE_PRODUCT_ID);
+    await client.products.retrieve(FREEZE_PRODUCT_ID);
   } catch (err) {
-    if (!isMissing(err)) throw err;
-    await stripe.products.create(
+    if (!isStripeMissing(err)) throw err;
+    await client.products.create(
       { id: FREEZE_PRODUCT_ID, name: "Paused membership" },
       { idempotencyKey: `create_${FREEZE_PRODUCT_ID}` },
     );
   }
 
-  const price = await stripe.prices.create(
+  const price = await client.prices.create(
     {
       product: FREEZE_PRODUCT_ID,
       currency: CURRENCY,

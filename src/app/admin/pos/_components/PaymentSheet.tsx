@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Elements } from '@stripe/react-stripe-js';
 import {
   Dialog,
   DialogContent,
@@ -10,7 +9,6 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { realEmail } from '@/lib/walkinEmail';
-import { getStripePromise } from './stripeClient';
 import { TerminalPane } from './TerminalPane';
 import { AccountCreditPane } from './payment/AccountCreditPane';
 import { CardPane } from './payment/CardPane';
@@ -327,9 +325,7 @@ export function PaymentSheet({
         )}
 
         {!completed && view === 'card' && (
-          <Elements stripe={getStripePromise()}>
-            <CardPane {...paneProps} remaining={remaining} />
-          </Elements>
+          <CardPane {...paneProps} remaining={remaining} />
         )}
 
         {!completed && view === 'giftcard' && (

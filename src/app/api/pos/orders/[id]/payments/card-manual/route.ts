@@ -1,7 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { stripe } from "@/lib/stripe";
+import { stripeForLocation } from "@/lib/stripe";
+import { findStripeCustomerId } from "@/lib/stripeCustomers";
 import { checkPermission } from "@/lib/permissions";
 import { checkOrderPayable, formatMoney, remainingBalanceCents } from "@/lib/pos";
 
@@ -43,16 +44,27 @@ export async function POST(
     );
   }
 
-  let stripeCustomerId: string | undefined;
-  if (order.customerId) {
-    const customer = await prisma.user.findUnique({
-      where: { id: order.customerId },
-      select: { stripeCustomerId: true },
-    });
-    stripeCustomerId = customer?.stripeCustomerId ?? undefined;
+  // The sale is charged into the studio's own Stripe account. The browser
+  // confirms the card with that account's publishable key, which is sent back
+  // with the client secret so the POS loads the matching Stripe.js.
+  const account = await stripeForLocation(order.locationId);
+  if (!account.publishableKey) {
+    return NextResponse.json(
+      {
+        error:
+          "Typed-in card payments aren't set up for this studio yet (no Stripe publishable key configured). Use the card reader.",
+      },
+      { status: 503 },
+    );
   }
 
-  const paymentIntent = await stripe.paymentIntents.create({
+  // Attach the customer only if they already exist in this account; a POS
+  // sale never creates a Stripe Customer.
+  const stripeCustomerId = order.customerId
+    ? await findStripeCustomerId(account, order.customerId)
+    : null;
+
+  const paymentIntent = await account.client.paymentIntents.create({
     amount: body.amountCents,
     currency: "usd",
     metadata: { posOrderId: id, type: "pos" },
@@ -70,7 +82,11 @@ export async function POST(
   });
 
   return NextResponse.json(
-    { clientSecret: paymentIntent.client_secret, paymentId: payment.id },
+    {
+      clientSecret: paymentIntent.client_secret,
+      paymentId: payment.id,
+      publishableKey: account.publishableKey,
+    },
     { status: 201 },
   );
 }

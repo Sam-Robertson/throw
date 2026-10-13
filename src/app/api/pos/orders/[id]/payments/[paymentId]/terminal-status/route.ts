@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { stripeForLocation } from "@/lib/stripe";
 import { checkPermission } from "@/lib/permissions";
 import { POS_ORDER_INCLUDE } from "@/lib/pos";
 import { TerminalError, getTerminalProgress } from "@/lib/terminal";
@@ -55,6 +56,7 @@ export async function GET(
 
   try {
     const progress = await getTerminalProgress(
+      await stripeForLocation(orderLocation.locationId),
       paymentId,
       payment.externalRef,
       payment.stripePaymentIntentId,

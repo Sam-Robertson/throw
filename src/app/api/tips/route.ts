@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { stripe } from "@/lib/stripe";
+import { stripeForLocation } from "@/lib/stripe";
 
 const MIN_TIP_CENTS = 100; // $1.00
 const MAX_TIP_CENTS = 10000; // $100.00
@@ -100,7 +100,9 @@ export async function POST(req: NextRequest) {
     booking.studioSession.instructor.name ?? "your instructor";
   const sessionName = booking.studioSession.sessionType.name;
 
-  const checkoutSession = await stripe.checkout.sessions.create({
+  // The tip is paid into the studio's own Stripe account.
+  const account = await stripeForLocation(booking.studioSession.locationId);
+  const checkoutSession = await account.client.checkout.sessions.create({
     mode: "payment",
     line_items: [
       {

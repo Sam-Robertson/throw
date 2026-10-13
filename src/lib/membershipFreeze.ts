@@ -1,7 +1,7 @@
 import type Stripe from "stripe";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { stripe } from "@/lib/stripe";
+import { stripeForMembership, type StripeAccount } from "@/lib/stripe";
 import { sendInngestEvent } from "@/lib/inngest";
 import { grantPeriodAllowance } from "@/lib/credits";
 import { ensureFreezePrice, ensureStripePriceForPlan } from "@/lib/stripePrices";
@@ -37,6 +37,9 @@ import {
  * A cancellation sets `cancel_at` on the subscription (a period end picked by
  * the 15th-of-the-month rule) and the webhook's subscription.deleted marks the
  * membership CANCELLED when Stripe ends it.
+ *
+ * Every Stripe call goes through the membership's own studio's account
+ * (stripeForMembership): a Lehi subscription only exists in Lehi's account.
  */
 
 export class MembershipActionError extends Error {
@@ -104,9 +107,9 @@ export function isPausePending(membership: { status: string; pausedAt: Date | nu
 }
 
 /** Releases the schedule a pause attached, if there is one. The subscription keeps its current price. */
-async function releaseSchedule(subscription: Stripe.Subscription): Promise<void> {
+async function releaseSchedule(account: StripeAccount, subscription: Stripe.Subscription): Promise<void> {
   const scheduleId = idOf(subscription.schedule);
-  if (scheduleId) await stripe.subscriptionSchedules.release(scheduleId);
+  if (scheduleId) await account.client.subscriptionSchedules.release(scheduleId);
 }
 
 // ── Pause ────────────────────────────────────────────────────────────────────
@@ -135,11 +138,13 @@ export async function requestPause(
       "TOO_SOON",
     );
   const subscriptionId = requireSubscriptionId(membership);
+  const account = await stripeForMembership(membership);
+  const { client } = account;
 
   const terms = await freezeTermsFor(membership);
-  const freezePriceId = await ensureFreezePrice(terms.monthlyFeeCents);
+  const freezePriceId = await ensureFreezePrice(account, terms.monthlyFeeCents);
 
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  const subscription = await client.subscriptions.retrieve(subscriptionId);
   if (subscription.schedule)
     throw new MembershipActionError("This subscription already has a schedule", 409, "HAS_SCHEDULE");
   const item = subscription.items.data[0];
@@ -147,10 +152,10 @@ export async function requestPause(
   const planInterval = billingIntervalFromDays(membership.plan.billingIntervalDays);
   const currentPeriodEnd = new Date(item.current_period_end * 1000);
 
-  const schedule = await stripe.subscriptionSchedules.create({ from_subscription: subscriptionId });
+  const schedule = await client.subscriptionSchedules.create({ from_subscription: subscriptionId });
   const current = schedule.phases[0];
   try {
-    await stripe.subscriptionSchedules.update(schedule.id, {
+    await client.subscriptionSchedules.update(schedule.id, {
       end_behavior: "release",
       phases: [
         {
@@ -174,7 +179,7 @@ export async function requestPause(
     });
   } catch (err) {
     // Leave the subscription exactly as it was rather than half-scheduled.
-    await stripe.subscriptionSchedules.release(schedule.id).catch(() => {});
+    await client.subscriptionSchedules.release(schedule.id).catch(() => {});
     throw err;
   }
 
@@ -220,13 +225,14 @@ export async function resumeMembership(membershipId: string, { by }: { by: Actor
   if (!paused && !pending)
     throw new MembershipActionError("This membership is not paused", 400, "NOT_PAUSED");
   const subscriptionId = requireSubscriptionId(membership);
+  const account = await stripeForMembership(membership);
 
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-  await releaseSchedule(subscription);
+  const subscription = await account.client.subscriptions.retrieve(subscriptionId);
+  await releaseSchedule(account, subscription);
 
   if (paused) {
     const { stripePriceId } = await ensureStripePriceForPlan(membership.planId);
-    await stripe.subscriptions.update(subscriptionId, {
+    await account.client.subscriptions.update(subscriptionId, {
       items: [{ id: subscription.items.data[0].id, price: stripePriceId }],
       proration_behavior: "always_invoice",
       // A paused member who had asked to cancel is choosing to stay.
@@ -314,15 +320,16 @@ export async function requestCancel(
       "IN_COMMITMENT",
     );
   const subscriptionId = requireSubscriptionId(membership);
+  const account = await stripeForMembership(membership);
 
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-  await releaseSchedule(subscription);
+  const subscription = await account.client.subscriptions.retrieve(subscriptionId);
+  await releaseSchedule(account, subscription);
 
   const forfeitedCents = membership.status === "PAUSED" ? await forfeitFreezeCredit(membership) : 0;
   const reasonLabel = cancelReasonLabel(reason) ?? reason;
 
   if (immediate) {
-    await stripe.subscriptions.cancel(subscriptionId);
+    await account.client.subscriptions.cancel(subscriptionId);
     const now = new Date();
     await prisma.membership.update({
       where: { id: membership.id },
@@ -361,7 +368,7 @@ export async function requestCancel(
           billingIntervalDays: membership.plan.billingIntervalDays,
         });
 
-  await stripe.subscriptions.update(subscriptionId, {
+  await account.client.subscriptions.update(subscriptionId, {
     cancel_at: Math.floor(endsAt.getTime() / 1000),
   });
 
@@ -398,8 +405,9 @@ export async function withdrawCancel(membershipId: string, { by }: { by: Actor }
   if (membership.status !== "ACTIVE" || !membership.cancelAt)
     throw new MembershipActionError("This membership is not set to cancel", 400, "NOT_CANCELLING");
   const subscriptionId = requireSubscriptionId(membership);
+  const account = await stripeForMembership(membership);
 
-  await stripe.subscriptions.update(subscriptionId, { cancel_at: "" });
+  await account.client.subscriptions.update(subscriptionId, { cancel_at: "" });
   await prisma.membership.update({
     where: { id: membership.id },
     data: { cancelAt: null, cancelReason: null },
