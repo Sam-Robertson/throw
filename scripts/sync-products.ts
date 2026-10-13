@@ -1,8 +1,11 @@
 // Brings products and discounts in line with what throwartstudio.com sells:
-// finished pieces ($9.99 / $12.99 / $14.99), class packs (5, 10, 15) and the
-// GRAND30 Lehi grand-opening code. Nothing else is on the site, so nothing
-// else is created (Sam, 2026-09-21). Rows an earlier version of this script
-// created for firing, clay, shipping and staff discounts are archived.
+// finished pieces ($9.99 / $12.99 / $14.99), class packs (5, 10, 15), the
+// GRAND30 Lehi grand-opening code, and — since the Oct 2026 Memberships
+// design (Sam, 2026-10-13: members pay online and in person) — the three
+// 25 lb bags of clay and glaze firing by weight that members buy from the
+// portal (/buy/clay, /buy/firing) and at the POS. Rows an earlier version of
+// this script created for other clay bodies, shipping and staff discounts are
+// archived.
 //
 // What it does:
 //   1. PRODUCTS  — matches on RetailProduct.slug. Creates what's missing and
@@ -55,13 +58,26 @@ const PRODUCTS: ProductEntry[] = [
   { slug: "class-pack-5", name: "5 class pack", category: "CLASS_PACK", priceCents: 15000, classCredits: 5 },
   { slug: "class-pack-10", name: "10 class pack", category: "CLASS_PACK", priceCents: 27000, classCredits: 10 },
   { slug: "class-pack-15", name: "15 class pack", category: "CLASS_PACK", priceCents: 36000, classCredits: 15 },
+
+  // Clay, 25 lb bags, as the Memberships page prices them ("Clay and glaze
+  // firing pricing": Bmix $25, Chestnut $37.50, Aspen porcelain $50). Sold
+  // from the member portal and the POS.
+  { slug: "clay-bmix-25lb", name: "Bmix", category: "CLAY", priceCents: 2500, description: "25 lb bag. Cone 5-6." },
+  { slug: "clay-chestnut-25lb", name: "Chestnut", category: "CLAY", priceCents: 3750, description: "25 lb bag. Cone 5-6." },
+  { slug: "clay-aspen-porcelain-25lb", name: "Aspen porcelain", category: "CLAY", priceCents: 5000, description: "25 lb bag. Cone 5-6." },
+
+  // Member glaze firing by weight (docs/throw-catalog.md §3.1): $1.00/lb,
+  // $1.75/lb over 12 in at the widest point, $1 minimum per piece. The POS
+  // and src/lib/pos.ts getFiringProducts read these two rows by slug.
+  { slug: "glaze-firing", name: "Glaze firing", category: "FIRING", priceCents: 100, unit: "LB", minChargeCents: 100, membersOnly: true },
+  { slug: "glaze-firing-oversize", name: "Glaze firing, over 12 inches", category: "FIRING", priceCents: 175, unit: "LB", minChargeCents: 100, membersOnly: true },
 ];
 
 // Rows an earlier version of this script created that are not on the website:
 // archived on sight, never deleted.
 const RETIRE_PRODUCT_SLUGS = [
   "piece-over-2lb", "add-handle", "glazed-by-us", "extra-clay",
-  "glaze-firing", "glaze-firing-oversize", "bisque-firing",
+  "bisque-firing",
   "clay-b-mix", "clay-recycled", "clay-speckled-buff", "clay-charcoal",
   "clay-b-mix-bag-10lb", "clay-b-mix-bag-25lb", "clay-speckled-buff-bag-10lb", "clay-speckled-buff-bag-25lb",
   "clay-charcoal-bag-10lb", "clay-charcoal-bag-25lb", "clay-sample-pack",

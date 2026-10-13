@@ -1,13 +1,17 @@
-import { redirect, notFound } from "next/navigation";
-import Link from "next/link";
-import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
-import { formatMountainTime } from "@/lib/timezone";
-import { getTicketBalance } from "@/lib/credits";
-import { CLASS_PRICE_SELECT, isSellable, resolveClassPriceCents } from "@/lib/sellable";
-import { findUnsignedWaiver, waiverSignUrl } from "@/lib/waivers";
-import { BookingForm } from "./_components/BookingForm";
-import { BackLink } from "@/components/shared/BackLink";
+import { notFound, redirect } from 'next/navigation';
+import NextLink from 'next/link';
+import { auth } from '@/auth';
+import { prisma } from '@/lib/prisma';
+import { getTicketBalance } from '@/lib/credits';
+import { CLASS_PRICE_SELECT, isSellable, resolveClassPriceCents } from '@/lib/sellable';
+import { findUnsignedWaiver, waiverSignUrl } from '@/lib/waivers';
+import { mapHref, sessionKicker, sessionPhoto, sessionWhen } from '@/lib/sessionPresentation';
+import { SessionDetail, StatusChip } from '@/components/site/SessionDetail';
+import { SitePhoto } from '@/components/site/SitePhoto';
+import { BackLink } from '@/components/shared/BackLink';
+import { BookingForm } from './_components/BookingForm';
+
+export const dynamic = 'force-dynamic';
 
 async function getSession(id: string) {
   return prisma.studioSession.findUnique({
@@ -17,30 +21,46 @@ async function getSession(id: string) {
         select: {
           ...CLASS_PRICE_SELECT,
           name: true,
+          description: true,
           kind: true,
           durationMinutes: true,
         },
       },
-      location: { select: { name: true } },
+      location: { select: { name: true, address: true } },
       instructor: { select: { name: true } },
-      _count: { select: { bookings: { where: { status: "CONFIRMED" } } } },
+      _count: { select: { bookings: { where: { status: 'CONFIRMED' } } } },
     },
   });
 }
 
-export default async function BookPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+function Notice({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="mx-auto w-full max-w-lg px-6 py-8 md:py-12">
+      <BackLink href="/book">Choose a class</BackLink>
+      <h1 className="t-h-lg text-headline mt-4">{title}</h1>
+      <p className="t-body-sm text-body mt-2">{body}</p>
+      <NextLink
+        href="/bookings"
+        className="t-body-sm-bold text-headline mt-4 inline-block underline underline-offset-4"
+      >
+        My classes
+      </NextLink>
+    </div>
+  );
+}
+
+/**
+ * A class page in the portal (Membership Portal design, Book): photo, the
+ * details, and "Book with 1 class ticket" (or the paid drop-in path for
+ * non-members and members out of tickets).
+ */
+export default async function BookPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
   const authSession = await auth();
-  if (!authSession?.user?.id) {
-    redirect(`/login?callbackUrl=/book/${id}`);
-  }
-
+  if (!authSession?.user?.id) redirect(`/login?callbackUrl=/book/${id}`);
   const userId = authSession.user.id;
+
   const studioSession = await getSession(id);
   if (!studioSession) notFound();
   const priceCents = resolveClassPriceCents({
@@ -51,122 +71,98 @@ export default async function BookPage({
 
   if (studioSession.isCancelled) {
     return (
-      <main className="mx-auto max-w-2xl px-4 py-10">
-        <div className="mb-6">
-          <BackLink href="/schedule">Schedule</BackLink>
-        </div>
-        <div className="rounded-lg border bg-card p-8 shadow-sm">
-          <h1 className="text-2xl font-bold">Session cancelled</h1>
-          <p className="mt-2 text-muted-foreground">
-            This session has been cancelled and is no longer available for
-            booking.
-          </p>
-        </div>
-      </main>
+      <Notice
+        title="This class was cancelled"
+        body="It can't be booked. Pick another from the list."
+      />
     );
   }
-
   if (studioSession.startsAt <= new Date()) {
     return (
-      <main className="mx-auto max-w-2xl px-4 py-10">
-        <div className="mb-6">
-          <BackLink href="/schedule">Schedule</BackLink>
-        </div>
-        <div className="rounded-lg border bg-card p-8 shadow-sm">
-          <h1 className="text-2xl font-bold">This session has started</h1>
-          <p className="mt-2 text-muted-foreground">
-            It can no longer be booked. Pick another time from the schedule.
-          </p>
-        </div>
-      </main>
+      <Notice
+        title="This class has started"
+        body="It can no longer be booked. Pick another time."
+      />
     );
   }
 
-  // Waiver check — the same per-location lookup the booking APIs enforce, so
-  // the page and the server never disagree about which waiver is required.
-  const unsignedWaiver = await findUnsignedWaiver(userId, studioSession.locationId, "CLASS", {
+  // Same per-studio waiver lookup the booking APIs enforce.
+  const unsignedWaiver = await findUnsignedWaiver(userId, studioSession.locationId, 'CLASS', {
     sessionTypeId: studioSession.sessionType.id,
     sessionKind: studioSession.sessionType.kind,
   });
-  if (unsignedWaiver) {
-    redirect(waiverSignUrl(unsignedWaiver.id, `/book/${id}`));
-  }
+  if (unsignedWaiver) redirect(waiverSignUrl(unsignedWaiver.id, `/book/${id}`));
 
-  // Duplicate booking check — show already-booked state
   const existingBooking = await prisma.booking.findFirst({
-    where: { userId, studioSessionId: id, status: { not: "CANCELLED" } },
-    select: { status: true },
+    where: { userId, studioSessionId: id, status: { not: 'CANCELLED' } },
+    select: { id: true, status: true },
   });
-
-  if (existingBooking) {
-    return (
-      <main className="mx-auto max-w-2xl px-4 py-10">
-        <div className="mb-6">
-          <BackLink href="/schedule">Schedule</BackLink>
-        </div>
-        <div className="rounded-lg border bg-card p-8 shadow-sm">
-          <h1 className="text-2xl font-bold">
-            {existingBooking.status === "CONFIRMED"
-              ? "You're already booked"
-              : "You're on the waitlist"}
-          </h1>
-          <p className="mt-2 text-muted-foreground">
-            {existingBooking.status === "CONFIRMED"
-              ? "You have a confirmed booking for this session."
-              : "You are on the waitlist for this session."}
-          </p>
-          <Link
-            href="/dashboard"
-            className="mt-4 inline-block text-sm underline underline-offset-4"
-          >
-            Go to dashboard
-          </Link>
-        </div>
-      </main>
-    );
-  }
 
   const activeMembership = await prisma.membership.findFirst({
-    where: {
-      userId,
-      status: "ACTIVE",
-      currentPeriodEnd: { gt: new Date() },
-    },
+    where: { userId, status: 'ACTIVE', currentPeriodEnd: { gt: new Date() } },
     select: { id: true },
   });
-
   const ticketBalance = activeMembership ? await getTicketBalance(activeMembership.id) : null;
+  const spotsRemaining = studioSession.capacity - studioSession._count.bookings;
 
-  const spotsRemaining =
-    studioSession.capacity - studioSession._count.bookings;
+  const { sessionType } = studioSession;
+  const title = studioSession.title ?? sessionType.name;
+  const address = studioSession.location?.address ?? studioSession.location?.name ?? null;
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
-      <div className="mb-6">
-        <BackLink href={`/schedule/${id}`}>Session details</BackLink>
-      </div>
-
-      <BookingForm
-        sessionId={id}
-        hasMembership={activeMembership !== null}
-        membershipUnlimited={ticketBalance?.unlimited ?? false}
-        ticketsRemaining={
-          ticketBalance && !ticketBalance.unlimited ? Math.max(0, ticketBalance.balance ?? 0) : null
-        }
-        ticketAllowance={ticketBalance && !ticketBalance.unlimited ? ticketBalance.allowance : null}
-        ticketsResetDate={
-          ticketBalance ? formatMountainTime(ticketBalance.periodEnd, "date") : null
-        }
-        dropInPriceCents={priceCents}
-        forSale={isSellable(studioSession.sessionType, priceCents)}
-        sessionName={studioSession.sessionType.name}
-        studioName={studioSession.location?.name ?? null}
-        sessionDate={formatMountainTime(studioSession.startsAt, "date")}
-        sessionTime={formatMountainTime(studioSession.startsAt, "time")}
-        instructorName={studioSession.instructor?.name ?? null}
-        durationMinutes={studioSession.sessionType.durationMinutes}
-        spotsRemaining={spotsRemaining}
+    <div className="mx-auto w-full max-w-lg md:py-8">
+      <SitePhoto
+        photo={sessionPhoto(sessionType)}
+        priority
+        sizes="(min-width: 768px) 512px, 100vw"
+        className="bg-fill aspect-[16/10] w-full md:rounded-2xl"
       />
-    </main>
+      <div className="px-6 py-6">
+        <div className="mb-4">
+          <BackLink href="/book">Choose a class</BackLink>
+        </div>
+        <SessionDetail
+          chip={
+            existingBooking ? (
+              <StatusChip tone={existingBooking.status === 'WAITLIST' ? 'grey' : 'sage'}>
+                {existingBooking.status === 'WAITLIST' ? 'On the waitlist' : 'Booked'}
+              </StatusChip>
+            ) : null
+          }
+          title={title}
+          kicker={sessionKicker(sessionType)}
+          instructor={studioSession.instructor?.name}
+          when={sessionWhen(studioSession.startsAt, studioSession.endsAt)}
+          address={address}
+          mapHref={studioSession.location?.address ? mapHref(studioSession.location.address) : null}
+          description={sessionType.description}
+        >
+          <div className="mt-8">
+            {existingBooking ? (
+              <NextLink
+                href={`/bookings/${existingBooking.id}`}
+                className="bg-sage flex h-12 w-full items-center justify-center rounded-full text-base font-bold text-white"
+              >
+                See my booking
+              </NextLink>
+            ) : (
+              <BookingForm
+                sessionId={id}
+                hasMembership={activeMembership !== null}
+                membershipUnlimited={ticketBalance?.unlimited ?? false}
+                ticketsRemaining={
+                  ticketBalance && !ticketBalance.unlimited
+                    ? Math.max(0, ticketBalance.balance ?? 0)
+                    : null
+                }
+                dropInPriceCents={priceCents}
+                forSale={isSellable(sessionType, priceCents)}
+                spotsRemaining={spotsRemaining}
+              />
+            )}
+          </div>
+        </SessionDetail>
+      </div>
+    </div>
   );
 }

@@ -1,10 +1,10 @@
-import { auth } from "@/auth";
-import { redirect, notFound } from "next/navigation";
-import Link from "next/link";
-import { prisma } from "@/lib/prisma";
-import { formatMountainTime } from "@/lib/timezone";
-import { TipForm } from "./_components/TipForm";
-import { BackLink } from "@/components/shared/BackLink";
+import { auth } from '@/auth';
+import { redirect, notFound } from 'next/navigation';
+import Link from 'next/link';
+import { prisma } from '@/lib/prisma';
+import { formatMountainTime } from '@/lib/timezone';
+import { TipForm } from './_components/TipForm';
+import { BackLink } from '@/components/shared/BackLink';
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -12,7 +12,7 @@ interface Props {
 
 export default async function TipPage({ params }: Props) {
   const session = await auth();
-  if (!session?.user?.id) redirect("/login");
+  if (!session?.user?.id) redirect('/login');
 
   const { id: bookingId } = await params;
 
@@ -48,9 +48,9 @@ export default async function TipPage({ params }: Props) {
     return (
       <main className="mx-auto max-w-md p-8">
         <BackLink href="/bookings">Bookings</BackLink>
-        <p className="text-sm text-muted-foreground">
-          No instructor was assigned to this session. Tips are only available when
-          an instructor is on file.
+        <p className="text-muted-foreground text-sm">
+          No instructor was assigned to this session. Tips are only available when an instructor is
+          on file.
         </p>
       </main>
     );
@@ -65,16 +65,13 @@ export default async function TipPage({ params }: Props) {
     return (
       <main className="mx-auto max-w-md p-8">
         <BackLink href="/bookings">Bookings</BackLink>
-        <div className="rounded-lg border bg-card p-6 text-center">
+        <div className="bg-card rounded-lg border p-6 text-center">
           <p className="text-2xl">💚</p>
           <p className="mt-2 font-semibold">You already left a tip for this class</p>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="text-muted-foreground mt-1 text-sm">
             Thank you for supporting {instructor.name}!
           </p>
-          <Link
-            href="/bookings"
-            className="mt-4 block text-sm underline underline-offset-4"
-          >
+          <Link href="/bookings" className="mt-4 block text-sm underline underline-offset-4">
             Back to bookings
           </Link>
         </div>
@@ -82,14 +79,14 @@ export default async function TipPage({ params }: Props) {
     );
   }
 
-  const sessionDate = formatMountainTime(studioSession.startsAt, "datetime");
+  const sessionDate = formatMountainTime(studioSession.startsAt, 'datetime');
 
   return (
     <main className="mx-auto max-w-md p-8">
       <BackLink href="/bookings">Bookings</BackLink>
       <TipForm
         bookingId={bookingId}
-        instructorName={instructor.name ?? "your instructor"}
+        instructorName={instructor.name ?? 'your instructor'}
         sessionName={studioSession.sessionType.name}
         sessionDate={sessionDate}
       />

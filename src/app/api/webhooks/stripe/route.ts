@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { configuredStripeAccounts, type StripeAccount } from "@/lib/stripe";
 import { defaultStudioLocationId } from "@/lib/locations";
+import { recordShopPurchase } from "@/lib/shop";
 
 export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
@@ -448,6 +449,12 @@ export async function POST(req: NextRequest) {
       typeof checkoutSession.payment_intent === "string"
         ? checkoutSession.payment_intent
         : (checkoutSession.payment_intent?.id ?? null);
+
+    if (metadata.type === "clay" || metadata.type === "firing") {
+      // ── Member portal purchase (clay bag, glaze firing) ─────────────
+      await recordShopPurchase(checkoutSession);
+      return NextResponse.json({ received: true });
+    }
 
     if (metadata.type === "tip") {
       // ── Tip payment ──────────────────────────────────────────────
