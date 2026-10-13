@@ -58,6 +58,15 @@ body {
   font-family: var(--font-satoshi), system-ui, -apple-system, sans-serif;
 }
 
+/* Why the marketing copy looked "lighter and skinnier than the Figma": MUI's
+   CssBaseline puts -webkit-font-smoothing: antialiased on <body>, and on macOS
+   that renders Satoshi noticeably thinner than Figma (which uses the OS
+   default). The public site opts back out; the admin/MUI surfaces keep it. */
+.site-text {
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    Marketing design system — "Design system (2).png"
 

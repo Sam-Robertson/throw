@@ -8,20 +8,21 @@ type Card = { key: string; instructor: Instructor; photo: React.ReactNode };
 
 /**
  * Horizontally-scrolling rail of instructor polaroids — white card, photo
- * inset with a wide bottom margin, serif name, details-grey experience line.
+ * inset, serif name underneath. Nothing else: the Oct 2026 review removed the
+ * "N yrs experience" line.
  *
- * The desktop design draws one card in an expanded state: it grows and swaps
- * the photo for a "Teaches" list and a "Fun fact". That is built here as a
- * hover/focus reveal, since it can only be an interaction state — several cards
- * are drawn collapsed alongside it. Touch devices get no expand (no hover), so
- * the card stays a plain polaroid on mobile, as drawn.
+ * On desktop, hovering (or focusing) a card lays "<Name> teaches" and a "Fun
+ * fact" over the photo, top-left aligned. The card keeps its size and the name
+ * stays exactly where it was, whichever face is showing — both asked for in
+ * the review. Touch devices get no reveal (no hover), so the card stays a plain
+ * polaroid on mobile, as drawn.
  */
 export function InstructorRail({ cards }: { cards: Card[] }) {
   const [openKey, setOpenKey] = useState<string | null>(null);
 
   return (
     <div
-      className="flex gap-4 overflow-x-auto px-6 pt-2 pb-8 md:gap-6 md:px-10 [&::-webkit-scrollbar]:hidden"
+      className="flex gap-4 overflow-x-auto px-6 pt-2 pb-8 md:gap-8 md:px-10 [&::-webkit-scrollbar]:hidden"
       style={{ scrollbarWidth: 'none' }}
     >
       {cards.map(({ key, instructor, photo }) => {
@@ -35,33 +36,36 @@ export function InstructorRail({ cards }: { cards: Card[] }) {
             onBlur={() => setOpenKey((k) => (k === key ? null : k))}
             tabIndex={0}
             className={cn(
-              'flex w-[264px] shrink-0 flex-col bg-white p-3 pb-6 shadow-[0_2px_10px_rgba(0,0,0,0.06)]',
-              'focus-visible:outline-sage transition-[width] duration-200 focus-visible:outline-2',
-              open && 'md:w-[300px]',
+              'flex w-[228px] shrink-0 flex-col bg-white p-4 pb-5 shadow-[0_2px_10px_rgba(0,0,0,0.06)]',
+              'focus-visible:outline-sage focus-visible:outline-2 md:w-[292px] md:p-6 md:pb-6',
             )}
           >
-            {open ? (
-              // Expanded face — text replaces the photo, name/experience stay.
-              <div className="flex aspect-[3/4] flex-col justify-center px-3">
-                <p className="t-body-sm-bold text-headline">Teaches</p>
+            {/* The photo always renders so the box never changes height; the
+                facts are laid over it rather than replacing it. */}
+            <div className="relative aspect-[3/4] w-full">
+              {photo}
+              <div
+                aria-hidden={!open}
+                className={cn(
+                  'absolute inset-0 hidden flex-col bg-white px-1 pt-10 text-left md:flex',
+                  open ? 'opacity-100' : 'pointer-events-none opacity-0',
+                  'transition-opacity duration-150',
+                )}
+              >
+                <p className="t-body-sm-bold text-headline">{instructor.name} teaches</p>
                 {instructor.teaches.map((t) => (
                   <p key={t} className="t-body-sm text-body">
                     {t}
                   </p>
                 ))}
-                <p className="t-body-sm-bold text-headline mt-5">Fun fact</p>
+                <p className="t-body-sm-bold text-headline mt-6">Fun fact</p>
                 <p className="t-body-sm text-body">{instructor.funFact}</p>
               </div>
-            ) : (
-              photo
-            )}
+            </div>
 
-            <h3 className="t-h-lg text-headline mt-4 text-center">
+            <h3 className="text-headline mt-4 text-center font-serif text-[28px] leading-none md:mt-5 md:text-[44px]">
               {instructor.name}
             </h3>
-            <p className="t-body-lg text-details text-center">
-              {instructor.experience}
-            </p>
           </article>
         );
       })}

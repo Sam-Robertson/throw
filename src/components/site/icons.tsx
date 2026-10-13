@@ -164,6 +164,25 @@ export function ArrowRight({ className }: { className?: string }) {
   );
 }
 
+/** Two overlapping squares: the copy-address button on the location cards. */
+export function CopyIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="8" y="8" width="13" height="13" rx="2.5" />
+      <path d="M16 8V5.5A2.5 2.5 0 0013.5 3h-8A2.5 2.5 0 003 5.5v8A2.5 2.5 0 005.5 16H8" />
+    </svg>
+  );
+}
+
 export function FacebookIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden className={className} fill="currentColor">

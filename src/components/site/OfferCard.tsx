@@ -4,12 +4,14 @@ import type { Photo } from '@/content/site';
 
 /**
  * The three offer cards below the hero: white card, 1px sage-stroke border,
- * generous corner radius, a cut-out product photo on white, then title (serif),
- * price (Satoshi bold), blurb (Satoshi regular), and a full-width primary
- * button pinned to the bottom.
+ * generous corner radius, a photo filling the top of the card, then title
+ * (serif), price (Satoshi bold), a one-line blurb (Satoshi regular), and a
+ * full-width primary button.
  *
- * Cards sit on the creme background and stretch to equal height so the buttons
- * line up across the row on desktop.
+ * Shortened in the Oct 2026 review ("these are too tall"): the photo is a
+ * landscape 4:3 crop flush with the card's top instead of a square cut-out on
+ * white, the copy is one line, and the spacing is tighter. Cards stretch to
+ * equal height so the buttons line up across the row on desktop.
  */
 export function OfferCard({
   title,
@@ -30,21 +32,16 @@ export function OfferCard({
     <article className="border-sage-stroke flex flex-col overflow-hidden rounded-[28px] border bg-white">
       <SitePhoto
         photo={photo}
-        fit="contain"
         sizes="(min-width: 768px) 33vw, 100vw"
-        className="aspect-square w-full bg-white"
+        className="bg-fill aspect-[4/3] w-full"
       />
 
-      <div className="flex flex-1 flex-col px-6 pb-6 text-center md:px-5">
+      <div className="flex flex-1 flex-col px-6 pt-5 pb-6 text-center">
         <h3 className="t-h-lg text-headline">{title}</h3>
-        <p className="t-body-sm-bold text-body mt-2 md:mt-1">{price}</p>
-        <p className="t-body-sm text-body mt-5 md:mt-3">{blurb}</p>
-        {/* Full-bleed within the card on mobile. On desktop all three cards use
-            the same 220px button regardless of label length — measured at 222,
-            221 and 220px across the three cards in Desktop.png — so it is a
-            fixed width there rather than padding around the text. */}
-        <div className="mt-auto pt-7 md:pt-5">
-          <Button href={href} block className="md:w-[220px]">
+        <p className="t-body-sm-bold text-body mt-1">{price}</p>
+        <p className="t-body-sm text-body mt-3">{blurb}</p>
+        <div className="mt-auto pt-5">
+          <Button href={href} block>
             {cta}
           </Button>
         </div>

@@ -84,9 +84,10 @@ export default async function AboutPage() {
         </Container>
       </Box>
 
-      {/* Find Us */}
+      {/* Find Us — the home page's location cards link here (#locations) */}
       <Box
         component="section"
+        id="locations"
         sx={{ bgcolor: md3.surfaceVariant, py: { xs: 8, md: 10 }, px: 3 }}
       >
         <Container maxWidth="md">

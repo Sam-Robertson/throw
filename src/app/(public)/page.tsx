@@ -1,6 +1,6 @@
 import { Button } from '@/components/site/Button';
 import { InstructorRail } from '@/components/site/InstructorRail';
-import { LocationCarousel } from '@/components/site/LocationCarousel';
+import { LocationCard } from '@/components/site/LocationCard';
 import { OfferCard } from '@/components/site/OfferCard';
 import { SitePhoto } from '@/components/site/SitePhoto';
 import { Star } from '@/components/site/icons';
@@ -10,17 +10,19 @@ import {
   INSTRUCTORS,
   LOCATIONS,
   OFFERS,
-  PHOTO_STRIP,
   RATING,
   REVIEWS,
 } from '@/content/site';
 
 /**
- * Marketing home page — built to "Home (1).png" (mobile) and "Desktop.png".
+ * Marketing home page — built to "Home (1).png" (mobile) and "Desktop.png",
+ * revised to the designer's Oct 2026 review ("Mobile Home screen NIts" 1 + 2):
+ * hero copy sits lower on desktop, shorter offer cards, location cards instead
+ * of carousels, a name-only instructor rail, tilted review cards on cream, and
+ * no photo strip above the footer.
  *
  * Mobile-first throughout. Where the two designs disagree on wording (hero CTA,
- * the events heading, the location CTAs and hours, the instructors heading),
- * both strings are rendered and toggled at `md` rather than picking one.
+ * the events heading), both strings are rendered and toggled at `md`.
  */
 
 function RatingLine({ className }: { className?: string }) {
@@ -32,6 +34,9 @@ function RatingLine({ className }: { className?: string }) {
     </p>
   );
 }
+
+// The review draws the three cards with a slight, alternating tilt.
+const REVIEW_TILTS = ['-rotate-2', 'rotate-[1.5deg]', '-rotate-1'];
 
 export default function HomePage() {
   return (
@@ -48,13 +53,13 @@ export default function HomePage() {
             scrim keeps it legible whatever crop the final image lands on. */}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 via-black/10 to-transparent" />
 
-        <div className="absolute inset-x-0 bottom-0 flex flex-col items-center px-6 pb-10 text-white md:pb-0 md:top-1/2 md:-translate-y-1/2 md:justify-center">
+        {/* Desktop: the review asked for the heading and CTA "down a touch"
+            from dead centre, so the block is centred on 58% rather than 50%. */}
+        <div className="absolute inset-x-0 bottom-0 flex flex-col items-center px-6 pb-10 text-white md:top-[58%] md:bottom-auto md:-translate-y-1/2 md:pb-0">
           {/* At 60px this wraps to "Learn to" / "throw" on a 402px frame and
               sits on one line from md up, matching both comps without a
               hard-coded break. */}
-          <h1 className="t-hero text-center">
-            {HERO.heading}
-          </h1>
+          <h1 className="t-hero text-center">{HERO.heading}</h1>
           <RatingLine className="mt-5 text-center md:mt-6" />
           <Button
             href={HERO.href}
@@ -75,8 +80,8 @@ export default function HomePage() {
       </section>
 
       {/* ── Offers ────────────────────────────────────────────────────────── */}
-      <section className="bg-cream px-6 py-14 md:px-10 md:py-24">
-        <div className="mx-auto grid w-full max-w-[1264px] gap-8 md:grid-cols-3 md:gap-10">
+      <section className="bg-cream px-6 py-12 md:px-10 md:py-20">
+        <div className="mx-auto grid w-full max-w-[1120px] gap-6 md:grid-cols-3 md:gap-8">
           {OFFERS.map((o) => (
             <OfferCard key={o.title} {...o} />
           ))}
@@ -118,32 +123,33 @@ export default function HomePage() {
       </section>
 
       {/* ── Locations ─────────────────────────────────────────────────────── */}
+      {/* Mobile heads the section "2 Locations" and scrolls the cards sideways;
+          desktop says "Locations" and sets them two across. */}
       <section className="pb-16 md:pb-24">
-        <h2 className="t-h-xl text-headline px-6 pb-10 text-center md:px-10 md:pb-14">
-          Locations
+        <h2 className="t-h-xl text-headline px-6 pb-8 text-center md:px-10 md:pb-12">
+          <span className="md:hidden">{LOCATIONS.length} Locations</span>
+          <span className="hidden md:inline">Locations</span>
         </h2>
-        <div className="mx-auto grid w-full max-w-[1264px] gap-16 md:grid-cols-2 md:gap-10 md:px-10">
+        <div
+          className="flex snap-x snap-mandatory gap-4 overflow-x-auto px-6 pb-2 md:mx-auto md:grid md:w-full md:max-w-[1040px] md:grid-cols-2 md:gap-10 md:overflow-visible md:px-10 md:pb-0 [&::-webkit-scrollbar]:hidden"
+          style={{ scrollbarWidth: 'none' }}
+        >
           {LOCATIONS.map((loc) => (
-            <LocationCarousel
+            <LocationCard
               key={loc.name}
               name={loc.name}
               address={loc.address}
+              fullAddress={loc.fullAddress}
               mapHref={loc.mapHref}
-              hoursMobile={loc.hoursMobile}
-              hoursDesktop={loc.hoursDesktop}
-              ctaMobile={loc.ctaMobile}
-              ctaDesktop={loc.ctaDesktop}
               href={loc.href}
-              slides={loc.photos.map((p) => ({
-                key: p.src,
-                node: (
-                  <SitePhoto
-                    photo={p}
-                    sizes="(min-width: 768px) 50vw, 100vw"
-                    className="aspect-[4/3] w-full md:rounded-[28px]"
-                  />
-                ),
-              }))}
+              className="w-[84vw] max-w-[340px] shrink-0 snap-center md:w-auto md:max-w-none"
+              photo={
+                <SitePhoto
+                  photo={loc.photo}
+                  sizes="(min-width: 768px) 480px, 84vw"
+                  className="bg-fill aspect-[11/10] w-full"
+                />
+              }
             />
           ))}
         </div>
@@ -151,11 +157,8 @@ export default function HomePage() {
 
       {/* ── Instructors ───────────────────────────────────────────────────── */}
       <section className="bg-cream py-14 md:py-20">
-        <h2 className="t-h-xl text-headline px-6 pb-8 text-center md:px-10 md:pb-12 md:hidden">
+        <h2 className="t-h-xl text-headline px-6 pb-8 text-center md:px-10 md:pb-12">
           Our instructors
-        </h2>
-        <h2 className="t-h-xl text-headline hidden px-10 pb-12 text-center md:block">
-          Meet our instructors
         </h2>
         <InstructorRail
           cards={INSTRUCTORS.map((i) => ({
@@ -164,8 +167,8 @@ export default function HomePage() {
             photo: (
               <SitePhoto
                 photo={i.photo}
-                sizes="264px"
-                className="aspect-[3/4] w-full"
+                sizes="(min-width: 768px) 244px, 196px"
+                className="bg-fill aspect-[3/4] w-full"
               />
             ),
           }))}
@@ -177,39 +180,23 @@ export default function HomePage() {
         <h2 className="t-h-xl text-headline text-center">Reviews</h2>
         <RatingLine className="text-headline mt-5 text-center md:mt-4" />
 
-        <div className="mx-auto mt-12 grid w-full max-w-[1264px] gap-16 md:mt-14 md:grid-cols-3 md:gap-10">
-          {REVIEWS.map((r) => (
-            <figure key={r.name} className="text-center">
-              <blockquote className="t-h-xl text-headline">
+        <div className="mx-auto mt-12 flex w-full max-w-[1120px] flex-col gap-8 md:mt-16 md:grid md:grid-cols-3 md:items-start md:gap-10">
+          {REVIEWS.map((r, i) => (
+            <figure
+              key={r.name}
+              className={`bg-cream rounded-[24px] px-7 py-8 text-center ${REVIEW_TILTS[i % REVIEW_TILTS.length]}`}
+            >
+              <blockquote className="text-headline text-[18px] leading-7 font-bold md:text-[17px]">
                 {r.quote}
               </blockquote>
-              <figcaption className="mt-7 md:mt-8">
-                <span className="t-body-lg-bold text-body block md:text-base">
-                  {r.name}
-                </span>
-                <span className="t-body-lg text-body mt-2 block md:mt-1 md:text-sm">
-                  {r.product}
-                </span>
+              <figcaption className="text-body mt-3 text-[14px] leading-6">
+                {r.name}
+                <span className="text-details mx-2">|</span>
+                {r.product}
               </figcaption>
             </figure>
           ))}
         </div>
-      </section>
-
-      {/* ── Community photo strip ─────────────────────────────────────────── */}
-      {/* Mobile draws a single row of two; desktop draws all four across. The
-          last two are dropped below md rather than wrapping to a second row. */}
-      <section aria-label="Life at the studio" className="grid grid-cols-2 md:grid-cols-4">
-        {PHOTO_STRIP.map((p, i) => (
-          <SitePhoto
-            key={p.src}
-            photo={p}
-            sizes="(min-width: 768px) 25vw, 50vw"
-            className={`aspect-square w-full md:aspect-[4/3] ${
-              i >= 2 ? 'hidden md:block' : ''
-            }`}
-          />
-        ))}
       </section>
     </>
   );

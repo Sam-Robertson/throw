@@ -1,15 +1,18 @@
 /**
  * Copy and imagery for the public marketing site.
  *
- * Everything the designs draw is fixed text — prices, hours, the instructor
- * roster, the review quotes. None of it comes from the database in the designs,
- * and there is no Instructor model, so it lives here as typed content rather
- * than behind a migration. Edit this file to change the marketing site.
+ * Everything the designs draw is fixed text — prices, the instructor roster,
+ * the review quotes. None of it comes from the database in the designs, and
+ * there is no Instructor model, so it lives here as typed content rather than
+ * behind a migration. Edit this file to change the marketing site.
  *
- * IMAGES: every `src` below points at /public/site/… . Those files are not in
- * the repo yet — see the asset list handed over with this work. Until they land,
- * <SitePhoto> renders a labelled placeholder in the right aspect ratio, so the
- * layout is correct and only the picture is missing.
+ * Updated 2026-10-13 to the designer's home page review ("Mobile Home screen
+ * NIts" 1 and 2): shorter offer cards with new copy, location cards, the
+ * instructor rail without the experience line, and the footer with Gift cards.
+ *
+ * IMAGES: every `src` below points at /public/site/… . Until a file lands,
+ * <SitePhoto> renders a placeholder in the right aspect ratio, so the layout is
+ * correct and only the picture is missing.
  */
 
 export type Photo = { src: string; alt: string };
@@ -22,13 +25,16 @@ export const RATING = { score: '5.0', count: '350+ Google ratings' };
 // have no design and no route yet, so those links point at the nearest real
 // page rather than 404ing from the site-wide nav and footer. Flagged for the
 // client — see the handover notes.
+//
+// The mobile menu design (Oct 2026) lists everything but Calendar, so that
+// entry is desktop-only.
 export const NAV_LINKS = [
-  { href: '/classes/drop-in', label: 'One time classes' },
-  { href: '/classes/kickstarter', label: '4 week courses' },
-  { href: '/membership', label: 'Memberships' },
-  { href: '/schedule', label: 'Kids camps' },
-  { href: '/classes/group-events', label: 'Group events' },
-  { href: '/schedule', label: 'Calendar' },
+  { href: '/classes/drop-in', label: 'One time classes', inMobileMenu: true },
+  { href: '/classes/kickstarter', label: '4 week courses', inMobileMenu: true },
+  { href: '/membership', label: 'Memberships', inMobileMenu: true },
+  { href: '/schedule', label: 'Kids camps', inMobileMenu: true },
+  { href: '/classes/group-events', label: 'Group events', inMobileMenu: true },
+  { href: '/schedule', label: 'Calendar', inMobileMenu: false },
 ] as const;
 
 export const HERO = {
@@ -41,21 +47,21 @@ export const HERO = {
   href: '/schedule',
 };
 
-/** The three offer cards under the hero. */
+/** The three offer cards under the hero. Copy per the Oct 2026 review. */
 export const OFFERS = [
   {
     title: 'One time class',
     price: '$40 + $8-12 per piece',
-    blurb: 'Give it a try! Perfect for date nights.',
+    blurb: 'Perfect for date nights.',
     cta: 'Book a class',
     href: '/classes/drop-in',
     photo: { src: '/site/offer-green-mug.png', alt: 'A green glazed mug' },
   },
   {
-    title: '4 week course',
+    title: 'Kickstart course',
     price: '$200 everything included',
-    blurb: 'Designed for beginners to learn the basics with lots of time for practice.',
-    cta: 'Book a course',
+    blurb: 'Learn the basics in this 4 week course',
+    cta: 'Book a 4 week course',
     href: '/classes/kickstarter',
     photo: {
       src: '/site/offer-checker-mug.png',
@@ -64,8 +70,8 @@ export const OFFERS = [
   },
   {
     title: 'Memberships',
-    price: 'Starts from $70 per month',
-    blurb: 'Create around your schedule with near 24/7 access',
+    price: 'From $70 per month',
+    blurb: 'Create around your schedule',
     cta: 'Start a membership',
     href: '/membership',
     photo: { src: '/site/offer-dark-vase.png', alt: 'A dark ribbed vase' },
@@ -79,6 +85,9 @@ export const EVENTS = {
   lines: ['Special pricing for groups of 8+', 'Birthdays, team building, and more.'],
   cta: 'Plan your event',
   href: '/classes/group-events',
+  // NOTE: the file in /public/site is a 300x162 screenshot with no
+  // transparency, which is why the orange reads too bright. Replace it with
+  // the designer's export (SVG or transparent PNG at 2x) under the same name.
   illustration: {
     src: '/site/illo-pot-trio.png',
     alt: 'Three pottery characters standing together',
@@ -87,105 +96,83 @@ export const EVENTS = {
 
 export type Location = {
   name: string;
+  /** As printed on the card (the design keeps it to one line). */
   address: string;
+  /** What the copy button puts on the clipboard. */
+  fullAddress: string;
   mapHref: string;
-  /** Mobile and desktop word the hours and CTA differently — both are kept. */
-  hoursMobile: string[];
-  hoursDesktop: string[];
-  ctaMobile: string;
-  ctaDesktop: string;
+  /** Where "See the space →" goes. */
   href: string;
-  photos: Photo[];
+  photo: Photo;
 };
 
 export const LOCATIONS: Location[] = [
   {
     name: 'Provo Studio',
-    address: '308 E 300 S, Provo, Ut',
-    mapHref: 'https://maps.google.com/?q=308+E+300+S+Provo+UT',
-    hoursMobile: ['6am-10pm Mon - Sat', 'Closed Sundays'],
-    hoursDesktop: ['6am-10pm Monday - Saturday', 'Closed Sundays'],
-    ctaMobile: 'Choose a class at provo',
-    ctaDesktop: 'Book at provo',
-    href: '/schedule?location=provo',
-    // Only photo 1 was recoverable from the comps; the design shows a
-    // five-slide carousel. Add studio-provo-2…5.jpg and extend this list.
-    photos: [1].map((n) => ({
-      src: `/site/studio-provo-${n}.jpg`,
-      alt: `Inside the Provo studio`,
-    })),
+    address: '308 E 300 S, Provo, UT 84606',
+    fullAddress: '308 E 300 S, Provo, UT 84606',
+    mapHref: 'https://maps.google.com/?q=308+E+300+S+Provo+UT+84606',
+    href: '/about#locations',
+    photo: { src: '/site/studio-provo-1.jpg', alt: 'Inside the Provo studio' },
   },
   {
     name: 'Lehi Studio',
-    // Both comps print a Provo street address on the Lehi card (desktop says
-    // "Provo, Ut" outright). The real address is the one on the Location record
-    // in the database, so that is used here rather than either drawing.
-    address: '4275 N Thanksgiving Way, Lehi, Ut',
-    mapHref: 'https://maps.google.com/?q=4275+N+Thanksgiving+Way+Lehi+UT',
-    hoursMobile: ['Opens in October!'],
-    hoursDesktop: ['Opening soon!', 'First class starts in October'],
-    ctaMobile: 'Join the waitlist',
-    ctaDesktop: 'Join the wait list',
-    href: 'mailto:info@throwartstudio.com?subject=Lehi%20studio%20waitlist',
-    // As above — add studio-lehi-2…5.jpg to restore the five-slide carousel.
-    photos: [1].map((n) => ({
-      src: `/site/studio-lehi-${n}.jpg`,
-      alt: `Inside the Lehi studio`,
-    })),
+    address: '4275 N Thanksgiving Way #400',
+    fullAddress: '4275 N Thanksgiving Way #400, Lehi, UT 84043',
+    mapHref: 'https://maps.google.com/?q=4275+N+Thanksgiving+Way+400+Lehi+UT+84043',
+    href: '/about#locations',
+    photo: { src: '/site/studio-lehi-1.jpg', alt: 'Inside the Lehi studio' },
   },
 ];
 
 export type Instructor = {
   name: string;
-  experience: string;
   teaches: string[];
   funFact: string;
   photo: Photo;
 };
 
-/** Desktop expands the hovered card to reveal `teaches` + `funFact`. */
+/**
+ * Desktop reveals `teaches` + `funFact` over the hovered card's photo. The
+ * review folds years of experience into the fun fact ("Has 4 years teaching
+ * experience and has won a hot dog eating contest") and drops the separate
+ * experience line.
+ */
 export const INSTRUCTORS: Instructor[] = [
   {
     name: 'Bob',
-    experience: '4 yrs experience',
     teaches: ['Drop in classes', '4 week courses'],
-    funFact: 'Has won a hot dog eating contest',
+    funFact: 'Has 4 years teaching experience and has won a hot dog eating contest',
     photo: { src: '/site/instructor-bob.jpg', alt: 'Bob' },
   },
   {
     name: 'Joan',
-    experience: '4 yrs experience',
     teaches: ['Drop in classes', '4 week courses'],
-    funFact: 'Has won a hot dog eating contest',
+    funFact: 'Has 4 years teaching experience and has won a hot dog eating contest',
     photo: { src: '/site/instructor-joan.jpg', alt: 'Joan' },
   },
   {
     name: 'Abby',
-    experience: '4 yrs experience',
     teaches: ['Drop in classes', '4 week courses'],
-    // The design reads "hot dot eating contest" — a typo for "hot dog".
-    funFact: 'Has won a hot dog eating contest',
+    funFact: 'Has 4 years teaching experience and has won a hot dog eating contest',
     photo: { src: '/site/instructor-abby.jpg', alt: 'Abby' },
   },
   {
     name: 'Billy',
-    experience: '4 yrs experience',
     teaches: ['Drop in classes', '4 week courses'],
-    funFact: 'Has won a hot dog eating contest',
+    funFact: 'Has 4 years teaching experience and has won a hot dog eating contest',
     photo: { src: '/site/instructor-billy.jpg', alt: 'Billy' },
   },
   {
     name: 'Trey',
-    experience: '2 yrs experience',
     teaches: ['Drop in classes', '4 week courses'],
-    funFact: 'Has won a hot dog eating contest',
+    funFact: 'Has 2 years teaching experience and has won a hot dog eating contest',
     photo: { src: '/site/instructor-trey.jpg', alt: 'Trey' },
   },
   {
     name: 'Sam',
-    experience: '4 yrs pottery experience',
     teaches: ['Drop in classes', '4 week courses'],
-    funFact: 'Has won a hot dog eating contest',
+    funFact: 'Has 4 years pottery experience and has won a hot dog eating contest',
     photo: { src: '/site/instructor-sam.jpg', alt: 'Sam' },
   },
 ];
@@ -204,14 +191,6 @@ export const REVIEWS = [
   },
 ] as const;
 
-/** Edge-to-edge photo band above the footer. Mobile shows 2, desktop 4. */
-export const PHOTO_STRIP: Photo[] = [
-  { src: '/site/community-1.jpg', alt: 'Two students in the studio' },
-  { src: '/site/community-2.jpg', alt: 'A group class at the wheel' },
-  { src: '/site/community-3.jpg', alt: 'A kids camp group photo' },
-  { src: '/site/community-4.jpg', alt: 'Hands shaping a mug handle' },
-];
-
 export const FOOTER_COLUMNS = [
   {
     heading: 'Learn to throw',
@@ -221,6 +200,8 @@ export const FOOTER_COLUMNS = [
       { href: '/membership', label: 'Memberships' },
       { href: '/schedule', label: 'Kid camps' },
       { href: '/classes/group-events', label: 'Group events' },
+      // Gift cards are sold at the front desk; there is no page for them yet.
+      { href: 'mailto:info@throwartstudio.com?subject=Gift%20cards', label: 'Gift cards' },
     ],
   },
   {

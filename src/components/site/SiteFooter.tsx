@@ -3,16 +3,16 @@ import { CONTACT, FOOTER_COLUMNS } from '@/content/site';
 import { FacebookIcon, InstagramIcon, TikTokIcon } from './icons';
 
 /**
- * Sage footer.
+ * Sage footer, to the designer's Oct 2026 review.
  *
- * Section headings are GT Alpina in a pale sage tint; links are Satoshi bold in
- * white. Mobile stacks Learn / About us / Connect / Other in a single column;
- * desktop puts the wordmark on the left and four columns on the right in the
- * order Learn / Connect / About us / Other — both taken from their own design.
+ * Section headings are small uppercase letter-spaced Satoshi bold in white;
+ * links are Satoshi bold in white. Mobile stacks Learn / About us / Connect /
+ * Other in a single column under the wordmark; desktop puts the wordmark on
+ * the left and four columns on the right in the order Learn / Connect / About
+ * us / Other.
  *
- * The four class-page designs show an older footer (uppercase Satoshi headings,
- * a "throw." wordmark with a period). Confirmed with the client that the Home
- * version shown here is the current one, so it is used site-wide.
+ * The design uses the studio's swashy white "throw" logotype, which has not
+ * been supplied as an SVG; the serif wordmark stands in at the same size.
  */
 
 const CONNECT_HEADING = 'Connect';
@@ -22,26 +22,22 @@ export function SiteFooter() {
 
   return (
     <footer className="bg-sage text-white">
-      <div className="mx-auto w-full max-w-[1568px] px-6 py-14 md:px-10 md:py-20">
-        {/* Wordmark. The design uses a swashy white "throw" logotype; until that
-            SVG arrives this is the serif wordmark at the same weight/size. */}
+      <div className="mx-auto w-full max-w-[1568px] px-6 py-12 md:px-10 md:py-16">
         <NextLink
           href="/"
-          className="mb-14 inline-block font-serif text-[44px] leading-none md:mb-0 md:text-[56px]"
+          className="mb-12 inline-block font-serif text-[40px] leading-none tracking-[-0.02em] md:mb-0 md:text-[52px]"
         >
           throw
         </NextLink>
 
-        <div className="md:-mt-16 md:flex md:justify-end">
-          <div className="flex flex-col gap-12 md:grid md:grid-cols-4 md:gap-x-12 md:gap-y-0">
+        <div className="md:-mt-14 md:flex md:justify-end">
+          <div className="flex flex-col gap-11 md:grid md:grid-cols-[auto_auto_auto_auto] md:gap-x-14 md:gap-y-0">
             <FooterColumn heading={learn.heading} links={learn.links} />
 
             {/* Connect — mobile draws it third, desktop second. */}
             <div className="order-3 md:order-none">
-              <h2 className="mb-6 font-serif text-[28px] leading-none text-white/45">
-                {CONNECT_HEADING}
-              </h2>
-              <div className="flex flex-col gap-5">
+              <FooterHeading>{CONNECT_HEADING}</FooterHeading>
+              <div className="flex flex-col gap-4">
                 <a
                   href={`mailto:${CONTACT.email}`}
                   className="t-body-sm-bold transition-opacity hover:opacity-70"
@@ -54,7 +50,7 @@ export function SiteFooter() {
                 >
                   {CONTACT.phone}
                 </a>
-                <div className="flex items-center gap-5">
+                <div className="flex items-center gap-5 pt-1">
                   <a href={CONTACT.facebook} aria-label="Throw on Facebook">
                     <FacebookIcon className="size-7 transition-opacity hover:opacity-70" />
                   </a>
@@ -81,6 +77,10 @@ export function SiteFooter() {
   );
 }
 
+function FooterHeading({ children }: { children: React.ReactNode }) {
+  return <h2 className="t-eyebrow mb-5 text-white">{children}</h2>;
+}
+
 function FooterColumn({
   heading,
   links,
@@ -90,10 +90,8 @@ function FooterColumn({
 }) {
   return (
     <div>
-      <h2 className="mb-6 font-serif text-[28px] leading-none text-white/45">
-        {heading}
-      </h2>
-      <div className="flex flex-col gap-5">
+      <FooterHeading>{heading}</FooterHeading>
+      <div className="flex flex-col gap-4">
         {links.map((l) => (
           <NextLink
             key={l.href}

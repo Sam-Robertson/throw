@@ -13,10 +13,12 @@ export default async function PublicLayout({
     : null;
 
   return (
-    <>
+    // .site-text restores the OS default font smoothing for the marketing
+    // site (globals.css) so Satoshi renders at the weight the designs show.
+    <div className="site-text">
       <SiteNav user={user} />
       <main>{children}</main>
       <SiteFooter />
-    </>
+    </div>
   );
 }
