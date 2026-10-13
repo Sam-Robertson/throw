@@ -2,9 +2,10 @@
  * The four class/event pages: Drop in class, Date night, Group events,
  * Kickstarter (4 week course).
  *
- * All four share one layout — hero, steps, "What you'll make", a details block,
- * instructors, reviews, FAQs, a product row and a sticky book bar — so they are
- * described as data here and rendered by <ClassPage>. Sections that only some
+ * All four share one layout (Oct 2026 "Drop in class" design) — title, steps,
+ * a details card beside the class photo, "What you'll make", instructors,
+ * reviews and FAQs — so they are described as data here and rendered by
+ * <ClassPage>. `hero` is the photo beside the details card. Sections that only some
  * pages have (the Kickstarter pick-up row, the Group events "Doing something
  * special?" band, the Drop-in group CTA) are optional fields.
  *
