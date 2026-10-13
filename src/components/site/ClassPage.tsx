@@ -345,7 +345,7 @@ export function ClassPage({ page }: { page: ClassPageData }) {
         <div className="mx-auto max-w-[760px]">
           <SitePhoto
             photo={{
-              src: '/site/illo-pot-faq.png',
+              src: '/site/illo-pot-faq.svg',
               alt: 'A pottery character holding a list',
             }}
             fit="contain"

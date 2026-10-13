@@ -44,10 +44,23 @@ export function SitePhoto({
   priority = false,
 }: Props) {
   const has = exists(photo.src);
+  // next/image won't serve SVG through the optimizer, and the designer's
+  // illustrations are vector, so those go out as a plain <img>.
+  const isSvg = photo.src.endsWith('.svg');
 
   return (
     <div className={cn('relative overflow-hidden', className)}>
-      {has ? (
+      {has && isSvg ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={photo.src}
+          alt={photo.alt}
+          className={cn(
+            'absolute inset-0 h-full w-full',
+            fit === 'cover' ? 'object-cover' : 'object-contain',
+          )}
+        />
+      ) : has ? (
         <Image
           src={photo.src}
           alt={photo.alt}

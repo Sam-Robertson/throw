@@ -262,7 +262,7 @@ export const CLASS_PAGES: ClassPage[] = [
       heading: 'Doing something special?',
       body: 'Let us know and we’ll see if we can make it happen',
       illustration: {
-        src: '/site/illo-pot-daisy.png',
+        src: '/site/illo-pot-daisy.svg',
         alt: 'A sage pottery character with a daisy',
       },
     },
