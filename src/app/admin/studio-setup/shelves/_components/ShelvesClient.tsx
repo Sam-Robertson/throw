@@ -269,7 +269,7 @@ export function ShelvesClient() {
   return (
     <Box sx={{ p: { xs: 3, md: 4 } }}>
       <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
-        <Typography variant="h2" sx={{ fontWeight: 700 }}>
+        <Typography variant="h2">
           Shelf Spaces
         </Typography>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>

@@ -788,7 +788,7 @@ export default function DashboardPage() {
           </>
         ) : (
           <>
-            <Typography variant="h3" sx={{ fontWeight: 700, letterSpacing: '-0.02em', mb: 0.5 }}>
+            <Typography variant="h3" sx={{ letterSpacing: '-0.02em', mb: 0.5 }}>
               {greeting()}, {firstName(data?.user.name ?? null, data?.user.email ?? '')}
             </Typography>
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>{today}</Typography>

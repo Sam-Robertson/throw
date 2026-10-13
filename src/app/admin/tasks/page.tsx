@@ -459,7 +459,7 @@ export default function AdminTasksPage() {
     <Box sx={{ p: { xs: 3, md: 4 } }}>
       {/* ── Header ── */}
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-        <Typography variant="h2" sx={{ fontWeight: 700 }}>Staff tasks</Typography>
+        <Typography variant="h2">Staff tasks</Typography>
         <Button variant="contained" startIcon={<AddIcon />} onClick={openNew}>
           Add task
         </Button>

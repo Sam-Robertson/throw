@@ -9,7 +9,7 @@ export const metadata = { title: 'Unsubscribed — Throw' };
 export default function UnsubscribedPage() {
   return (
     <Container maxWidth="sm" sx={{ py: { xs: 8, md: 10 }, px: 3, textAlign: 'center' }}>
-      <Typography variant="h2" sx={{ fontWeight: 700, mb: 2 }}>
+      <Typography variant="h2" sx={{ mb: 2 }}>
         You&apos;ve been unsubscribed
       </Typography>
       <Typography color="text.secondary" sx={{ mb: 1 }}>

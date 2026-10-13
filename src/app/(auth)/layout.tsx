@@ -1,5 +1,5 @@
 import { auth } from "@/auth";
-import { PublicNav } from "@/components/shared/PublicNav";
+import { SiteNav } from "@/components/site/SiteNav";
 
 export default async function AuthLayout({
   children,
@@ -12,9 +12,9 @@ export default async function AuthLayout({
     : null;
 
   return (
-    <>
-      <PublicNav user={user} />
+    <div className="site-text">
+      <SiteNav user={user} />
       <main>{children}</main>
-    </>
+    </div>
   );
 }

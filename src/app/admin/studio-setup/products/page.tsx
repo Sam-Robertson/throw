@@ -402,7 +402,7 @@ export default function ProductsPage() {
     <Box sx={{ p: { xs: 3, md: 4 } }}>
       {/* ── Header ── */}
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-        <Typography variant="h2" sx={{ fontWeight: 700 }}>Products</Typography>
+        <Typography variant="h2">Products</Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}

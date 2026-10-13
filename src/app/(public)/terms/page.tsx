@@ -13,7 +13,7 @@ const CONTACT_EMAIL = 'info@throwartstudio.com';
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <Box component="section" sx={{ mb: 5 }}>
-      <Typography variant="h2" sx={{ fontWeight: 700, fontSize: '1.35rem', mb: 1.5 }}>
+      <Typography variant="h2" sx={{ fontSize: '1.35rem', mb: 1.5 }}>
         {title}
       </Typography>
       {children}

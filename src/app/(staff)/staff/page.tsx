@@ -126,7 +126,7 @@ export default async function StaffPage() {
     <Container maxWidth="md" sx={{ py: 5, px: { xs: 3, md: 4 } }}>
       {/* Header */}
       <Box sx={{ mb: 5 }}>
-        <Typography variant="h2" sx={{ fontWeight: 700 }}>
+        <Typography variant="h2">
           {greeting(nowMT.getHours())}, {firstName}
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
@@ -211,7 +211,7 @@ export default async function StaffPage() {
           <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3 }}>
             <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 2 }}>
               <Box>
-                <Typography variant="h3" sx={{ fontWeight: 700 }}>
+                <Typography variant="h3">
                   {(tipSummary.totalAmountCents / 100).toLocaleString("en-US", {
                     style: "currency",
                     currency: "USD",

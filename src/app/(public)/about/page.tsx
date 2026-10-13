@@ -61,7 +61,7 @@ export default async function AboutPage() {
       {/* What We Offer */}
       <Box component="section" sx={{ py: { xs: 8, md: 10 }, px: 3 }}>
         <Container maxWidth="md">
-          <Typography variant="h2" sx={{ mb: 4, fontWeight: 700 }}>
+          <Typography variant="h2" sx={{ mb: 4 }}>
             What We Offer
           </Typography>
           <Stack spacing={3}>
@@ -91,7 +91,7 @@ export default async function AboutPage() {
         sx={{ bgcolor: md3.surfaceVariant, py: { xs: 8, md: 10 }, px: 3 }}
       >
         <Container maxWidth="md">
-          <Typography variant="h2" sx={{ mb: 4, fontWeight: 700 }}>
+          <Typography variant="h2" sx={{ mb: 4 }}>
             Find Us
           </Typography>
           <Box sx={{ mb: 4 }}>
@@ -144,7 +144,7 @@ export default async function AboutPage() {
       {/* CTA */}
       <Box component="section" sx={{ py: { xs: 8, md: 10 }, px: 3, textAlign: 'center' }}>
         <Container maxWidth="sm">
-          <Typography variant="h2" sx={{ mb: 2, fontWeight: 700 }}>
+          <Typography variant="h2" sx={{ mb: 2 }}>
             Ready to get your hands dirty?
           </Typography>
           <Typography color="text.secondary" sx={{ mb: 4 }}>

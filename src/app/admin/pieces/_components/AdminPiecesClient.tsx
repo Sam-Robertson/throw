@@ -320,7 +320,7 @@ export function AdminPiecesClient() {
     <Box sx={{ p: { xs: 2, md: 4 } }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2, flexWrap: "wrap" }}>
         <Box>
-          <Typography variant="h2" sx={{ fontWeight: 700 }}>
+          <Typography variant="h2">
             Pieces
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>

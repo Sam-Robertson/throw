@@ -112,7 +112,7 @@ export function SuppressionsClient() {
   return (
     <Box sx={{ p: { xs: 3, md: 4 } }}>
       <Box sx={{ mb: 3 }}>
-        <Typography variant="h2" sx={{ fontWeight: 700 }}>
+        <Typography variant="h2">
           Suppressions
         </Typography>
         <Typography variant="body2" color="text.secondary">

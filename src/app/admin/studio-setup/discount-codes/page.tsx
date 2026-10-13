@@ -423,7 +423,7 @@ export default function DiscountCodesPage() {
       {/* ── Header ── */}
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
         <Box>
-          <Typography variant="h2" sx={{ fontWeight: 700 }}>Discounts</Typography>
+          <Typography variant="h2">Discounts</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             Promo codes, staff discounts and automatic member discounts. They apply in the POS and at online class
             checkout. Sales tax is worked out after the discount.

@@ -1,17 +1,14 @@
-import { auth } from "@/auth";
-import { redirect } from "next/navigation";
-import Box from "@mui/material/Box";
-import { AdminNav, DRAWER_WIDTH } from "./_components/AdminNav";
-import { InboxCountProvider } from "./_components/InboxCountContext";
-import { LocationFilterProvider } from "./_components/LocationFilterContext";
+import { auth } from '@/auth';
+import { redirect } from 'next/navigation';
+import Box from '@mui/material/Box';
+import { md3 } from '@/lib/theme';
+import { AdminNav, DRAWER_WIDTH } from './_components/AdminNav';
+import { InboxCountProvider } from './_components/InboxCountContext';
+import { LocationFilterProvider } from './_components/LocationFilterContext';
 
-export default async function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
-  if (!session) redirect("/login");
+  if (!session) redirect('/login');
 
   return (
     <InboxCountProvider>
@@ -19,7 +16,7 @@ export default async function AdminLayout({
         role={session.user.role}
         assignedLocationIds={session.user.locationIds}
       >
-        <Box sx={{ display: "flex", minHeight: "100vh" }}>
+        <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: md3.background }}>
           <AdminNav />
           <Box
             component="main"

@@ -75,7 +75,7 @@ export default function AdminCustomersPage() {
   return (
     <Box sx={{ p: { xs: 3, md: 4 } }}>
       <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography variant="h2" sx={{ fontWeight: 700 }}>Customers</Typography>
+        <Typography variant="h2">Customers</Typography>
         <Typography variant="body2" color="text.secondary">{total} total</Typography>
       </Box>
 

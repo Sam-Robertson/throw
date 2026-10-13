@@ -47,7 +47,7 @@ export default async function PiecesPage({
       <BackLink href="/dashboard">Dashboard</BackLink>
       <Box sx={{ mb: 4, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 2, flexWrap: "wrap" }}>
         <Box>
-          <Typography variant="h2" sx={{ fontWeight: 700 }}>
+          <Typography variant="h2">
             My pieces
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>

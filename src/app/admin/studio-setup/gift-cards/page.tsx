@@ -120,7 +120,7 @@ export default function GiftCardsPage() {
     <Box sx={{ p: { xs: 3, md: 4 } }}>
       <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h2" sx={{ fontWeight: 700 }}>Gift Cards</Typography>
+          <Typography variant="h2">Gift Cards</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             Issue and manage gift cards for the studio.
           </Typography>

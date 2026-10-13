@@ -387,7 +387,7 @@ export default function ClassTypesPage() {
     <Box sx={{ p: { xs: 3, md: 4 } }}>
       <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h2" sx={{ fontWeight: 700 }}>
+          <Typography variant="h2">
             Class Types
           </Typography>
           <Typography variant="body2" color="text.secondary">

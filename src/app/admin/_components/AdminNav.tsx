@@ -62,8 +62,42 @@ import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
 import WebOutlinedIcon from '@mui/icons-material/WebOutlined';
 
 import { md3 } from '@/lib/theme';
+import { Wordmark } from '@/components/site/Logo';
 
 export const DRAWER_WIDTH = 240;
+
+/** The studio's logotype with a quiet "Admin" beside it, as the sidebar and mobile bar heading. */
+function AdminWordmark({ onClick, sx }: { onClick?: () => void; sx?: object }) {
+  return (
+    <Box
+      component={NextLink}
+      href="/admin"
+      onClick={onClick}
+      aria-label="Throw admin — home"
+      sx={{
+        display: 'flex',
+        alignItems: 'baseline',
+        gap: 1,
+        color: '#000',
+        textDecoration: 'none',
+        ...sx,
+      }}
+    >
+      <Wordmark className="h-6 w-auto" />
+      <Typography
+        component="span"
+        sx={{
+          fontSize: '0.8125rem',
+          fontWeight: 700,
+          color: 'text.secondary',
+          letterSpacing: '0.04em',
+        }}
+      >
+        Admin
+      </Typography>
+    </Box>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -121,15 +155,37 @@ const MAIN_NAV: NavSection[] = [
   {
     label: 'Overview',
     items: [
-      { kind: 'link', href: '/admin', label: 'Dashboard', icon: <DashboardOutlinedIcon fontSize="small" />, exact: true },
-      { kind: 'link', href: '/admin/inbox', label: 'Inbox', icon: <MoveToInboxOutlinedIcon fontSize="small" />, badgeKey: 'inbox' },
+      {
+        kind: 'link',
+        href: '/admin',
+        label: 'Dashboard',
+        icon: <DashboardOutlinedIcon fontSize="small" />,
+        exact: true,
+      },
+      {
+        kind: 'link',
+        href: '/admin/inbox',
+        label: 'Inbox',
+        icon: <MoveToInboxOutlinedIcon fontSize="small" />,
+        badgeKey: 'inbox',
+      },
     ],
   },
   {
     label: 'Manage',
     items: [
-      { kind: 'link', href: '/admin/schedule',    label: 'Schedule',    icon: <CalendarMonthOutlinedIcon fontSize="small" /> },
-      { kind: 'link', href: '/admin/class-types',  label: 'Class Types', icon: <StyleOutlinedIcon fontSize="small" /> },
+      {
+        kind: 'link',
+        href: '/admin/schedule',
+        label: 'Schedule',
+        icon: <CalendarMonthOutlinedIcon fontSize="small" />,
+      },
+      {
+        kind: 'link',
+        href: '/admin/class-types',
+        label: 'Class Types',
+        icon: <StyleOutlinedIcon fontSize="small" />,
+      },
 
       // ── Customers flyout ──────────────────────────────────────────────
       {
@@ -141,21 +197,42 @@ const MAIN_NAV: NavSection[] = [
           {
             label: 'CRM',
             items: [
-              { href: '/admin/customers', label: 'Customer List', icon: <PeopleOutlinedIcon fontSize="small" />, exact: true },
+              {
+                href: '/admin/customers',
+                label: 'Customer List',
+                icon: <PeopleOutlinedIcon fontSize="small" />,
+                exact: true,
+              },
             ],
           },
           {
             label: 'ORGANIZATION',
             items: [
-              { href: '/admin/customers/tags',  label: 'Tags',  icon: <LabelOutlinedIcon fontSize="small" /> },
-              { href: '/admin/customers/notes', label: 'Notes', icon: <ArticleOutlinedIcon fontSize="small" /> },
+              {
+                href: '/admin/customers/tags',
+                label: 'Tags',
+                icon: <LabelOutlinedIcon fontSize="small" />,
+              },
+              {
+                href: '/admin/customers/notes',
+                label: 'Notes',
+                icon: <ArticleOutlinedIcon fontSize="small" />,
+              },
             ],
           },
           {
             label: 'SET-UP',
             items: [
-              { href: '/admin/customers/payment-plans',   label: 'Payment Plans',      icon: <CreditCardOutlinedIcon fontSize="small" /> },
-              { href: '/admin/customers/custom-fields',   label: 'Custom Info Fields', icon: <ListAltOutlinedIcon fontSize="small" /> },
+              {
+                href: '/admin/customers/payment-plans',
+                label: 'Payment Plans',
+                icon: <CreditCardOutlinedIcon fontSize="small" />,
+              },
+              {
+                href: '/admin/customers/custom-fields',
+                label: 'Custom Info Fields',
+                icon: <ListAltOutlinedIcon fontSize="small" />,
+              },
             ],
           },
         ],
@@ -166,33 +243,73 @@ const MAIN_NAV: NavSection[] = [
         kind: 'flyout',
         label: 'Memberships',
         icon: <CardMembershipOutlinedIcon fontSize="small" />,
-        isActive: (p) => p.startsWith('/admin/memberships') || p.startsWith('/admin/membership-plans'),
+        isActive: (p) =>
+          p.startsWith('/admin/memberships') || p.startsWith('/admin/membership-plans'),
         groups: [
           {
             items: [
-              { href: '/admin/membership-plans', label: 'Subscriptions & Packs', icon: <CardMembershipOutlinedIcon fontSize="small" /> },
-              { href: '/admin/memberships',       label: 'Active Memberships',    icon: <GroupOutlinedIcon fontSize="small" />, exact: true },
+              {
+                href: '/admin/membership-plans',
+                label: 'Subscriptions & Packs',
+                icon: <CardMembershipOutlinedIcon fontSize="small" />,
+              },
+              {
+                href: '/admin/memberships',
+                label: 'Active Memberships',
+                icon: <GroupOutlinedIcon fontSize="small" />,
+                exact: true,
+              },
             ],
           },
         ],
       },
 
-      { kind: 'link', href: '/admin/waivers', label: 'Waivers', icon: <GavelOutlinedIcon fontSize="small" /> },
-      { kind: 'link', href: '/admin/pieces', label: 'Pieces', icon: <Inventory2OutlinedIcon fontSize="small" /> },
+      {
+        kind: 'link',
+        href: '/admin/waivers',
+        label: 'Waivers',
+        icon: <GavelOutlinedIcon fontSize="small" />,
+      },
+      {
+        kind: 'link',
+        href: '/admin/pieces',
+        label: 'Pieces',
+        icon: <Inventory2OutlinedIcon fontSize="small" />,
+      },
     ],
   },
   {
     label: 'Content',
     items: [
-      { kind: 'link', href: '/admin/community',     label: 'Community',     icon: <ForumOutlinedIcon fontSize="small" /> },
-      { kind: 'link', href: '/admin/landing-pages', label: 'Landing Pages', icon: <WebOutlinedIcon fontSize="small" /> },
+      {
+        kind: 'link',
+        href: '/admin/community',
+        label: 'Community',
+        icon: <ForumOutlinedIcon fontSize="small" />,
+      },
+      {
+        kind: 'link',
+        href: '/admin/landing-pages',
+        label: 'Landing Pages',
+        icon: <WebOutlinedIcon fontSize="small" />,
+      },
     ],
   },
   {
     label: 'Business',
     items: [
-      { kind: 'link', href: '/admin/reports', label: 'Reports', icon: <BarChartOutlinedIcon fontSize="small" /> },
-      { kind: 'link', href: '/admin/tips', label: 'Tips', icon: <PaidOutlinedIcon fontSize="small" /> },
+      {
+        kind: 'link',
+        href: '/admin/reports',
+        label: 'Reports',
+        icon: <BarChartOutlinedIcon fontSize="small" />,
+      },
+      {
+        kind: 'link',
+        href: '/admin/tips',
+        label: 'Tips',
+        icon: <PaidOutlinedIcon fontSize="small" />,
+      },
     ],
   },
 ];
@@ -202,37 +319,81 @@ const STUDIO_SETUP_GROUPS: FlyoutGroup[] = [
   {
     label: 'STAFF',
     items: [
-      { href: '/admin/studio-setup/instructors', label: 'Instructors', icon: <PersonOutlinedIcon fontSize="small" /> },
-      { href: '/admin/tasks',                     label: 'Staff Tasks', icon: <ChecklistOutlinedIcon fontSize="small" /> },
-      { href: '/admin/studio-setup/roles',        label: 'Roles & Permissions', icon: <AdminPanelSettingsOutlinedIcon fontSize="small" /> },
-      { href: '/admin/studio-setup/shelves',      label: 'Shelf Spaces', icon: <Inventory2OutlinedIcon fontSize="small" /> },
+      {
+        href: '/admin/studio-setup/instructors',
+        label: 'Instructors',
+        icon: <PersonOutlinedIcon fontSize="small" />,
+      },
+      {
+        href: '/admin/tasks',
+        label: 'Staff Tasks',
+        icon: <ChecklistOutlinedIcon fontSize="small" />,
+      },
+      {
+        href: '/admin/studio-setup/roles',
+        label: 'Roles & Permissions',
+        icon: <AdminPanelSettingsOutlinedIcon fontSize="small" />,
+      },
+      {
+        href: '/admin/studio-setup/shelves',
+        label: 'Shelf Spaces',
+        icon: <Inventory2OutlinedIcon fontSize="small" />,
+      },
     ],
   },
   {
     label: 'RETAIL',
     items: [
-      { href: '/admin/studio-setup/products', label: 'Products', icon: <StorefrontOutlinedIcon fontSize="small" /> },
+      {
+        href: '/admin/studio-setup/products',
+        label: 'Products',
+        icon: <StorefrontOutlinedIcon fontSize="small" />,
+      },
     ],
   },
   {
     label: 'PROMOS',
     items: [
-      { href: '/admin/studio-setup/discount-codes', label: 'Discount Codes', icon: <LocalOfferOutlinedIcon fontSize="small" /> },
-      { href: '/admin/studio-setup/gift-cards',     label: 'Gift Cards',     icon: <CardGiftcardOutlinedIcon fontSize="small" /> },
+      {
+        href: '/admin/studio-setup/discount-codes',
+        label: 'Discount Codes',
+        icon: <LocalOfferOutlinedIcon fontSize="small" />,
+      },
+      {
+        href: '/admin/studio-setup/gift-cards',
+        label: 'Gift Cards',
+        icon: <CardGiftcardOutlinedIcon fontSize="small" />,
+      },
     ],
   },
   {
     label: 'MESSAGING',
     items: [
-      { href: '/admin/studio-setup/templates', label: 'Templates', icon: <MailOutlinedIcon fontSize="small" /> },
-      { href: '/admin/studio-setup/suppressions', label: 'Suppressions', icon: <BlockOutlinedIcon fontSize="small" /> },
+      {
+        href: '/admin/studio-setup/templates',
+        label: 'Templates',
+        icon: <MailOutlinedIcon fontSize="small" />,
+      },
+      {
+        href: '/admin/studio-setup/suppressions',
+        label: 'Suppressions',
+        icon: <BlockOutlinedIcon fontSize="small" />,
+      },
     ],
   },
   {
     label: 'LOCATIONS',
     items: [
-      { href: '/admin/studio-setup/locations', label: 'Locations', icon: <LocationOnOutlinedIcon fontSize="small" /> },
-      { href: '/admin/studio-setup/card-readers', label: 'Card Readers', icon: <PointOfSaleOutlinedIcon fontSize="small" /> },
+      {
+        href: '/admin/studio-setup/locations',
+        label: 'Locations',
+        icon: <LocationOnOutlinedIcon fontSize="small" />,
+      },
+      {
+        href: '/admin/studio-setup/card-readers',
+        label: 'Card Readers',
+        icon: <PointOfSaleOutlinedIcon fontSize="small" />,
+      },
     ],
   },
 ];
@@ -242,16 +403,18 @@ const STUDIO_SETUP_GROUPS: FlyoutGroup[] = [
 // ---------------------------------------------------------------------------
 
 function NavLink({
-  item, pathname, onClick, badgeContent,
+  item,
+  pathname,
+  onClick,
+  badgeContent,
 }: {
   item: NavLinkItem | FlyoutSubItem;
   pathname: string;
   onClick?: () => void;
   badgeContent?: number;
 }) {
-  const active = 'exact' in item && item.exact
-    ? pathname === item.href
-    : pathname.startsWith(item.href);
+  const active =
+    'exact' in item && item.exact ? pathname === item.href : pathname.startsWith(item.href);
 
   return (
     <ListItemButton
@@ -279,7 +442,14 @@ function NavLink({
           color="error"
           max={99}
           invisible={!badgeContent}
-          sx={{ '& .MuiBadge-badge': { fontSize: '0.625rem', minWidth: 16, height: 16, padding: '0 3px' } }}
+          sx={{
+            '& .MuiBadge-badge': {
+              fontSize: '0.625rem',
+              minWidth: 16,
+              height: 16,
+              padding: '0 3px',
+            },
+          }}
         >
           {item.icon}
         </Badge>
@@ -296,7 +466,12 @@ function NavLink({
 // FlyoutPanel — the shared popover content shell
 // ---------------------------------------------------------------------------
 
-function FlyoutPanel({ groups, flyoutTitle, pathname, onNavClick }: {
+function FlyoutPanel({
+  groups,
+  flyoutTitle,
+  pathname,
+  onNavClick,
+}: {
   groups: FlyoutGroup[];
   flyoutTitle?: string;
   pathname: string;
@@ -307,7 +482,15 @@ function FlyoutPanel({ groups, flyoutTitle, pathname, onNavClick }: {
       {flyoutTitle && (
         <>
           <Box sx={{ px: 2.5, pt: 1.75, pb: 1 }}>
-            <Typography sx={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'text.disabled' }}>
+            <Typography
+              sx={{
+                fontSize: '0.6875rem',
+                fontWeight: 700,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                color: 'text.disabled',
+              }}
+            >
               {flyoutTitle}
             </Typography>
           </Box>
@@ -317,7 +500,17 @@ function FlyoutPanel({ groups, flyoutTitle, pathname, onNavClick }: {
       {groups.map((group, gi) => (
         <Box key={group.label ?? gi}>
           {group.label && (
-            <Typography sx={{ px: 2.5, pt: 1.25, pb: 0.25, fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em', color: 'text.disabled' }}>
+            <Typography
+              sx={{
+                px: 2.5,
+                pt: 1.25,
+                pb: 0.25,
+                fontSize: '0.6875rem',
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                color: 'text.disabled',
+              }}
+            >
               {group.label}
             </Typography>
           )}
@@ -351,7 +544,18 @@ interface FlyoutNavItemProps {
   onNavClick?: () => void;
 }
 
-function FlyoutNavItem({ label, icon, isActive, groups, flyoutTitle, pathname, open, onOpen, onClose, onNavClick }: FlyoutNavItemProps) {
+function FlyoutNavItem({
+  label,
+  icon,
+  isActive,
+  groups,
+  flyoutTitle,
+  pathname,
+  open,
+  onOpen,
+  onClose,
+  onNavClick,
+}: FlyoutNavItemProps) {
   const buttonRef = useRef<HTMLDivElement>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -366,7 +570,11 @@ function FlyoutNavItem({ label, icon, isActive, groups, flyoutTitle, pathname, o
   }
 
   function handleButtonClick() {
-    if (open) { onClose(); } else { onOpen(); }
+    if (open) {
+      onClose();
+    } else {
+      onOpen();
+    }
   }
 
   function handleNavClick() {
@@ -410,7 +618,11 @@ function FlyoutNavItem({ label, icon, isActive, groups, flyoutTitle, pathname, o
           primary={label}
           slotProps={{
             primary: {
-              sx: { fontSize: '0.8125rem', fontWeight: highlighted ? 600 : 400, color: highlighted ? md3.primary : 'inherit' },
+              sx: {
+                fontSize: '0.8125rem',
+                fontWeight: highlighted ? 600 : 400,
+                color: highlighted ? md3.primary : 'inherit',
+              },
             },
           }}
         />
@@ -444,8 +656,8 @@ function FlyoutNavItem({ label, icon, isActive, groups, flyoutTitle, pathname, o
             onMouseLeave={handleMouseLeave}
             sx={{
               width: 232,
-              borderRadius: 2,
-              bgcolor: 'background.default',
+              borderRadius: 3,
+              bgcolor: 'background.paper',
               border: '1px solid',
               borderColor: 'divider',
               pb: 1,
@@ -620,26 +832,17 @@ interface SidebarContentProps {
 }
 
 function SidebarContent({ pathname, onClose }: SidebarContentProps) {
-  const isSetupActive = pathname.startsWith('/admin/studio-setup') || pathname.startsWith('/admin/tasks');
+  const isSetupActive =
+    pathname.startsWith('/admin/studio-setup') || pathname.startsWith('/admin/tasks');
   // Only one flyout open at a time — keyed by label string
   const [openKey, setOpenKey] = useState<string | null>(null);
   const { unreadCount } = useInboxCount();
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', pb: 3 }}>
-
       {/* Wordmark */}
       <Box sx={{ px: 2.5, pt: 2.5, pb: 1.5, flexShrink: 0 }}>
-        <Typography
-          component={NextLink}
-          href="/admin"
-          variant="h6"
-          onClick={onClose}
-          sx={{ fontWeight: 700, letterSpacing: '-0.02em', color: 'text.primary', textDecoration: 'none', display: 'block' }}
-        >
-          Throw{' '}
-          <Box component="span" sx={{ fontWeight: 400, color: 'text.secondary', fontSize: '0.875rem' }}>Admin</Box>
-        </Typography>
+        <AdminWordmark onClick={onClose} />
       </Box>
 
       <Box sx={{ px: 2.5, pb: 1.5, flexShrink: 0 }}>
@@ -655,7 +858,18 @@ function SidebarContent({ pathname, onClose }: SidebarContentProps) {
             <List
               dense
               subheader={
-                <ListSubheader sx={{ lineHeight: '28px', fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em', color: 'text.disabled', bgcolor: 'transparent', px: 2.5, mt: 1 }}>
+                <ListSubheader
+                  sx={{
+                    lineHeight: '28px',
+                    fontSize: '0.6875rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.08em',
+                    color: 'text.disabled',
+                    bgcolor: 'transparent',
+                    px: 2.5,
+                    mt: 1,
+                  }}
+                >
                   {section.label}
                 </ListSubheader>
               }
@@ -672,7 +886,7 @@ function SidebarContent({ pathname, onClose }: SidebarContentProps) {
                     pathname={pathname}
                     open={openKey === item.label}
                     onOpen={() => setOpenKey(item.label)}
-                    onClose={() => setOpenKey((k) => k === item.label ? null : k)}
+                    onClose={() => setOpenKey((k) => (k === item.label ? null : k))}
                     onNavClick={onClose}
                   />
                 ) : (
@@ -683,7 +897,7 @@ function SidebarContent({ pathname, onClose }: SidebarContentProps) {
                     onClick={onClose}
                     badgeContent={item.badgeKey === 'inbox' ? unreadCount : undefined}
                   />
-                )
+                ),
               )}
             </List>
           </Box>
@@ -695,7 +909,11 @@ function SidebarContent({ pathname, onClose }: SidebarContentProps) {
       {/* Point of Sale — persistent top-level link, above Studio Set-up */}
       <List dense sx={{ flexShrink: 0, py: 0 }}>
         <NavLink
-          item={{ href: '/admin/pos', label: 'Point of Sale', icon: <PointOfSaleOutlinedIcon fontSize="small" /> }}
+          item={{
+            href: '/admin/pos',
+            label: 'Point of Sale',
+            icon: <PointOfSaleOutlinedIcon fontSize="small" />,
+          }}
           pathname={pathname}
           onClick={onClose}
         />
@@ -712,7 +930,7 @@ function SidebarContent({ pathname, onClose }: SidebarContentProps) {
           pathname={pathname}
           open={openKey === 'Studio Set-up'}
           onOpen={() => setOpenKey('Studio Set-up')}
-          onClose={() => setOpenKey((k) => k === 'Studio Set-up' ? null : k)}
+          onClose={() => setOpenKey((k) => (k === 'Studio Set-up' ? null : k))}
           onNavClick={onClose}
         />
       </List>
@@ -725,7 +943,13 @@ function SidebarContent({ pathname, onClose }: SidebarContentProps) {
           size="small"
           fullWidth
           endIcon={<OpenInNewIcon fontSize="small" />}
-          sx={{ color: 'text.secondary', justifyContent: 'flex-start', borderRadius: 2, px: 1.5, fontSize: '0.8125rem' }}
+          sx={{
+            color: 'text.secondary',
+            justifyContent: 'flex-start',
+            borderRadius: 2,
+            px: 1.5,
+            fontSize: '0.8125rem',
+          }}
         >
           View Site
         </Button>
@@ -750,7 +974,8 @@ export function AdminNav() {
       boxSizing: 'border-box',
       borderRight: '1px solid',
       borderColor: 'divider',
-      bgcolor: 'background.default',
+      // White rail beside the creme page, like the site's cards on creme.
+      bgcolor: 'background.paper',
     },
   };
 
@@ -763,22 +988,14 @@ export function AdminNav() {
           display: { xs: 'block', md: 'none' },
           borderBottom: '1px solid',
           borderColor: 'divider',
-          bgcolor: 'background.default',
+          bgcolor: 'background.paper',
           position: 'sticky',
           top: 0,
           zIndex: 1200,
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', px: 2, height: 56 }}>
-          <Typography
-            component={NextLink}
-            href="/admin"
-            variant="h6"
-            sx={{ fontWeight: 700, letterSpacing: '-0.02em', color: 'text.primary', textDecoration: 'none', flex: 1 }}
-          >
-            Throw{' '}
-            <Box component="span" sx={{ fontWeight: 400, color: 'text.secondary', fontSize: '0.875rem' }}>Admin</Box>
-          </Typography>
+          <AdminWordmark sx={{ flex: 1 }} />
           <IconButton aria-label="Open navigation" onClick={() => setMobileOpen(true)}>
             <MenuIcon />
           </IconButton>

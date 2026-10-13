@@ -98,7 +98,7 @@ export default async function NewPiecePage({
   return (
     <Container maxWidth="sm" sx={{ py: 5, px: { xs: 3, md: 4 } }}>
       <BackLink href="/pieces">My pieces</BackLink>
-      <Typography variant="h2" sx={{ fontWeight: 700 }}>
+      <Typography variant="h2">
         Log your pieces
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 4 }}>

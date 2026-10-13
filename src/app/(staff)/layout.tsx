@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { PublicNav } from "@/components/shared/PublicNav";
-import { PublicFooter } from "@/components/shared/PublicFooter";
+import { SiteNav } from "@/components/site/SiteNav";
+import { SiteFooter } from "@/components/site/SiteFooter";
 
 export default async function StaffLayout({
   children,
@@ -15,14 +15,14 @@ export default async function StaffLayout({
   const user = { name: session.user.name, role: session.user.role };
 
   return (
-    <>
+    <div className="site-text">
       <div className="print:hidden">
-        <PublicNav user={user} />
+        <SiteNav user={user} />
       </div>
       <main>{children}</main>
       <div className="print:hidden">
-        <PublicFooter />
+        <SiteFooter />
       </div>
-    </>
+    </div>
   );
 }

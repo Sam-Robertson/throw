@@ -250,7 +250,7 @@ export default function InstructorsPage() {
     <Box sx={{ p: { xs: 3, md: 4 } }}>
       {/* ── Page header ── */}
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-        <Typography variant="h2" sx={{ fontWeight: 700 }}>Instructors</Typography>
+        <Typography variant="h2">Instructors</Typography>
         <Stack direction="row" spacing={1}>
           <Button
             variant="contained"

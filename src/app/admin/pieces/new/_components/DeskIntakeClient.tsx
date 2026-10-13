@@ -281,7 +281,7 @@ export function DeskIntakeClient() {
   return (
     <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 720 }}>
       <BackLink href="/admin/pieces">Pieces</BackLink>
-      <Typography variant="h2" sx={{ fontWeight: 700 }}>
+      <Typography variant="h2">
         Log pieces at the desk
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 3 }}>

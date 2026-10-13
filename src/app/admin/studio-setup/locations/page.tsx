@@ -140,7 +140,7 @@ export default function LocationsPage() {
     <Box sx={{ p: { xs: 3, md: 4 } }}>
       <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h2" sx={{ fontWeight: 700 }}>Locations</Typography>
+          <Typography variant="h2">Locations</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             Physical studio locations used for sessions, memberships, and reporting.
           </Typography>

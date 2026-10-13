@@ -49,7 +49,7 @@ export default async function CommunityPage() {
     <Container maxWidth="sm" sx={{ py: { xs: 5, md: 7 }, px: { xs: 3, md: 4 } }}>
       {/* Header */}
       <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography variant="h2" sx={{ fontWeight: 700 }}>
+        <Typography variant="h2">
           Community
         </Typography>
         {isStaffOrAdmin && (

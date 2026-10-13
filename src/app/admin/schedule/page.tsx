@@ -455,7 +455,7 @@ export default function SchedulePage() {
       {/* Header */}
       <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Typography variant="h2" sx={{ fontWeight: 700 }}>Schedule</Typography>
+          <Typography variant="h2">Schedule</Typography>
           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
             <IconButton size="small" onClick={() => setWeekOffset((o) => o - 1)}>
               <ChevronLeftIcon />

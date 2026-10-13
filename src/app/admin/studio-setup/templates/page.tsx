@@ -575,7 +575,7 @@ export default function TemplatesPage() {
       {/* ── Header ── */}
       <Box sx={{ mb: 3, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
         <Box>
-          <Typography variant="h2" sx={{ fontWeight: 700 }}>Transactional Templates</Typography>
+          <Typography variant="h2">Transactional Templates</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             Email and SMS templates for automated notifications. Use{' '}
             <code style={{ fontFamily: 'monospace', background: 'rgba(0,0,0,0.06)', padding: '1px 4px', borderRadius: 3 }}>

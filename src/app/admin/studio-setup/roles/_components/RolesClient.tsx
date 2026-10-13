@@ -243,7 +243,7 @@ export function RolesClient({ isAdmin }: { isAdmin: boolean }) {
     <Box sx={{ p: { xs: 3, md: 4 } }}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Box>
-          <Typography variant="h2" sx={{ fontWeight: 700 }}>Roles &amp; Permissions</Typography>
+          <Typography variant="h2">Roles &amp; Permissions</Typography>
           <Typography variant="body2" color="text.secondary">
             Manage what staff can see and do once they&apos;re in the admin area.
           </Typography>

@@ -108,7 +108,7 @@ export default async function StaffSessionPage({
       <BackLink href="/staff">Dashboard</BackLink>
 
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h2" sx={{ fontWeight: 700 }}>
+        <Typography variant="h2">
           {studioSession.title ?? studioSession.sessionType.name}
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>

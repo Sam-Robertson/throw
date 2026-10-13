@@ -18,7 +18,7 @@ export default function MembershipPlansPage() {
 
   return (
     <Box sx={{ p: { xs: 3, md: 4 } }}>
-      <Typography variant="h2" sx={{ fontWeight: 700, mb: 2 }}>
+      <Typography variant="h2" sx={{ mb: 2 }}>
         Subscriptions & Packs
       </Typography>
 

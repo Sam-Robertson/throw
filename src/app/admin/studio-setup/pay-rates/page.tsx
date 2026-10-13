@@ -152,7 +152,7 @@ export default function PayRatesPage() {
       <BackLink href="/admin/studio-setup/instructors">Instructors</BackLink>
       <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h2" sx={{ fontWeight: 700 }}>Pay Rates</Typography>
+          <Typography variant="h2">Pay Rates</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             Hourly or per-session pay rates for instructors and staff.
           </Typography>
