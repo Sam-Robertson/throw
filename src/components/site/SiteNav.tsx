@@ -1,61 +1,50 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import NextLink from "next/link";
-import Image from "next/image";
-import { signOut } from "next-auth/react";
-import type { Role } from "@prisma/client";
-import { ANNOUNCEMENT, NAV_LINKS } from "@/content/site";
-import { cn } from "@/lib/utils";
-import { Button } from "./Button";
+import { useEffect, useRef, useState } from 'react';
+import NextLink from 'next/link';
+import { signOut } from 'next-auth/react';
+import type { Role } from '@prisma/client';
+import { ANNOUNCEMENT, KIDS_CAMPS_MENU, NAV_LINKS } from '@/content/site';
+import { cn } from '@/lib/utils';
+import { Button } from './Button';
+import { Logo, Wordmark } from './Logo';
 
 type NavUser = { name?: string | null; role: Role };
 
 /**
- * Marketing header — nav + announcement bar, to the designer's Oct 2026 review.
+ * Marketing header — nav + announcement bar, to the Navigation design
+ * (Oct 2026).
  *
- * Mobile: "throw" wordmark left, black hamburger right, a shorter announcement
- * bar with no asterisks. The whole header slides away as the page scrolls down
- * and comes back as soon as it scrolls up. The open menu is a white sheet with
- * Satoshi links and a green Sign in pill under them; Calendar is desktop-only.
+ * Desktop: the "throw" + mascot lockup left, five Satoshi links (no Calendar),
+ * a green Sign in pill right. A hovered link sits on a cream pill. Kids camps
+ * opens a dropdown with one column per studio. The header is static.
  *
- * Desktop: wordmark + mascot lockup left, Satoshi links, a green Sign in pill
- * on the right. The header is static there.
- *
- * WORDMARK: the design uses the studio's swashy "throw" logotype, which has
- * not been supplied as an SVG; the serif wordmark stands in at the same size
- * until it arrives. The red "thr(mascot)w" lockup in /public/logo.png is not
- * what the design shows, so it is no longer used here.
+ * Mobile: the wordmark left, a black hamburger right, a short announcement
+ * bar with no asterisks. The whole header slides away as the page scrolls
+ * down and comes back as soon as it scrolls up. The open menu is a white sheet
+ * with Satoshi links and a green Sign in pill under them.
  *
  * Signed-in customers still need a way to their account: "My account" takes
  * the Sign in pill's place, and the mobile sheet lists the account pages
  * under it.
  */
 const ACCOUNT_LINKS = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/bookings", label: "My bookings" },
-  { href: "/account", label: "Account settings" },
+  { href: '/dashboard', label: 'Dashboard' },
+  { href: '/bookings', label: 'My bookings' },
+  { href: '/account', label: 'Account settings' },
 ];
 
-const MOBILE_NAV_LINKS = NAV_LINKS.filter((l) => l.inMobileMenu);
+const DROPDOWN_LABEL = 'Kids camps';
 
-function Wordmark({ className }: { className?: string }) {
-  return (
-    <span
-      className={cn(
-        "text-headline font-serif leading-none tracking-[-0.02em] select-none",
-        className,
-      )}
-    >
-      throw
-    </span>
-  );
-}
+const LINK_CLASS =
+  'text-headline hover:bg-cream focus-visible:bg-cream rounded-full px-3.5 py-2 text-[15px] leading-none font-medium transition-colors outline-none';
 
 export function SiteNav({ user }: { user: NavUser | null }) {
   const [open, setOpen] = useState(false);
   const [hidden, setHidden] = useState(false);
-  const isStaffOrAdmin = user?.role === "STAFF" || user?.role === "ADMIN";
+  const [menuOpen, setMenuOpen] = useState(false);
+  const closeTimer = useRef<number | null>(null);
+  const isStaffOrAdmin = user?.role === 'STAFF' || user?.role === 'ADMIN';
 
   // Hide on scroll down, show on scroll up (mobile only — the header is
   // static from md up, see the className below). A small threshold keeps it
@@ -76,67 +65,129 @@ export function SiteNav({ user }: { user: NavUser | null }) {
         ticking = false;
       });
     };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   // Lock body scroll while the sheet is open.
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = prev;
     };
   }, [open]);
 
-  // Close on Escape.
+  // Close the sheet and the dropdown on Escape.
   useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+    if (!open && !menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setOpen(false);
+      setMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, menuOpen]);
+
+  // The dropdown stays open while the pointer moves from the link down into
+  // the panel; a short grace period covers the gap between them.
+  function showMenu() {
+    if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    setMenuOpen(true);
+  }
+  function hideMenu() {
+    if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => setMenuOpen(false), 120);
+  }
 
   return (
     <>
       <header
         className={cn(
-          "sticky top-0 z-40 transition-transform duration-300 ease-out md:static md:translate-y-0",
-          hidden && !open && "max-md:-translate-y-full",
+          'sticky top-0 z-40 transition-transform duration-300 ease-out md:static md:translate-y-0',
+          hidden && !open && 'max-md:-translate-y-full',
         )}
       >
         <div className="bg-white">
           <div className="mx-auto flex h-[60px] w-full max-w-[1568px] items-center justify-between px-6 md:h-20 md:px-10">
             {/* Wordmark alone on mobile; wordmark + waving mascot on desktop. */}
-            <NextLink href="/" className="flex items-center gap-1.5" aria-label="Throw — home">
-              <Wordmark className="text-[30px] md:text-[36px]" />
-              <Image
-                src="/mascot.png"
-                alt=""
-                width={217}
-                height={217}
-                priority
-                className="hidden h-9 w-auto md:block"
-              />
+            <NextLink
+              href="/"
+              className="text-headline flex items-center"
+              aria-label="Throw — home"
+            >
+              <Wordmark className="h-7 w-auto md:hidden" />
+              <Logo className="hidden h-10 w-auto md:block" />
             </NextLink>
 
             {/* Desktop links + Sign in pill */}
-            <nav className="hidden items-center gap-9 md:flex">
-              {NAV_LINKS.map((l) => (
-                <NextLink
-                  key={l.label}
-                  href={l.href}
-                  className="text-headline hover:text-sage text-[17px] leading-none font-medium transition-colors"
-                >
-                  {l.label}
-                </NextLink>
-              ))}
+            <nav className="hidden items-center gap-3 md:flex">
+              {NAV_LINKS.map((l) =>
+                l.label === DROPDOWN_LABEL ? (
+                  <div
+                    key={l.label}
+                    className="relative"
+                    onMouseEnter={showMenu}
+                    onMouseLeave={hideMenu}
+                    onFocus={showMenu}
+                    onBlur={(e) => {
+                      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) hideMenu();
+                    }}
+                  >
+                    <NextLink
+                      href={l.href}
+                      aria-haspopup="menu"
+                      aria-expanded={menuOpen}
+                      className={cn(LINK_CLASS, 'inline-block', menuOpen && 'bg-cream')}
+                    >
+                      {l.label}
+                    </NextLink>
+
+                    {/* Dropdown: one column per studio, as drawn in the
+                        Navigation design. */}
+                    <div
+                      role="menu"
+                      aria-label="Kids camps"
+                      className={cn(
+                        'absolute top-full left-0 z-50 mt-3 flex gap-10 rounded-2xl bg-white px-6 py-5 shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-opacity duration-150',
+                        menuOpen ? 'opacity-100' : 'pointer-events-none opacity-0',
+                      )}
+                    >
+                      {KIDS_CAMPS_MENU.map((col) => (
+                        <div key={col.studio} className="flex min-w-[120px] flex-col">
+                          <p className="text-details mb-3 text-[11px] leading-4 font-bold tracking-[0.14em] uppercase">
+                            {col.studio}
+                          </p>
+                          <div className="flex flex-col gap-3">
+                            {col.items.map((item) => (
+                              <NextLink
+                                key={item.label}
+                                href={item.href}
+                                role="menuitem"
+                                onClick={() => setMenuOpen(false)}
+                                className="text-headline hover:text-sage text-[14px] leading-5 font-medium whitespace-nowrap transition-colors"
+                              >
+                                {item.label}
+                              </NextLink>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <NextLink key={l.label} href={l.href} className={LINK_CLASS}>
+                    {l.label}
+                  </NextLink>
+                ),
+              )}
               <Button
-                href={user ? "/dashboard" : "/login"}
-                className="ml-2 h-10 px-6 text-[15px] md:h-10"
+                href={user ? '/dashboard' : '/login'}
+                className="ml-5 h-10 px-6 text-[15px] md:h-10"
               >
-                {user ? "My account" : "Sign in"}
+                {user ? 'My account' : 'Sign in'}
               </Button>
             </nav>
 
@@ -160,7 +211,7 @@ export function SiteNav({ user }: { user: NavUser | null }) {
           </div>
         </div>
 
-        {/* Announcement bar — shorter than before, no asterisks */}
+        {/* Announcement bar — short, no asterisks */}
         <div className="bg-sage text-white">
           <p className="t-body-sm-bold px-6 py-[7px] text-center text-[15px] leading-6 md:py-1.5">
             {ANNOUNCEMENT}
@@ -201,7 +252,7 @@ export function SiteNav({ user }: { user: NavUser | null }) {
             </div>
 
             <nav className="flex flex-col items-start gap-7 px-8 pt-6 pb-10">
-              {MOBILE_NAV_LINKS.map((l) => (
+              {NAV_LINKS.map((l) => (
                 <NextLink
                   key={l.label}
                   href={l.href}
@@ -213,11 +264,11 @@ export function SiteNav({ user }: { user: NavUser | null }) {
               ))}
 
               <Button
-                href={user ? "/dashboard" : "/login"}
+                href={user ? '/dashboard' : '/login'}
                 onClick={() => setOpen(false)}
                 className="mt-1 h-11 px-7 text-[15px]"
               >
-                {user ? "My account" : "Sign in"}
+                {user ? 'My account' : 'Sign in'}
               </Button>
             </nav>
 
@@ -246,7 +297,7 @@ export function SiteNav({ user }: { user: NavUser | null }) {
                   type="button"
                   onClick={() => {
                     setOpen(false);
-                    void signOut({ callbackUrl: "/" });
+                    void signOut({ callbackUrl: '/' });
                   }}
                   className="t-body-sm-bold text-rust text-left"
                 >

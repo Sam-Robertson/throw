@@ -26,15 +26,34 @@ export const RATING = { score: '5.0', count: '350+ Google ratings' };
 // page rather than 404ing from the site-wide nav and footer. Flagged for the
 // client — see the handover notes.
 //
-// The mobile menu design (Oct 2026) lists everything but Calendar, so that
-// entry is desktop-only.
+// The Navigation design (Oct 2026) has five links and no Calendar entry, on
+// desktop and mobile alike.
 export const NAV_LINKS = [
-  { href: '/classes/drop-in', label: 'One time classes', inMobileMenu: true },
-  { href: '/classes/kickstarter', label: '4 week courses', inMobileMenu: true },
-  { href: '/membership', label: 'Memberships', inMobileMenu: true },
-  { href: '/schedule', label: 'Kids camps', inMobileMenu: true },
-  { href: '/classes/group-events', label: 'Group events', inMobileMenu: true },
-  { href: '/schedule', label: 'Calendar', inMobileMenu: false },
+  { href: '/classes/drop-in', label: 'One time classes' },
+  { href: '/classes/kickstarter', label: '4 week courses' },
+  { href: '/membership', label: 'Memberships' },
+  { href: '/schedule', label: 'Kids camps' },
+  { href: '/classes/group-events', label: 'Group events' },
+] as const;
+
+/**
+ * The Kids camps dropdown on desktop (Navigation design): one column per
+ * studio. There are no kids-camp pages yet, so every item opens the schedule
+ * filtered to its studio until those pages exist.
+ */
+export const KIDS_CAMPS_MENU = [
+  {
+    studio: 'Lehi',
+    items: [
+      { href: '/schedule?location=lehi', label: 'Homeschool camp' },
+      { href: '/schedule?location=lehi', label: 'After school camp' },
+      { href: '/schedule?location=lehi', label: 'Summer camp' },
+    ],
+  },
+  {
+    studio: 'Provo',
+    items: [{ href: '/schedule?location=provo', label: 'Summer camp' }],
+  },
 ] as const;
 
 export const HERO = {
@@ -200,8 +219,8 @@ export const FOOTER_COLUMNS = [
       { href: '/membership', label: 'Memberships' },
       { href: '/schedule', label: 'Kid camps' },
       { href: '/classes/group-events', label: 'Group events' },
-      // Gift cards are sold at the front desk; there is no page for them yet.
-      { href: 'mailto:info@throwartstudio.com?subject=Gift%20cards', label: 'Gift cards' },
+      // Gift cards have no page yet; Sam wants it listed but going nowhere for now.
+      { href: null, label: 'Gift cards' },
     ],
   },
   {

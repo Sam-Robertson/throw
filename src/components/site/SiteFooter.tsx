@@ -1,6 +1,7 @@
 import NextLink from 'next/link';
 import { CONTACT, FOOTER_COLUMNS } from '@/content/site';
 import { FacebookIcon, InstagramIcon, TikTokIcon } from './icons';
+import { Wordmark } from './Logo';
 
 /**
  * Sage footer, to the designer's Oct 2026 review.
@@ -9,10 +10,7 @@ import { FacebookIcon, InstagramIcon, TikTokIcon } from './icons';
  * links are Satoshi bold in white. Mobile stacks Learn / About us / Connect /
  * Other in a single column under the wordmark; desktop puts the wordmark on
  * the left and four columns on the right in the order Learn / Connect / About
- * us / Other.
- *
- * The design uses the studio's swashy white "throw" logotype, which has not
- * been supplied as an SVG; the serif wordmark stands in at the same size.
+ * us / Other. The wordmark is the studio's logotype in white (./Logo).
  */
 
 const CONNECT_HEADING = 'Connect';
@@ -23,11 +21,8 @@ export function SiteFooter() {
   return (
     <footer className="bg-sage text-white">
       <div className="mx-auto w-full max-w-[1568px] px-6 py-12 md:px-10 md:py-16">
-        <NextLink
-          href="/"
-          className="mb-12 inline-block font-serif text-[40px] leading-none tracking-[-0.02em] md:mb-0 md:text-[52px]"
-        >
-          throw
+        <NextLink href="/" aria-label="Throw — home" className="mb-12 inline-block md:mb-0">
+          <Wordmark className="h-10 w-auto md:h-12" />
         </NextLink>
 
         <div className="md:-mt-14 md:flex md:justify-end">
@@ -86,21 +81,28 @@ function FooterColumn({
   links,
 }: {
   heading: string;
-  links: readonly { href: string; label: string }[];
+  links: readonly { href: string | null; label: string }[];
 }) {
   return (
     <div>
       <FooterHeading>{heading}</FooterHeading>
       <div className="flex flex-col gap-4">
-        {links.map((l) => (
-          <NextLink
-            key={l.href}
-            href={l.href}
-            className="t-body-sm-bold transition-opacity hover:opacity-70"
-          >
-            {l.label}
-          </NextLink>
-        ))}
+        {links.map((l) =>
+          l.href ? (
+            <NextLink
+              key={l.label}
+              href={l.href}
+              className="t-body-sm-bold transition-opacity hover:opacity-70"
+            >
+              {l.label}
+            </NextLink>
+          ) : (
+            // A dead entry: listed, goes nowhere yet (Gift cards).
+            <span key={l.label} className="t-body-sm-bold">
+              {l.label}
+            </span>
+          ),
+        )}
       </div>
     </div>
   );
