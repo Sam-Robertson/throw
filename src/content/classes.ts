@@ -76,8 +76,8 @@ const MAKE_PHOTOS: Photo[] = [
 ];
 
 export const PRODUCT_ROW: Photo[] = [
-  { src: '/site/offer-checker-mug.png', alt: 'A red and cream checkered mug' },
-  { src: '/site/offer-dark-vase.png', alt: 'A dark ribbed vase' },
+  { src: '/site/offer-checker-mug.jpg', alt: 'A red and cream checkered mug' },
+  { src: '/site/offer-dark-vase.jpg', alt: 'A dark ribbed vase' },
   { src: '/site/offer-green-mug.png', alt: 'A green glazed cup' },
 ];
 
@@ -160,7 +160,7 @@ export const CLASS_PAGES: ClassPage[] = [
     slug: 'drop-in',
     title: 'Drop-in class',
     intro: 'Learn the how to throw and glaze in this 2 hour class. Perfect for beginners',
-    hero: { src: '/site/hero-drop-in.jpg', alt: 'Two people throwing a pot together' },
+    hero: { src: '/site/hero-drop-in-2.jpg', alt: 'Two people throwing a pot together' },
     steps: HOUR_STEPS,
     makeHeading: 'What you’ll make',
     makeSubhead: 'Past student work',
