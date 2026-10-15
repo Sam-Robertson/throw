@@ -192,7 +192,7 @@ the Stripe webhook).
 
 | # | Item | Result | Found |
 |---|---|---|---|
-| H1 | Sold online only; the POS never starts a subscription | PASS | Memberships tab is lookup only (`CatalogPanel.tsx:23-30`, `catalog/MembershipTab.tsx` adds nothing). Note: the API still accepts a `MEMBERSHIP` line for any plan id, legacy included (`items/route.ts:288-297`); completion does nothing with it, so money could be taken for no membership if another client called it |
+| H1 | Sold online, and at the register since 2026-10-14 | CHANGED | The Memberships tab starts a membership (`catalog/MembershipTab.tsx`); the `MEMBERSHIP` line is priced and checked server-side (`describeMembershipLine` in `src/lib/posMembership.ts`: purchasable plan, customer attached, not already a member, membership waiver signed) and completion creates the subscription and the Membership row (`startPosMemberships`) |
 | H2 | Existing customer subscriptions untouched | Not verifiable here | Rehearsal has 0 `Membership` rows. Use spot-check 5 on production |
 | H3 | Provo Basic $70 / 8 / none, Pro $110 / 10 / half, Expert $120 / 12 / full | PASS | `provo-basic` 7000 · 8 · null, `provo-pro` 11000 · 10 · HALF, `provo-expert` 12000 · 12 · FULL; 30 days |
 | H4 | Lehi standard plans equal to Provo, marked needs confirmation | PASS | `lehi-basic` / `-pro` / `-expert` same numbers, `priceNeedsConfirmation=t`. See section 2, O1 |

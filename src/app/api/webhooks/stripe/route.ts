@@ -11,9 +11,8 @@ import { maybeCompletePosOrder } from "@/lib/pos";
 import { parseTenderMetadata, recordBookingTenders } from "@/lib/bookingCheckout";
 import { TERMINAL_METHOD, settleTerminalPayment } from "@/lib/terminal";
 import { grantPeriodAllowance } from "@/lib/credits";
-import { GUEST_PASS_ADD_ON_SLUG } from "@/lib/membershipCatalog";
+import { createMembershipFromSubscription } from "@/lib/membershipCreate";
 import { freezeTermsFor } from "@/lib/membershipFreeze";
-import { addMonths } from "date-fns";
 import { Prisma } from "@prisma/client";
 import type Stripe from "stripe";
 
@@ -216,90 +215,13 @@ export async function POST(req: NextRequest) {
   const { event, account } = verified;
 
   if (event.type === "customer.subscription.created") {
-    const subscription = event.data.object as Stripe.Subscription;
-    const { userId, planId, joiningFeeCharged, commitmentTermId } = subscription.metadata ?? {};
-    if (userId && planId) {
-      const customerId =
-        typeof subscription.customer === "string"
-          ? subscription.customer
-          : subscription.customer.id;
-      try {
-        const item = subscription.items.data[0];
-        const currentPeriodStart = new Date(item.current_period_start * 1000);
-        const currentPeriodEnd = new Date(item.current_period_end * 1000);
-        const plan = await prisma.membershipPlan.findUnique({ where: { id: planId } });
-        const locationId = plan?.locationId ?? (await defaultStudioLocationId()) ?? null;
-        // The commitment term the customer chose at checkout (subscribe route).
-        const term = commitmentTermId
-          ? await prisma.commitmentTerm.findUnique({ where: { id: commitmentTermId } })
-          : null;
-        const commitmentMonths = term ? term.months : (plan?.commitmentMonths ?? null);
-        const membership = await prisma.membership.create({
-          data: {
-            userId,
-            planId,
-            locationId,
-            status: "ACTIVE",
-            stripeSubscriptionId: subscription.id,
-            stripeCustomerId: customerId,
-            currentPeriodStart,
-            currentPeriodEnd,
-            creditsRemaining: 0,
-            // The joining-fee decision is made once, at checkout time in the
-            // subscribe route (based on whether the user had ever held a
-            // membership before) — it's carried here via subscription
-            // metadata rather than re-derived, so the two never disagree.
-            joiningFeePaid: joiningFeeCharged === "true",
-            commitmentTermId: term?.id ?? null,
-            commitmentEndsAt:
-              commitmentMonths != null ? addMonths(currentPeriodStart, commitmentMonths) : null,
-          },
-        });
-        await prisma.membershipEvent.create({
-          data: { membershipId: membership.id, eventType: "CREATED" },
-        });
-        await grantPeriodAllowance(
-          membership.id,
-          membership.currentPeriodStart,
-          membership.currentPeriodEnd,
-        );
-        await sendInngestEvent({
-          name: "membership/created",
-          data: { membershipId: membership.id, userId },
-        });
-
-        // A term can come with the guest pass (12 month): record it as an
-        // included add-on, not a paid one. The term's free months are stored
-        // on CommitmentTerm but no billing logic applies them yet.
-        if (term?.includesGuestPass) {
-          const guestPass = await prisma.membershipAddOn.findUnique({
-            where: { slug: GUEST_PASS_ADD_ON_SLUG },
-          });
-          if (guestPass) {
-            await prisma.membershipAddOnAssignment.create({
-              data: { membershipId: membership.id, addOnId: guestPass.id, included: true },
-            });
-          } else {
-            console.warn(
-              `[stripe webhook] membership ${membership.id}: term includes a guest pass but no "${GUEST_PASS_ADD_ON_SLUG}" add-on exists`,
-            );
-          }
-        }
-
-        // Fire purchase conversion for new membership
-        prisma.adTracking
-          .findFirst({ where: { userId } })
-          .then((t) => {
-            if (t && !t.firstPurchaseAt) {
-              prisma.adTracking
-                .update({ where: { id: t.id }, data: { firstPurchaseAt: new Date() } })
-                .catch(() => {});
-            }
-          })
-          .catch(() => {});
-      } catch {
-        // Idempotency: skip if membership already exists for this subscription
-      }
+    // Online sign-ups and desk sales alike: see src/lib/membershipCreate.ts.
+    // A membership the register already created for this subscription is
+    // found and left alone.
+    try {
+      await createMembershipFromSubscription(event.data.object as Stripe.Subscription);
+    } catch (err) {
+      console.error("[stripe webhook] customer.subscription.created failed:", err);
     }
   } else if (event.type === "customer.subscription.updated") {
     const subscription = event.data.object as Stripe.Subscription;

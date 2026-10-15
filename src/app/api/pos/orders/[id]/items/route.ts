@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { checkPermission } from "@/lib/permissions";
 import { MEMBERS_ONLY_MESSAGE, dropInSessionIds, isMemberOrEnrolledStudent, repriceOrder } from "@/lib/pos";
+import { describeMembershipLine } from "@/lib/posMembership";
 import { formatWeightLb, priceByWeight } from "@/lib/firing";
 import { CLASS_PRICE_SELECT, isSellable, resolveClassPriceCents } from "@/lib/sellable";
 import { formatMountainTime } from "@/lib/timezone";
@@ -286,15 +287,36 @@ export async function POST(
       ...(isCourse ? { seriesId: seriesId ?? null, courseSessionIds: sessionIds } : {}),
     };
   } else if (itemType === "MEMBERSHIP") {
-    // Not offered in the terminal UI (memberships are online-only until
-    // Oct 25); kept so existing clients and orders keep working.
+    // Sold at the register since 2026-10-14: the first period (plus the
+    // joining fee for a first-ever member) is charged here, and the
+    // subscription starts when the order completes (src/lib/posMembership.ts).
     if (!body.refId) {
       return NextResponse.json({ error: "refId is required for MEMBERSHIP items" }, { status: 400 });
     }
-    const plan = await prisma.membershipPlan.findUnique({ where: { id: body.refId } });
-    if (!plan) return NextResponse.json({ error: "Membership plan not found" }, { status: 404 });
-    name = plan.name;
-    unitPriceCents = plan.price;
+    const existingLine = await prisma.posOrderItem.findFirst({
+      where: { orderId: id, itemType: "MEMBERSHIP" },
+      select: { id: true },
+    });
+    if (existingLine) {
+      return NextResponse.json(
+        { error: "ONE_MEMBERSHIP", message: "This order already has a membership on it." },
+        { status: 409 },
+      );
+    }
+    const requested = asObject(body.metadata);
+    const line = await describeMembershipLine({
+      planId: body.refId,
+      commitmentTermId: typeof requested.commitmentTermId === "string" ? requested.commitmentTermId : null,
+      customerId: order.customerId,
+      locationId: order.locationId,
+    });
+    if ("error" in line) {
+      return NextResponse.json({ error: line.error, message: line.message }, { status: line.status });
+    }
+    name = line.name;
+    unitPriceCents = line.unitPriceCents;
+    quantity = 1;
+    metadata = line.metadata as unknown as Prisma.InputJsonValue;
   } else if (itemType === "GIFT_CARD") {
     if (!isNonNegativeInt(body.unitPriceCents) || body.unitPriceCents === 0) {
       return NextResponse.json(

@@ -15,6 +15,7 @@ import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import FormControl from '@mui/material/FormControl';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
 import InputLabel from '@mui/material/InputLabel';
@@ -23,6 +24,7 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Select from '@mui/material/Select';
+import Snackbar from '@mui/material/Snackbar';
 import Stack from '@mui/material/Stack';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
@@ -36,6 +38,7 @@ import Typography from '@mui/material/Typography';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import MailOutlineIcon from '@mui/icons-material/EmailOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PaidOutlinedIcon from '@mui/icons-material/PaidOutlined';
 import PersonAddAlt1OutlinedIcon from '@mui/icons-material/PersonAddAlt1Outlined';
@@ -47,23 +50,59 @@ interface PayRate {
   amountCents: number;
 }
 
+interface StudioAssignment {
+  locationId: string;
+  locationName: string;
+  staffRoleId: string;
+  staffRoleName: string;
+}
+
 interface Instructor {
   id: string;
   name: string | null;
   email: string;
+  phone: string | null;
   role: 'STAFF' | 'ADMIN';
+  hasPassword: boolean;
+  studios: StudioAssignment[];
   defaultPayRate: PayRate | null;
 }
 
-interface Customer {
+interface LocationRow {
   id: string;
-  name: string | null;
-  email: string;
+  name: string;
+  isActive: boolean;
 }
 
-interface StaffAssignment {
-  userId: string;
-  staffRoleName: string;
+interface StaffRoleRow {
+  id: string;
+  name: string;
+  locationId: string;
+  locationName: string;
+  permissions: Record<string, boolean>;
+}
+
+const PERMISSION_LABELS: Record<string, string> = {
+  canViewTips: 'tips',
+  canViewMembershipReporting: 'membership reports',
+  canViewBilling: 'billing',
+  canManageSchedule: 'schedule',
+  canCheckInMembers: 'check-ins',
+  canManageTasks: 'tasks',
+  canUsePos: 'register',
+};
+
+const NO_ROLE = '';
+
+/** The form behind both Add and Edit: who they are, and a role at each studio. */
+interface FormState {
+  name: string;
+  email: string;
+  phone: string;
+  role: 'STAFF' | 'ADMIN';
+  /** locationId → staffRoleId ('' = not at this studio). */
+  roles: Record<string, string>;
+  sendInvite: boolean;
 }
 
 function initials(name: string | null, email: string) {
@@ -82,21 +121,39 @@ function formatPayRate(pr: PayRate | null) {
   return `$${dollars} / ${pr.rateType === 'hourly' ? 'hr' : 'session'}`;
 }
 
+function describePermissions(role: StaffRoleRow | undefined): string {
+  if (!role) return '';
+  const on = Object.entries(role.permissions)
+    .filter(([, v]) => v)
+    .map(([k]) => PERMISSION_LABELS[k] ?? k);
+  // Everyone on the team can use the register at their studio (src/lib/permissions.ts).
+  if (!on.includes('register')) on.push('register');
+  return on.join(', ');
+}
+
 // ── Row-level overflow menu ────────────────────────────────────────────────
 function RowMenu({
   instructor,
+  isSelf,
+  onEdit,
+  onInvite,
   onRemove,
 }: {
   instructor: Instructor;
+  isSelf: boolean;
+  onEdit: (i: Instructor) => void;
+  onInvite: (i: Instructor) => void;
   onRemove: (i: Instructor) => void;
 }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const close = () => setAnchor(null);
 
   return (
     <>
       <IconButton
         size="small"
-        onClick={(e) => { e.stopPropagation(); setAnchor(e.currentTarget); }}
+        aria-label={`Actions for ${instructor.name ?? instructor.email}`}
+        onClick={(e) => setAnchor(e.currentTarget)}
         sx={{ color: 'text.secondary' }}
       >
         <MoreVertIcon fontSize="small" />
@@ -104,29 +161,37 @@ function RowMenu({
       <Menu
         anchorEl={anchor}
         open={Boolean(anchor)}
-        onClose={() => setAnchor(null)}
+        onClose={close}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        slotProps={{ paper: { sx: { minWidth: 200, borderRadius: 2 } } }}
+        slotProps={{ paper: { sx: { minWidth: 220, borderRadius: 2 } } }}
       >
+        <MenuItem onClick={() => { close(); onEdit(instructor); }} sx={{ fontSize: '0.875rem' }}>
+          <ListItemIcon><EditOutlinedIcon fontSize="small" /></ListItemIcon>
+          Edit details &amp; studios
+        </MenuItem>
         <MenuItem
           component={NextLink}
-          href={`/admin/studio-setup/pay-rates`}
-          onClick={() => setAnchor(null)}
+          href={`/admin/studio-setup/pay-rates?userId=${instructor.id}`}
+          onClick={close}
           sx={{ fontSize: '0.875rem' }}
         >
           <ListItemIcon><PaidOutlinedIcon fontSize="small" /></ListItemIcon>
           Manage pay rates
         </MenuItem>
-        {instructor.role === 'STAFF' && [
+        <MenuItem onClick={() => { close(); onInvite(instructor); }} sx={{ fontSize: '0.875rem' }}>
+          <ListItemIcon><MailOutlineIcon fontSize="small" /></ListItemIcon>
+          {instructor.hasPassword ? 'Send password reset' : 'Resend sign-in invite'}
+        </MenuItem>
+        {!isSelf && [
           <Divider key="div" />,
           <MenuItem
             key="remove"
-            onClick={() => { setAnchor(null); onRemove(instructor); }}
+            onClick={() => { close(); onRemove(instructor); }}
             sx={{ fontSize: '0.875rem', color: 'error.main' }}
           >
             <ListItemIcon><DeleteOutlineIcon fontSize="small" sx={{ color: 'error.main' }} /></ListItemIcon>
-            Remove instructor
+            Remove from the team
           </MenuItem>,
         ]}
       </Menu>
@@ -137,129 +202,170 @@ function RowMenu({
 // ── Main page ──────────────────────────────────────────────────────────────
 export default function InstructorsPage() {
   const [instructors, setInstructors] = useState<Instructor[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [staffRoleNames, setStaffRoleNames] = useState<Map<string, string[]>>(new Map());
+  const [locations, setLocations] = useState<LocationRow[]>([]);
+  const [roles, setRoles] = useState<StaffRoleRow[]>([]);
+  const [myId, setMyId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [studioFilter, setStudioFilter] = useState('all');
+  const [snack, setSnack] = useState<string | null>(null);
 
-  // Add instructor dialog
-  const [addOpen, setAddOpen] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState('');
-  const [addSaving, setAddSaving] = useState(false);
-  const [addError, setAddError] = useState<string | null>(null);
+  // Add / edit dialog
+  const [editing, setEditing] = useState<Instructor | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [form, setForm] = useState<FormState>({ name: '', email: '', phone: '', role: 'STAFF', roles: {}, sendInvite: true });
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Remove confirmation
   const [removeTarget, setRemoveTarget] = useState<Instructor | null>(null);
 
   const load = useCallback(async () => {
-    const [staffRes, custRes, assignRes] = await Promise.all([
-      fetch('/api/admin/users'),
-      fetch('/api/admin/customers?page=1&limit=500'),
-      fetch('/api/admin/staff-assignments'),
+    const [staffRes, locRes, rolesRes, sessionRes] = await Promise.all([
+      fetch('/api/admin/instructors'),
+      fetch('/api/admin/locations'),
+      fetch('/api/admin/staff-roles'),
+      fetch('/api/auth/session'),
     ]);
-    if (staffRes.ok) setInstructors(await staffRes.json() as Instructor[]);
-    if (custRes.ok) {
-      const data = await custRes.json() as { customers: Customer[] };
-      setCustomers(data.customers ?? []);
-    }
-    if (assignRes.ok) {
-      const data = await assignRes.json() as StaffAssignment[];
-      const map = new Map<string, string[]>();
-      for (const a of data) {
-        map.set(a.userId, [...(map.get(a.userId) ?? []), a.staffRoleName]);
-      }
-      setStaffRoleNames(map);
+    if (staffRes.ok) setInstructors((await staffRes.json()) as Instructor[]);
+    if (locRes.ok) setLocations(((await locRes.json()) as LocationRow[]).filter((l) => l.isActive));
+    if (rolesRes.ok) setRoles((await rolesRes.json()) as StaffRoleRow[]);
+    if (sessionRes.ok) {
+      const data = (await sessionRes.json()) as { user?: { id?: string } } | null;
+      setMyId(data?.user?.id ?? null);
     }
     setLoading(false);
   }, []);
 
   useEffect(() => { void load(); }, [load]);
 
+  const rolesByLocation = useMemo(() => {
+    const map = new Map<string, StaffRoleRow[]>();
+    for (const r of roles) map.set(r.locationId, [...(map.get(r.locationId) ?? []), r]);
+    return map;
+  }, [roles]);
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    if (!q) return instructors;
-    return instructors.filter(
-      (i) =>
-        i.name?.toLowerCase().includes(q) ||
-        i.email.toLowerCase().includes(q),
-    );
-  }, [instructors, search]);
-
-  // Selection helpers
-  const allSelected = filtered.length > 0 && filtered.every((i) => selected.has(i.id));
-  const someSelected = filtered.some((i) => selected.has(i.id)) && !allSelected;
-  const selectedCount = selected.size;
-
-  function toggleAll() {
-    if (allSelected) {
-      setSelected((prev) => {
-        const next = new Set(prev);
-        filtered.forEach((i) => next.delete(i.id));
-        return next;
-      });
-    } else {
-      setSelected((prev) => {
-        const next = new Set(prev);
-        filtered.forEach((i) => next.add(i.id));
-        return next;
-      });
-    }
-  }
-
-  function toggleRow(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) { next.delete(id); } else { next.add(id); }
-      return next;
+    return instructors.filter((i) => {
+      if (studioFilter !== 'all' && !i.studios.some((s) => s.locationId === studioFilter)) return false;
+      if (!q) return true;
+      return i.name?.toLowerCase().includes(q) || i.email.toLowerCase().includes(q);
     });
+  }, [instructors, search, studioFilter]);
+
+  function openAdd() {
+    setEditing(null);
+    setForm({ name: '', email: '', phone: '', role: 'STAFF', roles: {}, sendInvite: true });
+    setFormError(null);
+    setFormOpen(true);
   }
 
-  async function handleAdd() {
-    if (!selectedUserId) return;
-    setAddSaving(true);
-    setAddError(null);
-    const res = await fetch(`/api/admin/users/${selectedUserId}/role`, {
-      method: 'PATCH',
+  function openEdit(i: Instructor) {
+    setEditing(i);
+    setForm({
+      name: i.name ?? '',
+      email: i.email,
+      phone: i.phone ?? '',
+      role: i.role,
+      roles: Object.fromEntries(i.studios.map((s) => [s.locationId, s.staffRoleId])),
+      sendInvite: false,
+    });
+    setFormError(null);
+    setFormOpen(true);
+  }
+
+  async function save() {
+    setSaving(true);
+    setFormError(null);
+    const assignments = Object.entries(form.roles)
+      .filter(([, staffRoleId]) => staffRoleId)
+      .map(([locationId, staffRoleId]) => ({ locationId, staffRoleId }));
+    const payload = {
+      name: form.name,
+      email: form.email,
+      phone: form.phone,
+      role: form.role,
+      assignments,
+      sendInvite: form.sendInvite,
+    };
+    const res = await fetch(editing ? `/api/admin/instructors/${editing.id}` : '/api/admin/instructors', {
+      method: editing ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: 'STAFF' }),
-    });
+      body: JSON.stringify(payload),
+    }).catch(() => null);
+    setSaving(false);
+    if (!res) {
+      setFormError('Could not reach the server.');
+      return;
+    }
+    const data = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      promoted?: boolean;
+      invite?: { sent: boolean; error?: string };
+    };
     if (!res.ok) {
-      const data = await res.json().catch(() => ({})) as { error?: string };
-      setAddError(data.error ?? 'Failed to add instructor');
-    } else {
-      setAddOpen(false);
-      setSelectedUserId('');
-      await load();
+      setFormError(data.error ?? 'Failed to save');
+      return;
     }
-    setAddSaving(false);
-  }
-
-  async function handleRemove(instructor: Instructor) {
-    setRemoveTarget(null);
-    await fetch(`/api/admin/users/${instructor.id}/role`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: 'CUSTOMER' }),
-    });
-    setSelected((prev) => { const next = new Set(prev); next.delete(instructor.id); return next; });
+    setFormOpen(false);
+    if (editing) {
+      setSnack('Saved.');
+    } else if (data.invite?.sent) {
+      setSnack(`Added. An email to set their password went to ${form.email.trim()}.`);
+    } else if (form.sendInvite) {
+      setSnack(
+        `Added${data.promoted ? ' (their customer account was promoted)' : ''}, but the invite email didn't send${
+          data.invite?.error ? ` (${data.invite.error})` : ''
+        }. Use "Resend sign-in invite" once email is set up.`,
+      );
+    } else {
+      setSnack('Added.');
+    }
     await load();
   }
+
+  async function sendInvite(i: Instructor) {
+    const res = await fetch(`/api/admin/instructors/${i.id}`, { method: 'POST' }).catch(() => null);
+    const data = (await res?.json().catch(() => ({}))) as { error?: string; mode?: string; to?: string } | undefined;
+    if (res?.ok) {
+      setSnack(`${data?.mode === 'reset' ? 'Password reset' : 'Sign-in invite'} emailed to ${data?.to ?? i.email}.`);
+    } else {
+      setSnack(`Email not sent${data?.error ? `: ${data.error}` : ''}.`);
+    }
+  }
+
+  async function remove(i: Instructor) {
+    setRemoveTarget(null);
+    const res = await fetch(`/api/admin/instructors/${i.id}`, { method: 'DELETE' }).catch(() => null);
+    if (res?.ok) setSnack(`${i.name ?? i.email} is a customer again.`);
+    else {
+      const data = (await res?.json().catch(() => ({}))) as { error?: string } | undefined;
+      setSnack(data?.error ?? 'Could not remove them.');
+    }
+    await load();
+  }
+
+  const canSave = form.email.trim().length > 0 && (editing !== null || form.name.trim().length > 0) && !saving;
 
   return (
     <Box sx={{ p: { xs: 3, md: 4 } }}>
       {/* ── Page header ── */}
-      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-        <Typography variant="h2">Instructors</Typography>
-        <Stack direction="row" spacing={1}>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => { setAddError(null); setSelectedUserId(''); setAddOpen(true); }}
-          >
-            Add new instructor
-          </Button>
-        </Stack>
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+        <Box>
+          <Typography variant="h2">Instructors</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Everyone with admin access, the studios they work at and what their role lets them do.
+            Roles themselves are set up under{' '}
+            <NextLink href="/admin/studio-setup/roles" style={{ textDecoration: 'underline' }}>
+              Roles &amp; Permissions
+            </NextLink>
+            .
+          </Typography>
+        </Box>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={openAdd}>
+          Add instructor
+        </Button>
       </Stack>
 
       <Paper variant="outlined" sx={{ borderRadius: 3, overflow: 'hidden' }}>
@@ -277,39 +383,43 @@ export default function InstructorsPage() {
             gap: 1,
           }}
         >
-          {/* Left: total count (or selection count) */}
-          <Box>
-            {selectedCount > 0 ? (
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                {selectedCount} selected
-              </Typography>
-            ) : (
-              <Stack spacing={0}>
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>Total</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {instructors.length} instructor{instructors.length !== 1 ? 's' : ''}
-                </Typography>
-              </Stack>
+          <Typography variant="body2" color="text.secondary">
+            {filtered.length} of {instructors.length} on the team
+          </Typography>
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+            {locations.length > 1 && (
+              <FormControl size="small" sx={{ minWidth: 160 }}>
+                <InputLabel id="studio-filter-label">Studio</InputLabel>
+                <Select
+                  labelId="studio-filter-label"
+                  label="Studio"
+                  value={studioFilter}
+                  onChange={(e) => setStudioFilter(e.target.value)}
+                >
+                  <MenuItem value="all">All studios</MenuItem>
+                  {locations.map((l) => (
+                    <MenuItem key={l.id} value={l.id}>{l.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             )}
-          </Box>
-
-          {/* Right: search */}
-          <TextField
-            size="small"
-            placeholder="Search instructors…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon fontSize="small" sx={{ color: 'text.disabled' }} />
-                  </InputAdornment>
-                ),
-              },
-            }}
-            sx={{ width: { xs: '100%', sm: 220 } }}
-          />
+            <TextField
+              size="small"
+              placeholder="Search instructors…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" sx={{ color: 'text.disabled' }} />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+              sx={{ width: { xs: '100%', sm: 220 } }}
+            />
+          </Stack>
         </Stack>
 
         {/* ── Table ── */}
@@ -317,27 +427,11 @@ export default function InstructorsPage() {
           <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell padding="checkbox" sx={{ pl: 2 }}>
-                  <Checkbox
-                    size="small"
-                    checked={allSelected}
-                    indeterminate={someSelected}
-                    onChange={toggleAll}
-                    disabled={filtered.length === 0}
-                  />
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem' }}>
-                  Instructor name
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem' }}>
-                  E-mail
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem' }}>
-                  Default pay rate
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem' }}>
-                  Staff role
-                </TableCell>
+                {['Instructor', 'Contact', 'Studios & roles', 'Default pay rate', 'Sign-in'].map((h) => (
+                  <TableCell key={h} sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem' }}>
+                    {h}
+                  </TableCell>
+                ))}
                 <TableCell padding="checkbox" />
               </TableRow>
             </TableHead>
@@ -353,187 +447,232 @@ export default function InstructorsPage() {
                   <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
                     <PersonAddAlt1OutlinedIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1, display: 'block', mx: 'auto' }} />
                     <Typography color="text.secondary" sx={{ fontWeight: 500 }}>
-                      {search ? 'No instructors match your search' : 'No instructors yet'}
+                      {search || studioFilter !== 'all' ? 'No instructors match' : 'No instructors yet'}
                     </Typography>
-                    {!search && (
-                      <Typography variant="body2" color="text.disabled" sx={{ mt: 0.5 }}>
-                        Add a customer as an instructor to get started.
-                      </Typography>
-                    )}
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((instructor) => {
-                  const isSelected = selected.has(instructor.id);
-                  return (
-                    <TableRow
-                      key={instructor.id}
-                      selected={isSelected}
-                      hover
-                      sx={{ cursor: 'default' }}
-                    >
-                      <TableCell padding="checkbox" sx={{ pl: 2 }}>
-                        <Checkbox
-                          size="small"
-                          checked={isSelected}
-                          onChange={() => toggleRow(instructor.id)}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Stack direction="row" sx={{ alignItems: 'center', gap: 1.5 }}>
-                          <Avatar
-                            sx={{
-                              width: 32,
-                              height: 32,
-                              fontSize: '0.75rem',
-                              fontWeight: 600,
-                              bgcolor: 'primary.main',
-                              color: 'primary.contrastText',
-                              flexShrink: 0,
-                            }}
-                          >
-                            {initials(instructor.name, instructor.email)}
-                          </Avatar>
-                          <Box>
-                            <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
-                              {instructor.name ?? '—'}
-                            </Typography>
-                            {instructor.role === 'ADMIN' && (
-                              <Chip
-                                label="Admin"
-                                size="small"
-                                color="primary"
-                                variant="outlined"
-                                sx={{ height: 18, fontSize: '0.65rem', mt: 0.25 }}
-                              />
-                            )}
-                          </Box>
-                        </Stack>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" color="text.secondary">
-                          {instructor.email}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75 }}>
-                          {instructor.defaultPayRate ? (
-                            <>
-                              <EditOutlinedIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
-                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                {formatPayRate(instructor.defaultPayRate)}
-                              </Typography>
-                            </>
-                          ) : (
-                            <Typography variant="body2" color="text.disabled">—</Typography>
-                          )}
-                        </Stack>
-                      </TableCell>
-                      <TableCell>
-                        <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
-                          <Typography variant="body2" color={staffRoleNames.get(instructor.id)?.length ? 'text.primary' : 'text.disabled'}>
-                            {staffRoleNames.get(instructor.id)?.join(', ') || 'No role assigned'}
+                filtered.map((instructor) => (
+                  <TableRow key={instructor.id} hover>
+                    <TableCell>
+                      <Stack direction="row" sx={{ alignItems: 'center', gap: 1.5 }}>
+                        <Avatar
+                          sx={{
+                            width: 32,
+                            height: 32,
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            bgcolor: 'primary.main',
+                            color: 'primary.contrastText',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {initials(instructor.name, instructor.email)}
+                        </Avatar>
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
+                            {instructor.name ?? '—'}
                           </Typography>
-                          <NextLink
-                            href="/admin/studio-setup/roles"
-                            style={{ fontSize: '0.75rem', textDecoration: 'underline', whiteSpace: 'nowrap' }}
-                          >
-                            Manage
-                          </NextLink>
+                          {instructor.role === 'ADMIN' && (
+                            <Chip
+                              label="Admin"
+                              size="small"
+                              color="primary"
+                              variant="outlined"
+                              sx={{ height: 18, fontSize: '0.65rem', mt: 0.25 }}
+                            />
+                          )}
+                        </Box>
+                      </Stack>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary">{instructor.email}</Typography>
+                      {instructor.phone && (
+                        <Typography variant="caption" color="text.disabled">{instructor.phone}</Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {instructor.studios.length === 0 ? (
+                        <Typography variant="body2" color={instructor.role === 'ADMIN' ? 'text.secondary' : 'warning.main'}>
+                          {instructor.role === 'ADMIN' ? 'Every studio (admin)' : 'No studio yet — can’t use the register'}
+                        </Typography>
+                      ) : (
+                        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+                          {instructor.studios.map((s) => (
+                            <Chip
+                              key={s.locationId}
+                              size="small"
+                              variant="outlined"
+                              label={`${s.locationName} · ${s.staffRoleName}`}
+                              title={describePermissions(roles.find((r) => r.id === s.staffRoleId))}
+                            />
+                          ))}
                         </Stack>
-                      </TableCell>
-                      <TableCell padding="checkbox" sx={{ pr: 1 }}>
-                        <RowMenu instructor={instructor} onRemove={setRemoveTarget} />
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color={instructor.defaultPayRate ? 'text.primary' : 'text.disabled'} sx={{ fontWeight: 500 }}>
+                        {formatPayRate(instructor.defaultPayRate)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color={instructor.hasPassword ? 'text.secondary' : 'warning.main'}>
+                        {instructor.hasPassword ? 'Has a password' : 'Not set up yet'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell padding="checkbox" sx={{ pr: 1 }}>
+                      <RowMenu
+                        instructor={instructor}
+                        isSelf={instructor.id === myId}
+                        onEdit={openEdit}
+                        onInvite={(i) => void sendInvite(i)}
+                        onRemove={setRemoveTarget}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))
               )}
             </TableBody>
           </Table>
         </TableContainer>
       </Paper>
 
-      {/* ── Add instructor dialog ── */}
-      <Dialog
-        open={addOpen}
-        onClose={() => setAddOpen(false)}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>Add new instructor</DialogTitle>
+      {/* ── Add / edit dialog ── */}
+      <Dialog open={formOpen} onClose={() => !saving && setFormOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{editing ? `Edit ${editing.name ?? editing.email}` : 'Add instructor'}</DialogTitle>
         <DialogContent>
-          <Box sx={{ pt: 1 }}>
-            {addError && <Alert severity="error" sx={{ mb: 2 }}>{addError}</Alert>}
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Promoting a customer to Staff gives them access to the admin panel and lets them be assigned to sessions.
-            </Typography>
-            <FormControl fullWidth>
-              <InputLabel id="user-label">Customer</InputLabel>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            {formError && <Alert severity="error">{formError}</Alert>}
+            {!editing && (
+              <Typography variant="body2" color="text.secondary">
+                They get an email to set their password. If a customer already uses this email, that
+                account is promoted so their history comes with them.
+              </Typography>
+            )}
+            <TextField
+              label="Full name"
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              required
+              autoFocus
+            />
+            <TextField
+              label="Email"
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+              required
+            />
+            <TextField
+              label="Phone (optional)"
+              value={form.phone}
+              onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+            />
+            <FormControl>
+              <InputLabel id="access-label">Access</InputLabel>
               <Select
-                labelId="user-label"
-                value={selectedUserId}
-                label="Customer"
-                onChange={(e) => setSelectedUserId(e.target.value)}
+                labelId="access-label"
+                label="Access"
+                value={form.role}
+                onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as 'STAFF' | 'ADMIN' }))}
+                disabled={editing !== null && editing.id === myId}
               >
-                {customers.map((u) => (
-                  <MenuItem key={u.id} value={u.id}>
-                    <Stack>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {u.name ?? u.email}
-                      </Typography>
-                      {u.name && (
-                        <Typography variant="caption" color="text.secondary">{u.email}</Typography>
-                      )}
-                    </Stack>
-                  </MenuItem>
-                ))}
-                {customers.length === 0 && (
-                  <MenuItem disabled>No customers found</MenuItem>
-                )}
+                <MenuItem value="STAFF">Staff — what their studio role allows</MenuItem>
+                <MenuItem value="ADMIN">Admin — everything, every studio</MenuItem>
               </Select>
             </FormControl>
-          </Box>
+
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Studios</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                Pick a role at each studio they work at. They can be scheduled and use the register
+                only at those studios.
+              </Typography>
+              <Stack spacing={1.5}>
+                {locations.map((loc) => {
+                  const options = rolesByLocation.get(loc.id) ?? [];
+                  const value = form.roles[loc.id] ?? NO_ROLE;
+                  const chosen = options.find((r) => r.id === value);
+                  return (
+                    <Stack key={loc.id} direction="row" sx={{ alignItems: 'center', gap: 2 }}>
+                      <Typography variant="body2" sx={{ minWidth: 72, fontWeight: 500 }}>{loc.name}</Typography>
+                      <FormControl size="small" sx={{ flex: 1 }}>
+                        <InputLabel id={`role-${loc.id}`}>Role</InputLabel>
+                        <Select
+                          labelId={`role-${loc.id}`}
+                          label="Role"
+                          value={value}
+                          onChange={(e) => setForm((f) => ({ ...f, roles: { ...f.roles, [loc.id]: e.target.value } }))}
+                        >
+                          <MenuItem value={NO_ROLE}>
+                            <em>Not at this studio</em>
+                          </MenuItem>
+                          {options.map((r) => (
+                            <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>
+                          ))}
+                        </Select>
+                        {chosen && (
+                          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                            Can see: {describePermissions(chosen)}
+                          </Typography>
+                        )}
+                        {options.length === 0 && (
+                          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                            No roles at {loc.name} yet — create one under Roles &amp; Permissions.
+                          </Typography>
+                        )}
+                      </FormControl>
+                    </Stack>
+                  );
+                })}
+              </Stack>
+            </Box>
+
+            {!editing && (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={form.sendInvite}
+                    onChange={(e) => setForm((f) => ({ ...f, sendInvite: e.target.checked }))}
+                  />
+                }
+                label="Email them a link to set their password now"
+              />
+            )}
+          </Stack>
         </DialogContent>
         <DialogActions>
-          <Button variant="outlined" onClick={() => setAddOpen(false)} disabled={addSaving}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleAdd}
-            disabled={addSaving || !selectedUserId}
-          >
-            {addSaving ? 'Adding…' : 'Add instructor'}
+          <Button variant="outlined" onClick={() => setFormOpen(false)} disabled={saving}>Cancel</Button>
+          <Button variant="contained" onClick={() => void save()} disabled={!canSave}>
+            {saving ? 'Saving…' : editing ? 'Save' : 'Add instructor'}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* ── Remove confirmation ── */}
-      <Dialog
-        open={removeTarget !== null}
-        onClose={() => setRemoveTarget(null)}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>Remove instructor?</DialogTitle>
+      <Dialog open={removeTarget !== null} onClose={() => setRemoveTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Remove from the team?</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            <strong>{removeTarget?.name ?? removeTarget?.email}</strong> will be moved back to a
-            customer account and lose admin panel access. This can be reversed at any time.
+            <strong>{removeTarget?.name ?? removeTarget?.email}</strong> becomes a customer again: no
+            admin access, no studio roles. Their account, classes they taught and pay history stay.
+            This can be undone by adding them again.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button variant="outlined" onClick={() => setRemoveTarget(null)}>Cancel</Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={() => removeTarget && handleRemove(removeTarget)}
-          >
+          <Button variant="contained" color="error" onClick={() => removeTarget && void remove(removeTarget)}>
             Remove
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={snack !== null}
+        autoHideDuration={6000}
+        onClose={() => setSnack(null)}
+        message={snack}
+      />
     </Box>
   );
 }

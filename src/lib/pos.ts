@@ -5,6 +5,7 @@ import { calculatePosTax, recordTaxTransaction } from "@/lib/stripeTax";
 import { stripeAccountForStudio } from "@/lib/stripeAccounts";
 import { findUnsignedWaiver } from "@/lib/waivers";
 import { formatMountainTime } from "@/lib/timezone";
+import { describeMembershipLine, membershipLineMetadata, startPosMemberships } from "@/lib/posMembership";
 import {
   calculateDiscounts,
   checkDiscountUsable,
@@ -498,19 +499,43 @@ export async function checkOrderPayable(orderId: string): Promise<PaymentBlock |
 
   const dropIns = order.items.filter((i) => i.itemType === "DROP_IN");
   const classPacks = order.items.filter((i) => i.category === "CLASS_PACK");
+  const memberships = order.items.filter((i) => i.itemType === "MEMBERSHIP");
 
-  if (!order.customerId && (dropIns.length > 0 || classPacks.length > 0)) {
+  if (!order.customerId && (dropIns.length > 0 || classPacks.length > 0 || memberships.length > 0)) {
     return {
       status: 400,
       error: "CUSTOMER_REQUIRED",
       message:
         dropIns.length > 0
           ? "This order books a class seat, so it needs a customer. Attach the customer before taking payment."
-          : "Class pack credits go on a customer's account. Attach the customer before taking payment.",
+          : memberships.length > 0
+            ? "A membership goes on a customer's account. Attach the customer before taking payment."
+            : "Class pack credits go on a customer's account. Attach the customer before taking payment.",
     };
   }
 
   if (order.payments.some((p) => p.status === "SUCCEEDED")) return null;
+
+  // A membership line was priced for the customer who was attached when it
+  // went on; the customer can change after that, so the rules (not already a
+  // member, membership waiver signed, plan still on sale) run again here.
+  for (const item of memberships) {
+    const meta = membershipLineMetadata(item.metadata);
+    if (!meta) {
+      return {
+        status: 400,
+        error: "PLAN_REQUIRED",
+        message: `${item.name} isn't tied to a plan. Remove it and add it again from the Memberships tab.`,
+      };
+    }
+    const line = await describeMembershipLine({
+      planId: meta.planId,
+      commitmentTermId: meta.commitmentTermId,
+      customerId: order.customerId,
+      locationId: order.locationId,
+    });
+    if ("error" in line) return { status: line.status === 404 || line.status === 403 ? 409 : line.status, error: line.error, message: line.message };
+  }
 
   // The customer can change after a line or a discount went on, so the rules
   // that depend on who they are are checked again before money is taken.
@@ -977,6 +1002,15 @@ export async function maybeCompletePosOrder(orderId: string): Promise<PosOrderWi
   }
 
   await attachFiringCharges(order);
+
+  const membershipNotes = await startPosMemberships(order);
+  if (membershipNotes.length > 0) {
+    const latest = await prisma.posOrder.findUniqueOrThrow({ where: { id: orderId }, select: { note: true } });
+    await prisma.posOrder.update({
+      where: { id: orderId },
+      data: { note: [latest.note, ...membershipNotes].filter(Boolean).join("\n") },
+    });
+  }
 
   if (order.stripeTaxCalculationId && order.taxCents > 0) {
     await recordTaxTransaction(

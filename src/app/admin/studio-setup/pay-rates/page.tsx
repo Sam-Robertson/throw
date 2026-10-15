@@ -79,6 +79,15 @@ export default function PayRatesPage() {
 
   useEffect(() => { void load(); }, []);
 
+  // "Manage pay rates" on the Instructors page links here with ?userId=.
+  useEffect(() => {
+    const userId = new URLSearchParams(window.location.search).get('userId');
+    if (userId) {
+      setForm({ ...emptyForm, userId });
+      setDialogOpen(true);
+    }
+  }, []);
+
   function openCreate() {
     setEditTarget(null);
     setForm(emptyForm);

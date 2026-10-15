@@ -139,9 +139,14 @@ Credits never expire and are not shareable.
 
 ## 4. Memberships
 
-Sold **online only** until membership billing migrates from Momence on
-**2026-10-25**. The POS never starts a subscription; it only looks a member up.
-Existing customer subscriptions are not to be touched before that date.
+Sold online, and at the register since 2026-10-14 (JP's ask): the POS
+Memberships tab starts a membership for a customer who has none. The first
+period (plus the joining fee for a first-ever member) is charged like any sale,
+and when the order is paid a Stripe subscription is created in the studio's
+account with a trial to the end of the paid period, so it renews from the next
+period on the card used at the desk (`src/lib/posMembership.ts`). Existing
+Momence subscriptions are still not touched before the billing migration on
+**2026-10-25**.
 
 ### 4.1 Standard plans (public)
 

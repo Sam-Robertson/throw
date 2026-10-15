@@ -4,12 +4,13 @@ import { useState, useEffect } from "react";
 import { DateRangePicker, defaultRange, type DateRange } from "@/components/shared/DateRangePicker";
 import { OverviewTab } from "./_components/OverviewTab";
 import { RevenueTab } from "./_components/RevenueTab";
+import { SalesTab } from "./_components/SalesTab";
 import { MembershipsTab } from "./_components/MembershipsTab";
 import { AttendanceTab } from "./_components/AttendanceTab";
 import { AdTrackingTab } from "./_components/AdTrackingTab";
 import { cn } from "@/lib/utils";
 
-type TabId = "overview" | "revenue" | "memberships" | "attendance" | "ad-tracking";
+type TabId = "overview" | "sales" | "revenue" | "memberships" | "attendance" | "ad-tracking";
 
 interface Permissions {
   role: string;
@@ -76,6 +77,7 @@ function usePermissions(): PermCheck {
 
 const ALL_TABS: { id: TabId; label: string }[] = [
   { id: "overview", label: "Overview" },
+  { id: "sales", label: "Sales" },
   { id: "revenue", label: "Revenue" },
   { id: "memberships", label: "Memberships" },
   { id: "attendance", label: "Attendance" },
@@ -159,6 +161,9 @@ export default function ReportsPage() {
       <div>
         {activeTab === "overview" && permissions?.role === "ADMIN" && (
           <OverviewTab range={range} />
+        )}
+        {activeTab === "sales" && permissions?.role === "ADMIN" && (
+          <SalesTab range={range} />
         )}
         {activeTab === "revenue" && permissions?.role === "ADMIN" && (
           <RevenueTab range={range} />

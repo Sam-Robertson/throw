@@ -8,6 +8,7 @@ import { CLASS_PRICE_SELECT, SELLABLE_SESSION_TYPE, resolveClassPriceCents } fro
 import { STUDIO_TIMEZONE } from "@/lib/timezone";
 import { GROUP_EVENT_LOOKBACK_DAYS, GROUP_EVENT_SESSION_TYPE, getFiringProducts } from "@/lib/pos";
 import { PRODUCT_CATEGORIES, PRODUCT_CATEGORY_LABELS } from "@/config/taxCodes";
+import { PURCHASABLE_PLAN_WHERE, getCapGroupUsage } from "@/lib/membershipCatalog";
 
 export const dynamic = "force-dynamic";
 
@@ -54,10 +55,25 @@ export async function GET(req: NextRequest) {
       select: { ...CLASS_PRICE_SELECT, name: true, priceUnit: true },
       orderBy: { name: "asc" },
     }),
+    // Plans the register can start: the ones on sale online, at this studio
+    // or everywhere (src/lib/posMembership.ts).
     prisma.membershipPlan.findMany({
-      where: { isActive: true, ...scope },
-      select: { id: true, name: true, price: true, billingIntervalDays: true },
-      orderBy: { name: "asc" },
+      where: { ...PURCHASABLE_PLAN_WHERE, ...scope },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        tier: true,
+        price: true,
+        billingIntervalDays: true,
+        billingAnchorDay: true,
+        joiningFeeCents: true,
+        classTicketsPerPeriod: true,
+        shelfType: true,
+        capGroupId: true,
+        locationId: true,
+      },
+      orderBy: [{ price: "asc" }, { name: "asc" }],
     }),
     locationId
       ? prisma.studioSession.findMany({
@@ -125,6 +141,24 @@ export async function GET(req: NextRequest) {
         })
       : Promise.resolve([]),
   ]);
+
+  // Founding plans share a cap; a full one is listed but can't be sold.
+  const capUsage = await getCapGroupUsage([
+    ...new Set(membershipPlans.flatMap((p) => (p.capGroupId ? [p.capGroupId] : []))),
+  ]);
+  const commitmentTerms = await prisma.commitmentTerm.findMany({
+    where: { isActive: true },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      months: true,
+      joiningFeeCents: true,
+      retailDiscountPercent: true,
+      includesGuestPass: true,
+      freeMonths: true,
+    },
+  });
 
   // One entry per course: sessions sharing a seriesId, or a lone session.
   const courseGroups = new Map<string, typeof courseSessions>();
@@ -257,9 +291,18 @@ export async function GET(req: NextRequest) {
     membershipPlans: membershipPlans.map((m) => ({
       id: m.id,
       name: m.name,
+      description: m.description,
+      tier: m.tier,
       priceInCents: m.price,
       billingIntervalDays: m.billingIntervalDays,
+      billingAnchorDay: m.billingAnchorDay,
+      joiningFeeCents: m.joiningFeeCents,
+      classTicketsPerPeriod: m.classTicketsPerPeriod,
+      shelfType: m.shelfType,
+      locationId: m.locationId,
+      soldOut: m.capGroupId ? (capUsage.get(m.capGroupId)?.remaining ?? 1) <= 0 : false,
     })),
+    commitmentTerms,
     courses,
     upcomingSessions: upcomingSessions
       .map((s) => ({ ...s, priceCents: resolveClassPriceCents({ sessionType: s.sessionType, locationId: s.locationId, priceCentsOverride: s.priceCentsOverride }) }))

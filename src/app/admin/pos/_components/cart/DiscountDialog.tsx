@@ -29,12 +29,23 @@ interface DiscountDialogProps {
   catalog: PosCatalog | null;
   /** The repriced order, plus the server's "applied but taking $0 off yet" hint. */
   onApplied: (order: PosOrder, discountWarning: string | null) => void;
+  /** 100% off everything on the order, for the reason given. Resolves true when it worked. */
+  onMakeOrderFree?: (reason: string) => Promise<boolean>;
 }
 
-export function DiscountDialog({ open, onOpenChange, order, catalog, onApplied }: DiscountDialogProps) {
+export function DiscountDialog({
+  open,
+  onOpenChange,
+  order,
+  catalog,
+  onApplied,
+  onMakeOrderFree,
+}: DiscountDialogProps) {
   const [selected, setSelected] = useState<StaffDiscount | null>(null);
   const [code, setCode] = useState('');
   const [note, setNote] = useState('');
+  const [freeOpen, setFreeOpen] = useState(false);
+  const [freeReason, setFreeReason] = useState('');
   const [groupEventSessionId, setGroupEventSessionId] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +58,8 @@ export function DiscountDialog({ open, onOpenChange, order, catalog, onApplied }
     setSelected(null);
     setCode('');
     setNote('');
+    setFreeOpen(false);
+    setFreeReason('');
     setGroupEventSessionId('');
     setError(null);
   }
@@ -54,6 +67,17 @@ export function DiscountDialog({ open, onOpenChange, order, catalog, onApplied }
   function handleOpenChange(next: boolean) {
     if (!next) reset();
     onOpenChange(next);
+  }
+
+  const orderAlreadyFree = order.items.length > 0 && order.items.every((i) => i.totalCents === 0);
+
+  async function makeOrderFree() {
+    if (!onMakeOrderFree || !freeReason.trim()) return;
+    setBusy(true);
+    setError(null);
+    const ok = await onMakeOrderFree(freeReason.trim());
+    setBusy(false);
+    if (ok) handleOpenChange(false);
   }
 
   const noteRequired = !!selected && (selected.requiresNote || isLargeDiscount(selected));
@@ -219,6 +243,44 @@ export function DiscountDialog({ open, onOpenChange, order, catalog, onApplied }
             {busy ? 'Applying…' : 'Apply discount'}
           </Button>
         </div>
+
+        {/* 100% off: the whole order, with a reason on record. One line can be
+            made free from its own Discount control in the cart. */}
+        {onMakeOrderFree && order.items.length > 0 && !orderAlreadyFree && (
+          <div className="border-t pt-3">
+            {!freeOpen ? (
+              <Button
+                variant="outline"
+                className="min-h-11 w-full"
+                onClick={() => setFreeOpen(true)}
+                disabled={busy}
+              >
+                Make the whole order free
+              </Button>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="pos-free-reason" className="text-sm font-medium">
+                  Why is this order free? (required)
+                </Label>
+                <Input
+                  id="pos-free-reason"
+                  autoFocus
+                  value={freeReason}
+                  onChange={(e) => setFreeReason(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void makeOrderFree();
+                  }}
+                  placeholder="Instructor's own pieces, make-good for a cancelled class…"
+                  maxLength={500}
+                  className="min-h-11 text-base"
+                />
+                <Button className="min-h-11" onClick={makeOrderFree} disabled={busy || !freeReason.trim()}>
+                  {busy ? 'Working…' : 'Make it free'}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

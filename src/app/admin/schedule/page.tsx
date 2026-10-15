@@ -114,6 +114,20 @@ interface UserOption {
   id: string;
   name: string | null;
   email: string;
+  /** Studios this person is assigned to; empty for admins with no assignment. */
+  locationIds?: string[];
+}
+
+/**
+ * The instructors to offer for a session at `locationId`: those assigned to
+ * that studio, plus anyone with no studio assignment at all (owners, admins)
+ * and the one already on the session so an edit never loses them.
+ */
+function instructorsFor(all: UserOption[], locationId: string | null | undefined, currentId?: string | null) {
+  if (!locationId) return all;
+  return all.filter(
+    (u) => u.id === currentId || !u.locationIds || u.locationIds.length === 0 || u.locationIds.includes(locationId),
+  );
 }
 
 const NONE = '__none__';
@@ -841,7 +855,7 @@ export default function SchedulePage() {
                 onChange={(e) => setAddForm((f) => ({ ...f, instructorId: e.target.value }))}
               >
                 <MenuItem value={NONE}>None</MenuItem>
-                {instructors.map((u) => (
+                {instructorsFor(instructors, addLocationId).map((u) => (
                   <MenuItem key={u.id} value={u.id}>{u.name ?? u.email}</MenuItem>
                 ))}
               </Select>
@@ -977,7 +991,7 @@ export default function SchedulePage() {
                       onChange={(e) => setEditForm((f) => ({ ...f, instructorId: e.target.value }))}
                     >
                       <MenuItem value={NONE}>None</MenuItem>
-                      {instructors.map((u) => (
+                      {instructorsFor(instructors, editSession.location?.id, editSession.instructor?.id).map((u) => (
                         <MenuItem key={u.id} value={u.id}>{u.name ?? u.email}</MenuItem>
                       ))}
                     </Select>

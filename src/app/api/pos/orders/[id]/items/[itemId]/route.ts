@@ -46,6 +46,7 @@ export async function PATCH(
   const meta = metadataObject(item.metadata);
   const quantityLocked =
     item.itemType === "DROP_IN" ||
+    item.itemType === "MEMBERSHIP" ||
     // "FIRING" is the old Clay & firing tab's custom line; open ones may still exist.
     meta.kind === "FIRING" ||
     meta.kind === MEMBER_FIRING_KIND ||

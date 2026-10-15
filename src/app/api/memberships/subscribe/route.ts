@@ -1,32 +1,17 @@
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
-import { addMonths, setDate, startOfDay } from "date-fns";
-import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { checkPlanPurchasable } from "@/lib/membershipCatalog";
 import { ensureStripePriceForPlan } from "@/lib/stripePrices";
 import { ensureStripeCustomerId } from "@/lib/stripeCustomers";
-import { STUDIO_TIMEZONE } from "@/lib/timezone";
+import { nextBillingAnchorUnix } from "@/lib/billingAnchor";
 import { findUnsignedWaiver } from "@/lib/waivers";
 
 type CheckoutSessionCreateParams = NonNullable<
   Parameters<Stripe["checkout"]["sessions"]["create"]>[0]
 >;
 type LineItem = NonNullable<CheckoutSessionCreateParams["line_items"]>[number];
-
-// Returns the unix timestamp (seconds) of the next occurrence of `day` of the
-// month, at midnight America/Denver, that is strictly after now. Stripe
-// requires billing_cycle_anchor to be in the future.
-function nextBillingAnchorUnix(day: number): number {
-  const nowMT = toZonedTime(new Date(), STUDIO_TIMEZONE);
-  let candidateMT = setDate(startOfDay(nowMT), day);
-  if (candidateMT <= nowMT) {
-    candidateMT = setDate(startOfDay(addMonths(nowMT, 1)), day);
-  }
-  const candidateUtc = fromZonedTime(candidateMT, STUDIO_TIMEZONE);
-  return Math.floor(candidateUtc.getTime() / 1000);
-}
 
 export async function POST(request: Request) {
   const session = await auth();

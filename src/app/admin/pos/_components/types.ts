@@ -172,6 +172,8 @@ export interface CustomerSummary {
     endsAt: string;
   }[];
   waiverOnFile: boolean;
+  /** Has ever held a membership (so no joining fee on a new one). */
+  everMember: boolean;
   canUseMemberFiring: boolean;
 }
 
@@ -186,8 +188,29 @@ export interface SessionTypeCatalogItem {
 export interface MembershipPlanCatalogItem {
   id: string;
   name: string;
+  description: string | null;
+  tier: string | null;
   priceInCents: number;
   billingIntervalDays: number;
+  billingAnchorDay: number | null;
+  joiningFeeCents: number;
+  /** null means unlimited classes. */
+  classTicketsPerPeriod: number | null;
+  shelfType: string | null;
+  locationId: string | null;
+  /** A founding plan whose cap is full: shown, not sellable. */
+  soldOut: boolean;
+}
+
+export interface CommitmentTermCatalogItem {
+  id: string;
+  name: string;
+  /** null is month to month. */
+  months: number | null;
+  joiningFeeCents: number;
+  retailDiscountPercent: number;
+  includesGuestPass: boolean;
+  freeMonths: number;
 }
 
 /** A bookable session at the order's studio, today through the next 6 days. */
@@ -233,6 +256,7 @@ export interface PosCatalog {
   retailProducts: RetailProductCatalogItem[];
   sessionTypes: SessionTypeCatalogItem[];
   membershipPlans: MembershipPlanCatalogItem[];
+  commitmentTerms: CommitmentTermCatalogItem[];
   upcomingSessions: UpcomingSessionCatalogItem[];
   products: ProductCatalogItem[];
   productGroups: ProductGroup[];
@@ -286,7 +310,11 @@ export function dropInSessionIdOf(item: PosOrderItem): string | null {
 export function isQuantityLocked(item: PosOrderItem): boolean {
   const m = metadataRecord(item);
   return (
-    item.itemType === 'DROP_IN' || m.kind === 'FIRING' || m.kind === 'MEMBER_FIRING' || m.unit === 'LB'
+    item.itemType === 'DROP_IN' ||
+    item.itemType === 'MEMBERSHIP' ||
+    m.kind === 'FIRING' ||
+    m.kind === 'MEMBER_FIRING' ||
+    m.unit === 'LB'
   );
 }
 

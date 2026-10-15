@@ -18,9 +18,8 @@ import type {
 } from './types';
 
 // Ordered by how often each is used at the desk: a group paying for the pieces
-// they made, then a member paying for firing, come first. Memberships is a
-// lookup only (sold online until the billing migration); the server still
-// accepts MEMBERSHIP items for older clients.
+// they made, then a member paying for firing, come first. Memberships looks a
+// member up, and starts a membership for a customer who has none.
 type TabId = 'PIECES' | 'CLASSES' | 'RETAIL' | 'MEMBERSHIP' | 'GIFT_CARD' | 'CUSTOM';
 
 const TABS: { id: TabId; label: string }[] = [
@@ -49,6 +48,7 @@ interface CatalogPanelProps {
   onAddFiring: (pieces: FiringPieceInput[]) => Promise<boolean>;
   onAddDropIn: (studioSessionId: string) => void;
   onAddCourse: (course: CourseCatalogItem) => void;
+  onAddMembership: (planId: string, commitmentTermId: string | null) => void;
   onAddDistinct: (payload: {
     itemType: 'GIFT_CARD' | 'CUSTOM';
     name?: string;
@@ -69,6 +69,7 @@ export function CatalogPanel({
   onAddFiring,
   onAddDropIn,
   onAddCourse,
+  onAddMembership,
   onAddDistinct,
 }: CatalogPanelProps) {
   const [tab, setTab] = useState<TabId>('PIECES');
@@ -135,10 +136,13 @@ export function CatalogPanel({
 
       {tab === 'MEMBERSHIP' && (
         <MembershipTab
+          catalog={catalog}
           order={order}
+          busy={busy}
           summary={customerSummary}
           summaryLoading={customerSummaryLoading}
           summaryError={customerSummaryError}
+          onAddMembership={onAddMembership}
         />
       )}
 

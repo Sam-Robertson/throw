@@ -12,9 +12,11 @@ interface LineItemRowProps {
   onRemove: (itemId: string) => void;
   onSetDiscount: (itemId: string, discountCents: number) => void;
   onSetNote: (itemId: string, note: string | null) => Promise<void> | void;
+  /** Takes the whole price off this line, for the reason given. */
+  onMakeFree?: (itemId: string, reason: string) => Promise<void> | void;
 }
 
-type Editing = 'note' | 'discount' | null;
+type Editing = 'note' | 'discount' | 'free' | null;
 
 /**
  * One order line, laid out in two rows so it fits the narrow order column on
@@ -27,6 +29,7 @@ export function LineItemRow({
   onRemove,
   onSetDiscount,
   onSetNote,
+  onMakeFree,
 }: LineItemRowProps) {
   const [editing, setEditing] = useState<Editing>(null);
   const [draft, setDraft] = useState('');
@@ -36,9 +39,14 @@ export function LineItemRow({
     // The editor holds the manual dollar discount only; named discounts are
     // shared out on top of it by the server.
     const manual = manualDiscountCentsOf(item);
-    setDraft(which === 'note' ? (item.note ?? '') : manual ? (manual / 100).toFixed(2) : '');
+    setDraft(
+      which === 'note' ? (item.note ?? '') : which === 'discount' && manual ? (manual / 100).toFixed(2) : '',
+    );
     setEditing(which);
   }
+
+  const lineCents = item.unitPriceCents * item.quantity;
+  const isFree = lineCents > 0 && item.totalCents === 0;
 
   async function save() {
     if (editing === 'note') {
@@ -46,6 +54,9 @@ export function LineItemRow({
     } else if (editing === 'discount') {
       const dollars = parseFloat(draft);
       onSetDiscount(item.id, Number.isFinite(dollars) && dollars > 0 ? Math.round(dollars * 100) : 0);
+    } else if (editing === 'free') {
+      if (!draft.trim() || !onMakeFree) return;
+      await onMakeFree(item.id, draft.trim());
     }
     setEditing(null);
   }
@@ -76,7 +87,7 @@ export function LineItemRow({
               item.discountCents > 0 ? 'text-green-700' : 'text-muted-foreground underline'
             }`}
           >
-            {item.discountCents > 0 ? `−${formatMoney(item.discountCents)}` : 'Discount'}
+            {isFree ? 'Free' : item.discountCents > 0 ? `−${formatMoney(item.discountCents)}` : 'Discount'}
           </span>
         </button>
       </div>
@@ -95,14 +106,36 @@ export function LineItemRow({
             onKeyDown={(e) => {
               if (e.key === 'Enter') void save();
             }}
-            placeholder={editing === 'discount' ? 'Dollars off this line' : 'Note for this line'}
-            maxLength={editing === 'note' ? 500 : undefined}
-            aria-label={editing === 'discount' ? `Dollars off ${item.name}` : `Note for ${item.name}`}
+            placeholder={
+              editing === 'discount'
+                ? 'Dollars off this line'
+                : editing === 'free'
+                  ? 'Why is it free? (required)'
+                  : 'Note for this line'
+            }
+            maxLength={editing === 'discount' ? undefined : 500}
+            aria-label={
+              editing === 'discount'
+                ? `Dollars off ${item.name}`
+                : editing === 'free'
+                  ? `Why ${item.name} is free`
+                  : `Note for ${item.name}`
+            }
             className="min-h-11 min-w-32 flex-1 text-base"
           />
-          <Button className="min-h-11 shrink-0" onClick={() => void save()} disabled={busy}>
-            Save
+          <Button
+            className="min-h-11 shrink-0"
+            onClick={() => void save()}
+            disabled={busy || (editing === 'free' && !draft.trim())}
+          >
+            {editing === 'free' ? 'Make free' : 'Save'}
           </Button>
+          {/* 100% off, with a reason: the whole line, not a dollar amount to type. */}
+          {editing === 'discount' && onMakeFree && !isFree && lineCents > 0 && (
+            <Button variant="outline" className="min-h-11 shrink-0" onClick={() => open('free')} disabled={busy}>
+              Free
+            </Button>
+          )}
           <Button variant="ghost" className="min-h-11 shrink-0 px-2" onClick={() => setEditing(null)}>
             Cancel
           </Button>

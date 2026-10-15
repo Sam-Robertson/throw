@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import SignatureCanvas from "react-signature-canvas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,10 +20,14 @@ export function WaiverSignatureForm({
   userName,
   content,
 }: Props) {
-  const router = useRouter();
   const sigCanvas = useRef<SignatureCanvas>(null);
 
   const [agreed, setAgreed] = useState(false);
+  // Drawing on the canvas doesn't re-render React, so whether a signature
+  // exists is tracked here (set on every stroke, cleared with Clear). Reading
+  // sigCanvas.isEmpty() at render time left the button disabled after the
+  // customer signed when their name was already filled in.
+  const [hasSignature, setHasSignature] = useState(false);
   const [typedName, setTypedName] = useState(userName);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +36,21 @@ export function WaiverSignatureForm({
 
   function handleClear() {
     sigCanvas.current?.clear();
+    setHasSignature(false);
     setSigError(false);
+  }
+
+  function handleStrokeEnd() {
+    setHasSignature(!(sigCanvas.current?.isEmpty() ?? true));
+    setSigError(false);
+  }
+
+  function leave() {
+    // A full navigation, not router.push: the page we return to decides
+    // server-side whether another waiver is still needed, and must not be
+    // served from the client router cache with the old "sign your waiver"
+    // banner.
+    window.location.assign(callbackUrl || "/dashboard");
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -67,22 +84,25 @@ export function WaiverSignatureForm({
       });
 
       if (!res.ok) {
+        // Signed already (a double tap, or signed on another device): carry on.
+        if (res.status === 409) {
+          leave();
+          return;
+        }
         const data = await res.json().catch(() => ({}));
         setError((data as { error?: string }).error ?? "Failed to sign waiver");
+        setSubmitting(false);
         return;
       }
 
-      router.push(callbackUrl || "/schedule");
-    } finally {
+      leave();
+    } catch {
+      setError("Couldn't reach the server. Check the connection and try again.");
       setSubmitting(false);
     }
   }
 
-  const canSubmit =
-    agreed &&
-    !submitting &&
-    !(sigCanvas.current?.isEmpty() ?? true) &&
-    typedName.trim().length > 0;
+  const canSubmit = agreed && !submitting && hasSignature && typedName.trim().length > 0;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -116,7 +136,7 @@ export function WaiverSignatureForm({
               className: "w-full rounded-md border",
               style: { height: 200, background: "#ffffff" },
             }}
-            onEnd={() => setSigError(false)}
+            onEnd={handleStrokeEnd}
           />
         </div>
         <div className="mt-2 flex items-center gap-3">

@@ -23,6 +23,9 @@ export async function GET() {
         orderBy: { createdAt: "desc" },
         take: 1,
       },
+      // The studios they're assigned to, so pickers can offer only the
+      // instructors who work at the session's studio.
+      staffRoleAssignments: { select: { locationId: true } },
     },
     orderBy: { name: "asc" },
   });
@@ -31,6 +34,7 @@ export async function GET() {
     users.map((u) => ({
       ...u,
       defaultPayRate: u.payRates[0] ?? null,
+      locationIds: u.staffRoleAssignments.map((a) => a.locationId),
     })),
   );
 }

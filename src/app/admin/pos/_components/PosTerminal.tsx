@@ -297,6 +297,14 @@ export function PosTerminal({
     });
   }
 
+  function addMembership(planId: string, commitmentTermId: string | null) {
+    void mutateOrder('/items', 'POST', {
+      itemType: 'MEMBERSHIP',
+      refId: planId,
+      metadata: { commitmentTermId },
+    });
+  }
+
   function addDistinct(payload: {
     itemType: 'GIFT_CARD' | 'CUSTOM';
     name?: string;
@@ -600,6 +608,7 @@ export function PosTerminal({
             onAddFiring={addFiring}
             onAddDropIn={addDropIn}
             onAddCourse={addCourse}
+            onAddMembership={addMembership}
             onAddDistinct={addDistinct}
           />
         </div>

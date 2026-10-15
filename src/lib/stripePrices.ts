@@ -112,7 +112,15 @@ export interface EnsuredPrice {
  * Safe to call on every checkout: when the stored Price already matches, this
  * is one Stripe read and no writes.
  */
-export async function ensureStripePriceForPlan(planId: string): Promise<EnsuredPrice> {
+export async function ensureStripePriceForPlan(
+  planId: string,
+  /**
+   * Bill through this account instead of the plan's own (the register sells
+   * an all-studio plan into the studio's account the card was charged in).
+   * The plan row only ever stores a Price from its own account.
+   */
+  accountOverride?: StripeAccount,
+): Promise<EnsuredPrice> {
   const plan = await prisma.membershipPlan.findUniqueOrThrow({
     where: { id: planId },
     select: {
@@ -127,7 +135,9 @@ export async function ensureStripePriceForPlan(planId: string): Promise<EnsuredP
   });
   if (plan.price <= 0) throw new Error(`Plan "${plan.name}" has no price, so it can't be billed`);
 
-  const account = await stripeForLocation(plan.locationId);
+  const ownAccount = await stripeForLocation(plan.locationId);
+  const account = accountOverride ?? ownAccount;
+  const foreignAccount = account.client !== ownAccount.client;
   const { client } = account;
   const interval = billingIntervalFromDays(plan.billingIntervalDays);
 
@@ -141,7 +151,7 @@ export async function ensureStripePriceForPlan(planId: string): Promise<EnsuredP
   // The stored id belongs to another key (the other mode, or the sandbox)
   // when this account can't see it.
   const storedIsForeign = !isPlaceholderPriceId(plan.stripePriceId) && stored === null;
-  const mayStore = !storedIsForeign || account.live;
+  const mayStore = !foreignAccount && (!storedIsForeign || account.live);
 
   const lookupKey = lookupKeyForPlan(plan.id, plan.price, interval);
   const existing = (await client.prices.list({ lookup_keys: [lookupKey], limit: 1 })).data[0];
@@ -172,7 +182,7 @@ export async function ensureStripePriceForPlan(planId: string): Promise<EnsuredP
 
   // Archive the outdated Price last, once the plan points at its replacement.
   let archivedPriceId: string | null = null;
-  if (stored && stored.id !== price.id && stored.active) {
+  if (!foreignAccount && stored && stored.id !== price.id && stored.active) {
     await client.prices.update(stored.id, { active: false });
     archivedPriceId = stored.id;
   }

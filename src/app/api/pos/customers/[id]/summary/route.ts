@@ -86,6 +86,8 @@ export async function GET(
 
   const membership = memberships[0] ?? null;
   const tickets = membership ? await getTicketBalance(membership.id) : null;
+  // The joining fee is only charged to someone who has never held a membership.
+  const everMember = (await prisma.membership.count({ where: { userId: id } })) > 0;
 
   return NextResponse.json({
     customer: { id: customer.id, name: customer.name, email: customer.email, phone: customer.phone },
@@ -120,6 +122,7 @@ export async function GET(
       endsAt: b.studioSession.endsAt,
     })),
     waiverOnFile: unsignedWaiver === null,
+    everMember,
     // May buy members-only products (member firing).
     canUseMemberFiring: firingEligible,
   });

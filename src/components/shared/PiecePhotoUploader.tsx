@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { upload } from "@vercel/blob/client";
 import Alert from "@mui/material/Alert";
 import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
@@ -16,16 +15,68 @@ import {
   MAX_PIECE_PHOTOS,
   piecePhotoPrefix,
 } from "@/app/api/pieces/_shared";
+import { PhotoTooLargeError, preparePhotoForUpload } from "@/lib/preparePhoto";
+
+/** How long one photo may take before the form gives up and lets staff carry on. */
+const UPLOAD_TIMEOUT_MS = 90_000;
 
 function safeFileName(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(-80) || "photo";
 }
 
+class UploadError extends Error {}
+
 /**
- * Piece photos via Vercel Blob client uploads. Shared by the customer intake
- * form and the front-desk intake: `ownerUserId` is the customer the pieces
- * belong to, and the photos land under their `pieces/<userId>/` prefix (staff
- * sessions may upload under any customer's prefix; see /api/upload).
+ * Sends one prepared photo through PUT /api/upload and returns its public URL.
+ * Throws UploadError with a message fit for the form.
+ */
+async function uploadOne(ownerUserId: string, file: File): Promise<string> {
+  let prepared;
+  try {
+    prepared = await preparePhotoForUpload(file);
+  } catch (err) {
+    if (err instanceof PhotoTooLargeError) {
+      throw new UploadError(`"${file.name}" is too big to send from this device. Try a JPEG under 4 MB.`);
+    }
+    throw new UploadError(`"${file.name}" couldn't be read as a photo.`);
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+  try {
+    const pathname = `${piecePhotoPrefix(ownerUserId)}${safeFileName(prepared.fileName)}`;
+    const res = await fetch(`/api/upload?pathname=${encodeURIComponent(pathname)}`, {
+      method: "PUT",
+      headers: { "content-type": prepared.contentType },
+      body: prepared.body,
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (data.error === "TOO_LARGE") {
+        throw new UploadError(`"${file.name}" is too big to upload. Try a smaller photo.`);
+      }
+      throw new UploadError(`"${file.name}" failed to upload (${data.error ?? res.status}).`);
+    }
+    const { url } = (await res.json()) as { url: string };
+    return url;
+  } catch (err) {
+    if (err instanceof UploadError) throw err;
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new UploadError(`"${file.name}" took too long to upload. Check the connection and try again.`);
+    }
+    throw new UploadError(`"${file.name}" failed to upload. Check the connection and try again.`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Piece photos, shrunk in the browser and stored through /api/upload. Shared
+ * by the customer intake form and the front-desk intake: `ownerUserId` is the
+ * customer the pieces belong to, and the photos land under their
+ * `pieces/<userId>/` prefix (staff sessions may upload under any customer's
+ * prefix; see /api/upload).
  */
 export function PiecePhotoUploader({
   ownerUserId,
@@ -42,7 +93,7 @@ export function PiecePhotoUploader({
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [uploadsAvailable, setUploadsAvailable] = useState<boolean | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,10 +103,7 @@ export function PiecePhotoUploader({
       .catch(() => setUploadsAvailable(false));
   }, []);
 
-  function setBusy(next: boolean) {
-    setUploading(next);
-    onUploadingChange?.(next);
-  }
+  const uploading = progress !== null;
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -71,25 +119,31 @@ export function PiecePhotoUploader({
       return;
     }
 
-    setBusy(true);
+    setProgress({ done: 0, total: chosen.length });
+    onUploadingChange?.(true);
+    const uploaded: string[] = [];
     try {
-      const uploaded: string[] = [];
       for (const file of chosen) {
-        const blob = await upload(`${piecePhotoPrefix(ownerUserId)}${safeFileName(file.name)}`, file, {
-          access: "public",
-          handleUploadUrl: "/api/upload",
-          contentType: file.type,
-        });
-        uploaded.push(blob.url);
+        uploaded.push(await uploadOne(ownerUserId, file));
+        setProgress({ done: uploaded.length, total: chosen.length });
       }
-      onChange([...value, ...uploaded].slice(0, MAX_PIECE_PHOTOS));
-    } catch {
-      setError("A photo failed to upload. You can try again, or log the pieces without it.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "A photo failed to upload.";
+      setError(`${message} You can try again, or log the pieces without it.`);
     } finally {
-      setBusy(false);
+      // Whatever happened, keep the photos that did make it and free the form.
+      if (uploaded.length > 0) onChange([...value, ...uploaded].slice(0, MAX_PIECE_PHOTOS));
+      setProgress(null);
+      onUploadingChange?.(false);
       if (fileInput.current) fileInput.current.value = "";
     }
   }
+
+  const buttonLabel = progress
+    ? progress.total > 1
+      ? `Uploading ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…`
+      : "Uploading…"
+    : "Add photos";
 
   return (
     <Box>
@@ -114,7 +168,7 @@ export function PiecePhotoUploader({
             disabled={disabled || uploadsAvailable === null || uploading || value.length >= MAX_PIECE_PHOTOS}
             sx={{ minHeight: 44 }}
           >
-            {uploading ? "Uploading…" : "Add photos"}
+            {buttonLabel}
           </Button>
         </>
       )}

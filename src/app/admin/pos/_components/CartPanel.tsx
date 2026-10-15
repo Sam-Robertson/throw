@@ -195,6 +195,19 @@ export function CartPanel({
     );
   }
 
+  /** 100% off one line (itemId) or the whole order, with the reason on the order. */
+  async function makeFree(reason: string, itemId?: string) {
+    if (!order) return false;
+    setNotice(null);
+    const updated = await callOrderRoute(
+      `/api/pos/orders/${order.id}/free`,
+      { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ reason, itemId }) },
+      'Could not make it free',
+    );
+    if (updated) setNotice({ kind: 'info', text: itemId ? 'That line is free.' : 'The whole order is free.' });
+    return updated !== null;
+  }
+
   async function removeDiscount(discount: PosOrderDiscount) {
     if (!order) return;
     setNotice(null);
@@ -257,6 +270,9 @@ export function CartPanel({
                 onRemove={onRemoveItem}
                 onSetDiscount={onSetItemDiscount}
                 onSetNote={setItemNote}
+                onMakeFree={async (itemId, reason) => {
+                  await makeFree(reason, itemId);
+                }}
               />
             ))}
           </div>
@@ -403,6 +419,7 @@ export function CartPanel({
                   : { kind: 'info', text: 'Discount applied.' },
               );
             }}
+            onMakeOrderFree={(reason) => makeFree(reason)}
           />
           <CustomAmountDialog
             open={customAmountOpen}

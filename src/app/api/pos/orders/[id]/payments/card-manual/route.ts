@@ -2,7 +2,8 @@ import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { stripeForLocation } from "@/lib/stripe";
-import { findStripeCustomerId } from "@/lib/stripeCustomers";
+import { ensureStripeCustomerId, findStripeCustomerId } from "@/lib/stripeCustomers";
+import { orderSellsMembership } from "@/lib/posMembership";
 import { checkPermission } from "@/lib/permissions";
 import { checkOrderPayable, formatMoney, remainingBalanceCents } from "@/lib/pos";
 
@@ -17,7 +18,7 @@ export async function POST(
 
   const { id } = await params;
 
-  const order = await prisma.posOrder.findUnique({ where: { id }, include: { payments: true } });
+  const order = await prisma.posOrder.findUnique({ where: { id }, include: { payments: true, items: true } });
   if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!(await checkPermission(session.user.id, "canUsePos", order.locationId))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -59,16 +60,22 @@ export async function POST(
   }
 
   // Attach the customer only if they already exist in this account; a POS
-  // sale never creates a Stripe Customer.
-  const stripeCustomerId = order.customerId
-    ? await findStripeCustomerId(account, order.customerId)
-    : null;
+  // sale never creates a Stripe Customer — except a membership sale, which
+  // needs the Customer and saves the card for the renewals
+  // (src/lib/posMembership.ts).
+  const sellsMembership = orderSellsMembership(order.items);
+  const stripeCustomerId = !order.customerId
+    ? null
+    : sellsMembership
+      ? await ensureStripeCustomerId(account, order.customerId)
+      : await findStripeCustomerId(account, order.customerId);
 
   const paymentIntent = await account.client.paymentIntents.create({
     amount: body.amountCents,
     currency: "usd",
     metadata: { posOrderId: id, type: "pos" },
     ...(stripeCustomerId ? { customer: stripeCustomerId } : {}),
+    ...(sellsMembership && stripeCustomerId ? { setup_future_usage: "off_session" as const } : {}),
   });
 
   const payment = await prisma.posPayment.create({
