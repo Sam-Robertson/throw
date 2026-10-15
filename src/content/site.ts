@@ -81,7 +81,7 @@ export const OFFERS = [
   },
   {
     title: 'Kickstart course',
-    price: '$200 everything included',
+    price: '$200 (everything included)',
     blurb: 'Learn the basics in this 4 week course',
     cta: 'Book a 4 week course',
     href: '/classes/kickstarter',

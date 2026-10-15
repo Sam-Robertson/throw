@@ -185,13 +185,14 @@ export default function HomePage() {
         <h2 className="t-h-xl text-headline text-center">Reviews</h2>
         <RatingLine className="text-headline mt-5 text-center md:mt-4" />
 
-        <div className="mx-auto mt-12 flex w-full max-w-[1120px] flex-col gap-8 md:mt-16 md:grid md:grid-cols-3 md:items-start md:gap-10">
+        {/* Equal heights across the row (the designer's 2026-10-14 note). */}
+        <div className="mx-auto mt-12 flex w-full max-w-[1120px] flex-col gap-8 md:mt-16 md:grid md:grid-cols-3 md:items-stretch md:gap-10">
           {/* Straight white cards with the sage stroke, per the designer's
               2026-10-15 desktop file (the Oct review's tilted cream cards are gone). */}
           {REVIEWS.map((r) => (
             <figure
               key={r.name}
-              className="border-sage-stroke rounded-[32px] border bg-white px-7 py-8 text-center"
+              className="border-sage-stroke flex flex-col justify-center rounded-[32px] border bg-white px-7 py-8 text-center"
             >
               <blockquote className="text-headline text-[18px] leading-7 font-bold md:text-[19px] md:leading-8">
                 {r.quote}
