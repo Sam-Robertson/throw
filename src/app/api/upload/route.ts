@@ -82,6 +82,9 @@ export async function PUT(request: Request) {
     return NextResponse.json({ url: blob.url });
   } catch (err) {
     console.error("[upload] Blob put failed:", err);
-    return NextResponse.json({ error: "UPLOAD_FAILED" }, { status: 502 });
+    // The Blob SDK's message ("Access denied", "store not found"…) is what
+    // tells an admin which setting is wrong; it never includes the token.
+    const detail = err instanceof Error ? err.message.slice(0, 200) : "unknown error";
+    return NextResponse.json({ error: "UPLOAD_FAILED", message: detail }, { status: 502 });
   }
 }

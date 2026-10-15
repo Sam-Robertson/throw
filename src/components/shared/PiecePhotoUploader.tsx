@@ -52,11 +52,11 @@ async function uploadOne(ownerUserId: string, file: File): Promise<string> {
       signal: controller.signal,
     });
     if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
       if (data.error === "TOO_LARGE") {
         throw new UploadError(`"${file.name}" is too big to upload. Try a smaller photo.`);
       }
-      throw new UploadError(`"${file.name}" failed to upload (${data.error ?? res.status}).`);
+      throw new UploadError(`"${file.name}" failed to upload (${data.message ?? data.error ?? res.status}).`);
     }
     const { url } = (await res.json()) as { url: string };
     return url;
