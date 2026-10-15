@@ -222,7 +222,7 @@ export function GlazePayForm({ rates }: { rates: FiringRates }) {
 
       {error && <p className="text-center text-[14px] leading-5 text-[#ff2d55]">{error}</p>}
 
-      <div className="sticky bottom-0 mt-2 bg-white pt-4 pb-4">
+      <div className="mt-2 pb-4">
         <Button block onClick={pay} disabled={busy || payCents <= 0}>
           {busy ? 'One moment…' : `Pay ${money(payCents)}`}
         </Button>
