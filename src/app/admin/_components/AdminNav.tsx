@@ -22,6 +22,7 @@ import Menu from '@mui/material/Menu';
 import ButtonBase from '@mui/material/ButtonBase';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import CheckIcon from '@mui/icons-material/Check';
+import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 
@@ -354,6 +355,11 @@ const STUDIO_SETUP_GROUPS: FlyoutGroup[] = [
   {
     label: 'PROMOS',
     items: [
+      {
+        href: '/admin/studio-setup/banner',
+        label: 'Site Banner',
+        icon: <CampaignOutlinedIcon fontSize="small" />,
+      },
       {
         href: '/admin/studio-setup/discount-codes',
         label: 'Discount Codes',

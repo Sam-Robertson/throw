@@ -1244,3 +1244,11 @@ model Piece {
   @@index([locationId, status])
   @@index([userId])
 }
+
+// Site-wide settings staff change from the admin without a deploy: the
+// announcement bar for now. One row per key, the value as JSON.
+model SiteSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}

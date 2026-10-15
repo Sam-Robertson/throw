@@ -4,12 +4,14 @@ import { useEffect, useRef, useState } from 'react';
 import NextLink from 'next/link';
 import { signOut } from 'next-auth/react';
 import type { Role } from '@prisma/client';
-import { ANNOUNCEMENT, KIDS_CAMPS_MENU, NAV_LINKS } from '@/content/site';
+import { KIDS_CAMPS_MENU, NAV_LINKS } from '@/content/site';
 import { cn } from '@/lib/utils';
 import { Button } from './Button';
 import { Logo, Wordmark } from './Logo';
 
 type NavUser = { name?: string | null; role: Role };
+/** The announcement bar, from Studio set-up → Site banner; null when switched off. */
+export type AnnouncementBar = { text: string; href: string | null };
 
 /**
  * Marketing header — nav + announcement bar, to the Navigation design
@@ -39,7 +41,13 @@ const DROPDOWN_LABEL = 'Kids camps';
 const LINK_CLASS =
   'text-headline hover:bg-cream focus-visible:bg-cream rounded-full px-3.5 py-2 text-[15px] leading-none font-medium transition-colors outline-none';
 
-export function SiteNav({ user }: { user: NavUser | null }) {
+export function SiteNav({
+  user,
+  announcement = null,
+}: {
+  user: NavUser | null;
+  announcement?: AnnouncementBar | null;
+}) {
   const [open, setOpen] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -216,12 +224,23 @@ export function SiteNav({ user }: { user: NavUser | null }) {
           </div>
         </div>
 
-        {/* Announcement bar — short, no asterisks */}
-        <div className="bg-sage text-white">
-          <p className="t-body-sm-bold px-6 py-[7px] text-center text-[15px] leading-6 md:py-1.5">
-            {ANNOUNCEMENT}
-          </p>
-        </div>
+        {/* Announcement bar — short, no asterisks; staff switch it on and off */}
+        {announcement && (
+          <div className="bg-sage text-white">
+            {announcement.href ? (
+              <NextLink
+                href={announcement.href}
+                className="t-body-sm-bold block px-6 py-[7px] text-center text-[15px] leading-6 underline-offset-4 hover:underline md:py-1.5"
+              >
+                {announcement.text}
+              </NextLink>
+            ) : (
+              <p className="t-body-sm-bold px-6 py-[7px] text-center text-[15px] leading-6 md:py-1.5">
+                {announcement.text}
+              </p>
+            )}
+          </div>
+        )}
       </header>
 
       {/* ── Mobile menu sheet ────────────────────────────────────────────── */}

@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { SiteNav } from "@/components/site/SiteNav";
+import { getAnnouncementBar } from "@/lib/siteSettings";
 import { SiteFooter } from "@/components/site/SiteFooter";
 
 export default async function StaffLayout({
@@ -8,7 +9,7 @@ export default async function StaffLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
+  const [session, announcement] = await Promise.all([auth(), getAnnouncementBar()]);
   if (!session) redirect("/login?callbackUrl=/staff");
   if (session.user.role === "CUSTOMER") redirect("/dashboard");
 
@@ -17,7 +18,7 @@ export default async function StaffLayout({
   return (
     <div className="site-text">
       <div className="print:hidden">
-        <SiteNav user={user} />
+        <SiteNav user={user} announcement={announcement} />
       </div>
       <main>{children}</main>
       <div className="print:hidden">
