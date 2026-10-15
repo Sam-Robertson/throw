@@ -28,6 +28,15 @@ export default async function PayPage() {
       {studio && (
         <p className="t-body-sm text-body mt-1 text-center">{studio.name} studio</p>
       )}
+      <p className="t-body-sm text-body mt-3 text-center">
+        Member?{' '}
+        <NextLink
+          href="/login?callbackUrl=/buy/firing"
+          className="t-body-sm-bold text-headline underline underline-offset-4"
+        >
+          Sign in to pay from your account
+        </NextLink>
+      </p>
 
       {!firing || !studio ? (
         <p className="t-body-sm text-body mt-8 text-center">
@@ -58,15 +67,6 @@ export default async function PayPage() {
 
           <GlazePayForm rates={firing.rates} />
 
-          <p className="t-body-sm text-body mt-8 text-center">
-            Member?{' '}
-            <NextLink
-              href="/login?callbackUrl=/buy/firing"
-              className="t-body-sm-bold text-headline underline underline-offset-4"
-            >
-              Sign in to pay from your account
-            </NextLink>
-          </p>
         </>
       )}
     </div>
