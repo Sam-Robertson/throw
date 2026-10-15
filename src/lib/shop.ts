@@ -130,6 +130,9 @@ export async function recordShopPurchase(checkout: Stripe.Checkout.Session): Pro
 
   if (type === 'firing') {
     const pieces = parseFiringPiecesMeta(meta.pieces ?? '');
+    // The poster's pay page (source "glaze-qr") collects a name and phone
+    // for the ready-for-pickup text; the member portal relies on the account.
+    const fromPoster = meta.source === 'glaze-qr';
     for (const p of pieces) {
       await prisma.piece.create({
         data: {
@@ -142,7 +145,14 @@ export async function recordShopPurchase(checkout: Stripe.Checkout.Session): Pro
           status: 'GLAZE',
           weightOz: Math.round(p.weightLb * 16),
           chargedCents: p.chargeCents,
-          staffNote: `Paid online, Stripe ${checkout.id}`,
+          staffNote: `Paid online${fromPoster ? ' (poster QR code)' : ''}, Stripe ${checkout.id}`,
+          ...(fromPoster
+            ? {
+                contactName: meta.contactName || null,
+                contactPhone: meta.contactPhone || null,
+                textOptIn: meta.textOptIn === '1',
+              }
+            : {}),
         },
       });
     }
