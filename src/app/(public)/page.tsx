@@ -18,8 +18,10 @@ import {
  * Marketing home page — built to "Home (1).png" (mobile) and "Desktop.png",
  * revised to the designer's Oct 2026 review ("Mobile Home screen NIts" 1 + 2):
  * hero copy sits lower on desktop, shorter offer cards, location cards instead
- * of carousels, a name-only instructor rail, tilted review cards on cream, and
- * no photo strip above the footer.
+ * of carousels, a name-only instructor rail, and no photo strip above the
+ * footer; the 2026-10-15 desktop file then set the review cards straight
+ * (white, sage stroke), the instructor names in Satoshi bold and the footer's
+ * tagline in place of the wordmark.
  *
  * Mobile-first throughout. Where the two designs disagree on wording (hero CTA,
  * the events heading), both strings are rendered and toggled at `md`.
@@ -35,8 +37,6 @@ function RatingLine({ className }: { className?: string }) {
   );
 }
 
-// The review draws the three cards with a slight, alternating tilt.
-const REVIEW_TILTS = ['-rotate-2', 'rotate-[1.5deg]', '-rotate-1'];
 
 export default function HomePage() {
   return (
@@ -186,15 +186,17 @@ export default function HomePage() {
         <RatingLine className="text-headline mt-5 text-center md:mt-4" />
 
         <div className="mx-auto mt-12 flex w-full max-w-[1120px] flex-col gap-8 md:mt-16 md:grid md:grid-cols-3 md:items-start md:gap-10">
-          {REVIEWS.map((r, i) => (
+          {/* Straight white cards with the sage stroke, per the designer's
+              2026-10-15 desktop file (the Oct review's tilted cream cards are gone). */}
+          {REVIEWS.map((r) => (
             <figure
               key={r.name}
-              className={`bg-cream rounded-[24px] px-7 py-8 text-center ${REVIEW_TILTS[i % REVIEW_TILTS.length]}`}
+              className="border-sage-stroke rounded-[32px] border bg-white px-7 py-8 text-center"
             >
-              <blockquote className="text-headline text-[18px] leading-7 font-bold md:text-[17px]">
+              <blockquote className="text-headline text-[18px] leading-7 font-bold md:text-[19px] md:leading-8">
                 {r.quote}
               </blockquote>
-              <figcaption className="text-body mt-3 text-[14px] leading-6">
+              <figcaption className="text-details mt-3 text-[14px] leading-6">
                 {r.name}
                 <span className="text-details mx-2">|</span>
                 {r.product}

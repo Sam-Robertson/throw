@@ -63,7 +63,8 @@ export function InstructorRail({ cards }: { cards: Card[] }) {
               </div>
             </div>
 
-            <h3 className="text-headline mt-4 text-center font-serif text-[28px] leading-none md:mt-5 md:text-[44px]">
+            {/* Satoshi bold, per the designer's 2026-10-15 desktop file (was serif). */}
+            <h3 className="text-headline mt-4 text-center text-[22px] leading-7 font-bold md:mt-5 md:text-[28px] md:leading-8">
               {instructor.name}
             </h3>
           </article>

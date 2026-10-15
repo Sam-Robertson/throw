@@ -19,6 +19,9 @@ export type Photo = { src: string; alt: string };
 
 export const ANNOUNCEMENT = '40% off 4 week courses';
 
+/** The studio's line, set in the footer where the wordmark used to be. */
+export const TAGLINE = 'Love people through art';
+
 export const RATING = { score: '5.0', count: '350+ Google ratings' };
 
 // Interim destinations: /classes/kids-camps, /careers and a Lehi waitlist page

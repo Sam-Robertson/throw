@@ -1,16 +1,15 @@
 import NextLink from 'next/link';
-import { CONTACT, FOOTER_COLUMNS } from '@/content/site';
+import { CONTACT, FOOTER_COLUMNS, TAGLINE } from '@/content/site';
 import { FacebookIcon, InstagramIcon, TikTokIcon } from './icons';
-import { Wordmark } from './Logo';
 
 /**
  * Sage footer, to the designer's Oct 2026 review.
  *
  * Section headings are small uppercase letter-spaced Satoshi bold in white;
- * links are Satoshi bold in white. Mobile stacks Learn / About us / Connect /
- * Other in a single column under the wordmark; desktop puts the wordmark on
+ * links are Satoshi regular in white (the 2026-10-15 desktop file). Mobile stacks Learn / About us / Connect /
+ * Other in a single column under the tagline; desktop puts the tagline on
  * the left and four columns on the right in the order Learn / Connect / About
- * us / Other. The wordmark is the studio's logotype in white (./Logo).
+ * us / Other.
  */
 
 const CONNECT_HEADING = 'Connect';
@@ -21,9 +20,9 @@ export function SiteFooter() {
   return (
     <footer className="bg-sage text-white">
       <div className="mx-auto w-full max-w-[1568px] px-6 py-12 md:px-10 md:py-16">
-        <NextLink href="/" aria-label="Throw — home" className="mb-12 inline-block md:mb-0">
-          <Wordmark className="h-10 w-auto md:h-12" />
-        </NextLink>
+        {/* The designer's 2026-10-15 desktop file puts the studio's line here
+            instead of the wordmark. */}
+        <p className="t-eyebrow mb-12 md:mb-0">{TAGLINE}</p>
 
         <div className="md:-mt-14 md:flex md:justify-end">
           <div className="flex flex-col gap-11 md:grid md:grid-cols-[auto_auto_auto_auto] md:gap-x-14 md:gap-y-0">
@@ -35,13 +34,13 @@ export function SiteFooter() {
               <div className="flex flex-col gap-4">
                 <a
                   href={`mailto:${CONTACT.email}`}
-                  className="t-body-sm-bold transition-opacity hover:opacity-70"
+                  className="t-body-sm transition-opacity hover:opacity-70"
                 >
                   {CONTACT.email}
                 </a>
                 <a
                   href={CONTACT.phoneHref}
-                  className="t-body-sm-bold transition-opacity hover:opacity-70"
+                  className="t-body-sm transition-opacity hover:opacity-70"
                 >
                   {CONTACT.phone}
                 </a>
@@ -92,13 +91,13 @@ function FooterColumn({
             <NextLink
               key={l.label}
               href={l.href}
-              className="t-body-sm-bold transition-opacity hover:opacity-70"
+              className="t-body-sm transition-opacity hover:opacity-70"
             >
               {l.label}
             </NextLink>
           ) : (
             // A dead entry: listed, goes nowhere yet (Gift cards).
-            <span key={l.label} className="t-body-sm-bold">
+            <span key={l.label} className="t-body-sm">
               {l.label}
             </span>
           ),
