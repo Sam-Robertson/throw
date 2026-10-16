@@ -14,6 +14,24 @@ interface Props {
   content: string;
 }
 
+/**
+ * The drawn signature as a PNG data URL no wider than 600px. A phone draws
+ * the canvas at 3x, so an untrimmed export runs to a few thousand pixels
+ * wide; this keeps the request small and the stored image sensible.
+ */
+function shrinkSignature(trimmed: HTMLCanvasElement): string {
+  const maxWidth = 600;
+  if (trimmed.width <= maxWidth) return trimmed.toDataURL("image/png");
+  const scale = maxWidth / trimmed.width;
+  const small = document.createElement("canvas");
+  small.width = maxWidth;
+  small.height = Math.max(1, Math.round(trimmed.height * scale));
+  const ctx = small.getContext("2d");
+  if (!ctx) return trimmed.toDataURL("image/png");
+  ctx.drawImage(trimmed, 0, 0, small.width, small.height);
+  return small.toDataURL("image/png");
+}
+
 export function WaiverSignatureForm({
   waiverVersionId,
   callbackUrl,
@@ -69,9 +87,7 @@ export function WaiverSignatureForm({
     setError(null);
 
     try {
-      const signatureData = sigCanvas.current!
-        .getTrimmedCanvas()
-        .toDataURL("image/png");
+      const signatureData = shrinkSignature(sigCanvas.current!.getTrimmedCanvas());
 
       const body = JSON.stringify({
         waiverVersionId,
