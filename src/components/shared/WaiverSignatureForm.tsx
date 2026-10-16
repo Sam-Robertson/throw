@@ -73,15 +73,26 @@ export function WaiverSignatureForm({
         .getTrimmedCanvas()
         .toDataURL("image/png");
 
-      const res = await fetch("/api/waivers/sign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          waiverVersionId,
-          typedName: typedName.trim(),
-          signatureImageData: signatureData,
-        }),
+      const body = JSON.stringify({
+        waiverVersionId,
+        typedName: typedName.trim(),
+        signatureImageData: signatureData,
       });
+      const send = () =>
+        fetch("/api/waivers/sign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+        });
+      // A phone that drops the connection for a moment ("Load failed" on
+      // iOS) gets one quiet retry before the error shows.
+      let res: Response;
+      try {
+        res = await send();
+      } catch {
+        await new Promise((r) => setTimeout(r, 1500));
+        res = await send();
+      }
 
       if (!res.ok) {
         // Signed already (a double tap, or signed on another device): carry on.
@@ -130,6 +141,10 @@ export function WaiverSignatureForm({
         <div className="w-full">
           <SignatureCanvas
             ref={sigCanvas}
+            // iOS Safari fires resize events as the address bar collapses
+            // while scrolling; the library's default wipes the drawing on
+            // every one, which is how JP lost his signature (2026-10-15).
+            clearOnResize={false}
             penColor="#000000"
             velocityFilterWeight={0.7}
             canvasProps={{
